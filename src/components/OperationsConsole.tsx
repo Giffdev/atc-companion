@@ -1,0 +1,625 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { NotamList } from "@/components/NotamList";
+import { QueryInput } from "@/components/QueryInput";
+import { ResultCard } from "@/components/ResultCard";
+import { SourceBadge } from "@/components/SourceBadge";
+import { StatusBar } from "@/components/StatusBar";
+import { TrafficMap } from "@/components/TrafficMap";
+import { WeatherDisplay } from "@/components/WeatherDisplay";
+import { createDemoDashboardData, type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
+import { API_ENDPOINTS } from "@/lib/constants";
+import { formatTimestamp } from "@/lib/utils";
+import type { ApiResponse } from "@/types/api";
+import type { ApproachPlate, FarReference, Frequency, Metar, Pirep, Taf, TrafficTarget, WeatherBundle } from "@/types/aviation";
+import type { ParsedIntent } from "@/types/intents";
+
+type OperationsConsoleProps = {
+  initialNow: string;
+};
+
+type LiveQueryResult = {
+  intent: ParsedIntent;
+  response: ApiResponse<unknown>;
+  executionTimeMs: number;
+  timestamp: string;
+};
+
+type AirportInfoQueryPayload = {
+  airport: string;
+  weather: ApiResponse<WeatherBundle>;
+  frequencies: ApiResponse<Frequency[]>;
+  plates: ApiResponse<ApproachPlate[]>;
+};
+
+const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "frequency"];
+
+const mapIntentToDashboardType = (intent: ParsedIntent | null): DashboardResultType | null => {
+  if (!intent) {
+    return null;
+  }
+
+  if (intent.type === "weather" || intent.type === "notam" || intent.type === "traffic" || intent.type === "frequency") {
+    return intent.type;
+  }
+
+  if (intent.type === "airport_info") {
+    return intent.detail === "frequencies" ? "frequency" : "weather";
+  }
+
+  return null;
+};
+
+const createDetailText = (response: ApiResponse<unknown>): string => {
+  if (!response.ok) {
+    return response.error.message;
+  }
+
+  return `${response.source.name} • ${formatTimestamp(response.fetchedAt)}`;
+};
+
+const applyResponseStatus = (items: SourceStatusItem[], id: SourceStatusItem["id"], response: ApiResponse<unknown>): SourceStatusItem[] =>
+  items.map((item) =>
+    item.id !== id
+      ? item
+      : {
+          ...item,
+          source: response.source,
+          fetchedAt: response.fetchedAt,
+          status: response.ok ? (response.isStale ? "degraded" : "online") : "degraded",
+          detail: createDetailText(response),
+          warning: response.ok ? response.stalenessWarning : response.error.message
+        }
+  );
+
+const mergeLiveDashboardData = (
+  dashboardData: ReturnType<typeof createDemoDashboardData>,
+  liveResult: LiveQueryResult | null
+): ReturnType<typeof createDemoDashboardData> => {
+  if (!liveResult || !liveResult.response.ok) {
+    return dashboardData;
+  }
+
+  switch (liveResult.intent.type) {
+    case "weather": {
+      if (liveResult.intent.subtype === "all") {
+        return {
+          ...dashboardData,
+          weather: liveResult.response.data as WeatherBundle
+        };
+      }
+
+      const nextWeather: WeatherBundle = {
+        ...dashboardData.weather,
+        stationIcao:
+          liveResult.intent.subtype === "metar"
+            ? (liveResult.response.data as Metar).stationIcao
+            : liveResult.intent.subtype === "taf"
+              ? (liveResult.response.data as Taf).stationIcao
+              : dashboardData.weather.stationIcao,
+        source: liveResult.response.source,
+        fetchedAt: liveResult.response.fetchedAt,
+        isStale: liveResult.response.isStale,
+        metar: liveResult.intent.subtype === "metar" ? (liveResult.response.data as Metar) : dashboardData.weather.metar,
+        taf: liveResult.intent.subtype === "taf" ? (liveResult.response.data as Taf) : dashboardData.weather.taf,
+        pireps: liveResult.intent.subtype === "pirep" ? (liveResult.response.data as Pirep[]) : dashboardData.weather.pireps
+      };
+
+      return {
+        ...dashboardData,
+        weather: nextWeather
+      };
+    }
+    case "notam":
+      return {
+        ...dashboardData,
+        notams: liveResult.response.data as ReturnType<typeof createDemoDashboardData>["notams"]
+      };
+    case "traffic":
+      return {
+        ...dashboardData,
+        traffic: liveResult.response.data as TrafficTarget[]
+      };
+    case "frequency":
+      return {
+        ...dashboardData,
+        frequencies: liveResult.response.data as Frequency[]
+      };
+    case "airport_info": {
+      const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
+
+      return {
+        ...dashboardData,
+        weather: airportInfo.weather.ok ? airportInfo.weather.data : dashboardData.weather,
+        frequencies: airportInfo.frequencies.ok ? airportInfo.frequencies.data : dashboardData.frequencies
+      };
+    }
+    case "plates":
+    case "regulatory":
+    case "unknown":
+      return dashboardData;
+  }
+};
+
+const mergeSourceStatuses = (statuses: SourceStatusItem[], liveResult: LiveQueryResult | null): SourceStatusItem[] => {
+  if (!liveResult) {
+    return statuses;
+  }
+
+  switch (liveResult.intent.type) {
+    case "weather":
+      return applyResponseStatus(statuses, "weather", liveResult.response);
+    case "notam":
+      return applyResponseStatus(statuses, "notams", liveResult.response);
+    case "traffic":
+      return applyResponseStatus(statuses, "traffic", liveResult.response);
+    case "frequency":
+      return applyResponseStatus(statuses, "frequencies", liveResult.response);
+    case "airport_info":
+      if (!liveResult.response.ok) {
+        return statuses;
+      }
+
+      return applyResponseStatus(
+        applyResponseStatus(statuses, "weather", (liveResult.response.data as AirportInfoQueryPayload).weather),
+        "frequencies",
+        (liveResult.response.data as AirportInfoQueryPayload).frequencies
+      );
+    case "plates":
+    case "regulatory":
+    case "unknown":
+      return statuses;
+  }
+};
+
+const collectWarnings = (
+  activeIntent: ParsedIntent | null,
+  liveResult: LiveQueryResult | null,
+  submitError: string | null,
+  sourceStatuses: SourceStatusItem[]
+): string[] => {
+  const warnings = new Set<string>();
+
+  sourceStatuses.forEach((source) => {
+    if (source.warning) {
+      warnings.add(source.warning);
+    }
+  });
+
+  if (activeIntent?.requiresClarification && activeIntent.clarificationPrompt) {
+    warnings.add(activeIntent.clarificationPrompt);
+  }
+
+  if (submitError) {
+    warnings.add(submitError);
+  }
+
+  if (!liveResult) {
+    return [...warnings];
+  }
+
+  if (!liveResult.response.ok) {
+    warnings.add(liveResult.response.error.message);
+    return [...warnings];
+  }
+
+  if (liveResult.response.stalenessWarning) {
+    warnings.add(liveResult.response.stalenessWarning);
+  }
+
+  if (liveResult.intent.type === "airport_info") {
+    const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
+
+    [airportInfo.weather, airportInfo.frequencies, airportInfo.plates].forEach((response) => {
+      if (!response.ok) {
+        warnings.add(response.error.message);
+        return;
+      }
+
+      if (response.stalenessWarning) {
+        warnings.add(response.stalenessWarning);
+      }
+    });
+  }
+
+  return [...warnings];
+};
+
+const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: boolean, submittedQuery: string) => {
+  if (isSubmitting) {
+    return (
+      <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
+        Dispatching live query for <span className="font-data">{submittedQuery}</span>…
+      </div>
+    );
+  }
+
+  if (!liveResult) {
+    return <p className="text-sm text-aviation-muted">Demo panels stay loaded until a live query completes.</p>;
+  }
+
+  if (!liveResult.response.ok) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+        <p>{liveResult.response.error.message}</p>
+        {liveResult.intent.clarificationPrompt ? <p className="text-xs text-amber-50/80">{liveResult.intent.clarificationPrompt}</p> : null}
+      </div>
+    );
+  }
+
+  switch (liveResult.intent.type) {
+    case "weather": {
+      if (liveResult.intent.subtype === "all") {
+        const weather = liveResult.response.data as WeatherBundle;
+        return <p className="text-sm text-aviation-text">Weather card updated for {weather.stationIcao} with live METAR, TAF, and PIREP data.</p>;
+      }
+
+      if (liveResult.intent.subtype === "metar") {
+        return <p className="font-data text-sm text-aviation-text">{(liveResult.response.data as Metar).rawText}</p>;
+      }
+
+      if (liveResult.intent.subtype === "taf") {
+        return <p className="font-data text-sm text-aviation-text">{(liveResult.response.data as Taf).rawText}</p>;
+      }
+
+      return <p className="text-sm text-aviation-text">Returned {(liveResult.response.data as Pirep[]).length} live PIREPs near {liveResult.intent.airport}.</p>;
+    }
+    case "notam":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-aviation-text">Returned {(liveResult.response.data as ReturnType<typeof createDemoDashboardData>["notams"]).length} live NOTAMs.</p>
+          <p className="font-data text-xs text-aviation-muted">
+            {(liveResult.response.data as ReturnType<typeof createDemoDashboardData>["notams"])
+              .slice(0, 3)
+              .map((notam) => notam.notamId)
+              .join(" • ") || "No NOTAMs returned"}
+          </p>
+        </div>
+      );
+    case "traffic":
+      return <p className="text-sm text-aviation-text">Traffic card updated with {(liveResult.response.data as TrafficTarget[]).length} live targets.</p>;
+    case "frequency":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {(liveResult.response.data as Frequency[]).map((frequency) => (
+            <div key={`${frequency.type}-${frequency.valueMHz}`} className="rounded-2xl border border-aviation-border bg-black/15 px-3 py-3">
+              <p className="data-label">{frequency.type}</p>
+              <p className="mt-2 font-data text-sm text-aviation-text">{frequency.valueMHz.toFixed(2)}</p>
+              <p className="mt-1 text-xs text-aviation-muted">{frequency.name}</p>
+            </div>
+          ))}
+        </div>
+      );
+    case "plates":
+      return (
+        <div className="space-y-3">
+          {(liveResult.response.data as ApproachPlate[]).slice(0, 6).map((plate) => (
+            <a
+              key={`${plate.airportIcao}-${plate.procedureName}`}
+              className="flex items-center justify-between rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-sm text-aviation-text hover:border-cyan-400/30"
+              href={plate.chartUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <span>{plate.procedureName}</span>
+              <span className="font-data text-xs text-aviation-muted">{plate.procedureType}</span>
+            </a>
+          ))}
+        </div>
+      );
+    case "regulatory":
+      return (
+        <div className="space-y-3">
+          {(liveResult.response.data as FarReference[]).slice(0, 3).map((reference) => (
+            <div key={`${reference.part}-${reference.section}`} className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="font-data text-sm text-aviation-text">
+                FAR {reference.part}.{reference.section}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-aviation-muted">{reference.text}</p>
+            </div>
+          ))}
+        </div>
+      );
+    case "airport_info": {
+      const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
+      const plates = airportInfo.plates.ok ? airportInfo.plates.data.length : 0;
+      const frequencies = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
+
+      return (
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+            <p className="data-label">Airport</p>
+            <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.airport}</p>
+          </div>
+          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+            <p className="data-label">Frequencies</p>
+            <p className="mt-2 font-data text-sm text-aviation-text">{frequencies}</p>
+          </div>
+          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+            <p className="data-label">Plates</p>
+            <p className="mt-2 font-data text-sm text-aviation-text">{plates}</p>
+          </div>
+        </div>
+      );
+    }
+    case "unknown":
+      return <p className="text-sm text-aviation-muted">Awaiting clarification.</p>;
+  }
+};
+
+export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
+  const demoData = useMemo(() => createDemoDashboardData(initialNow), [initialNow]);
+  const [activeIntent, setActiveIntent] = useState<ParsedIntent | null>(null);
+  const [submittedQuery, setSubmittedQuery] = useState("METAR and TAF for KSEA");
+  const [activeCard, setActiveCard] = useState<DashboardResultType>("weather");
+  const [dispatchMessage, setDispatchMessage] = useState("Demo cards loaded. Submit a query to replace them with live service data.");
+  const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const dashboardData = useMemo(() => mergeLiveDashboardData(demoData, liveResult), [demoData, liveResult]);
+  const sourceStatuses = useMemo(() => mergeSourceStatuses(demoData.sourceStatuses, liveResult), [demoData.sourceStatuses, liveResult]);
+
+  const warnings = useMemo(
+    () => collectWarnings(activeIntent, liveResult, submitError, sourceStatuses),
+    [activeIntent, liveResult, sourceStatuses, submitError]
+  );
+
+  const orderedCards = useMemo(() => {
+    return [...RESULT_ORDER].sort((left, right) => {
+      if (left === activeCard) {
+        return -1;
+      }
+
+      if (right === activeCard) {
+        return 1;
+      }
+
+      return RESULT_ORDER.indexOf(left) - RESULT_ORDER.indexOf(right);
+    });
+  }, [activeCard]);
+
+  const handleSubmit = async (query: string, intent: ParsedIntent | null) => {
+    setSubmittedQuery(query);
+    setActiveIntent(intent);
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    const previewCard = mapIntentToDashboardType(intent);
+    if (previewCard) {
+      setActiveCard(previewCard);
+    }
+
+    setDispatchMessage(`Dispatching ${intent?.type.replaceAll("_", " ") ?? "live"} query to live services.`);
+
+    try {
+      const response = await fetch(API_ENDPOINTS.query, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ input: query })
+      });
+
+      const payload = (await response.json()) as LiveQueryResult;
+      setLiveResult(payload);
+      setActiveIntent(payload.intent);
+
+      const returnedCard = mapIntentToDashboardType(payload.intent);
+      if (returnedCard) {
+        setActiveCard(returnedCard);
+      }
+
+      setDispatchMessage(
+        payload.response.ok
+          ? `Live ${payload.intent.type.replaceAll("_", " ")} response received in ${Math.round(payload.executionTimeMs)} ms.`
+          : payload.response.error.message
+      );
+    } catch {
+      const fallbackMessage =
+        typeof navigator !== "undefined" && !navigator.onLine
+          ? "Offline detected. Demo data remains active until connectivity returns."
+          : "Live query failed. Demo data remains active as the fallback view.";
+
+      setLiveResult(null);
+      setSubmitError(fallbackMessage);
+      setDispatchMessage(fallbackMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col">
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">
+        <header className="aviation-panel relative overflow-hidden px-5 py-5 md:px-7">
+          <div className="absolute inset-y-0 right-[-8rem] hidden w-80 rounded-full bg-cyan-500/10 blur-3xl xl:block" />
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25">
+                <div className="absolute inset-2 rounded-full border border-emerald-400/20" />
+                <div className="absolute inset-0 rounded-full border border-cyan-400/15" />
+                <div className="radar-sweep absolute left-1/2 top-1/2 h-[1px] w-7 origin-left bg-gradient-to-r from-cyan-300 to-transparent" />
+                <div className="h-2.5 w-2.5 rounded-full bg-aviation-green shadow-[0_0_18px_rgba(34,197,94,0.75)]" />
+              </div>
+
+              <div>
+                <p className="data-label">ATC Companion</p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-aviation-text md:text-5xl">Dark aviation console built for tower workflows.</h1>
+                <p className="mt-3 max-w-4xl text-sm leading-7 text-aviation-muted md:text-base">
+                  Source-attributed weather, NOTAM, traffic, and field-frequency panels share one high-contrast surface, with intent parsing and live query dispatch integrated up front.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[320px]">
+              <div className="rounded-2xl border border-aviation-border bg-black/20 px-4 py-3">
+                <p className="data-label">Current Tasking</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{submittedQuery}</p>
+              </div>
+              <div className="rounded-2xl border border-aviation-border bg-black/20 px-4 py-3">
+                <p className="data-label">Dispatch</p>
+                <p className="mt-2 text-sm text-aviation-text">{dispatchMessage}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <QueryInput initialQuery={submittedQuery} isSubmitting={isSubmitting} onPreviewChange={setActiveIntent} onSubmit={handleSubmit} />
+
+        <section className="aviation-panel px-5 py-5 md:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <p className="data-label">Live Query Result</p>
+              <h2 className="mt-2 text-2xl font-semibold text-aviation-text">Authoritative response envelope</h2>
+              <p className="mt-2 text-sm text-aviation-muted">
+                Query orchestration now dispatches intent output into live service adapters while keeping demo cards as the fallback path.
+              </p>
+            </div>
+
+            {liveResult ? (
+              <div className="flex flex-col items-start gap-3 xl:items-end">
+                <SourceBadge
+                  fetchedAt={liveResult.response.fetchedAt}
+                  isStale={liveResult.response.isStale}
+                  referenceTime={initialNow}
+                  source={liveResult.response.source}
+                />
+                <div className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-xs text-aviation-muted">
+                  {Math.round(liveResult.executionTimeMs)} ms
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {renderQuerySummary(liveResult, isSubmitting, submittedQuery)}
+
+            {liveResult ? (
+              <details className="rounded-2xl border border-aviation-border bg-black/20">
+                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">Reveal query envelope</summary>
+                <pre className="max-h-72 overflow-auto border-t border-aviation-border px-4 py-3 font-data text-xs leading-6 text-slate-300">
+                  {JSON.stringify(liveResult, null, 2)}
+                </pre>
+              </details>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-12">
+          {orderedCards.map((cardType) => {
+            switch (cardType) {
+              case "weather":
+                return (
+                  <div key="weather" className="xl:col-span-7">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={dashboardData.weather.fetchedAt}
+                      isActive={activeCard === "weather"}
+                      isStale={dashboardData.weather.isStale}
+                      kind="weather"
+                      rawData={dashboardData.weather}
+                      referenceTime={initialNow}
+                      source={dashboardData.weather.source}
+                      stalenessWarning={dashboardData.weather.isStale ? dashboardData.weather.source.refresh_interval : undefined}
+                      subtitle="Formatted METAR and TAF presentation with direct flight-category cues and raw observation access."
+                      title={`${dashboardData.weather.stationIcao} weather brief`}
+                    >
+                      <WeatherDisplay weather={dashboardData.weather} />
+                    </ResultCard>
+                  </div>
+                );
+              case "notam":
+                return (
+                  <div key="notam" className="xl:col-span-5">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={dashboardData.notams[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.notams[0].fetchedAt}
+                      isActive={activeCard === "notam"}
+                      isStale={dashboardData.notams.some((notam) => notam.isStale)}
+                      kind="notam"
+                      rawData={dashboardData.notams}
+                      referenceTime={initialNow}
+                      source={dashboardData.notams[0]?.source ?? liveResult?.response.source ?? demoData.notams[0].source}
+                      stalenessWarning="One or more NOTAM records are beyond the preferred review window."
+                      subtitle="Priority-sorted field notices with TFR emphasis, effective times, and expandable full text."
+                      title={`${dashboardData.notams[0]?.affectedFacility ?? "Field"} operational NOTAM stack`}
+                    >
+                      {dashboardData.notams.length ? (
+                        <NotamList notams={dashboardData.notams} />
+                      ) : (
+                        <div className="text-sm text-aviation-muted">No NOTAMs returned for the active live query.</div>
+                      )}
+                    </ResultCard>
+                  </div>
+                );
+              case "traffic":
+                return (
+                  <div key="traffic" className="xl:col-span-7">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={dashboardData.traffic[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.traffic[0].fetchedAt}
+                      isActive={activeCard === "traffic"}
+                      isStale={dashboardData.traffic.some((target) => target.isStale)}
+                      kind="traffic"
+                      rawData={dashboardData.traffic}
+                      referenceTime={initialNow}
+                      source={dashboardData.traffic[0]?.source ?? liveResult?.response.source ?? demoData.traffic[0].source}
+                      stalenessWarning="Traffic targets are older than the preferred surveillance window."
+                      subtitle="Live or fallback traffic picture with callsign labels and altitude-based color coding."
+                      title="Surface and terminal traffic picture"
+                    >
+                      {dashboardData.traffic.length ? (
+                        <TrafficMap traffic={dashboardData.traffic} />
+                      ) : (
+                        <div className="text-sm text-aviation-muted">No live traffic targets returned for the active query.</div>
+                      )}
+                    </ResultCard>
+                  </div>
+                );
+              case "frequency":
+                return (
+                  <div key="frequency" className="xl:col-span-5">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={dashboardData.frequencies[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.frequencies[0].fetchedAt}
+                      isActive={activeCard === "frequency"}
+                      kind="frequency"
+                      rawData={dashboardData.frequencies}
+                      referenceTime={initialNow}
+                      source={dashboardData.frequencies[0]?.source ?? liveResult?.response.source ?? demoData.frequencies[0].source}
+                      subtitle="High-contrast FAA field frequencies in a terminal-style list for quick eyes-on validation."
+                      title={`${activeIntent?.type === "frequency" ? activeIntent.facility : dashboardData.weather.stationIcao} core frequencies`}
+                    >
+                      {dashboardData.frequencies.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.frequencies.map((frequency) => (
+                            <div
+                              key={`${frequency.type}-${frequency.valueMHz}`}
+                              className="flex items-center justify-between rounded-2xl border border-aviation-border bg-black/15 px-4 py-3"
+                            >
+                              <div>
+                                <p className="data-label">{frequency.type}</p>
+                                <p className="mt-2 text-sm text-aviation-muted">{frequency.name}</p>
+                              </div>
+                              <p className="font-data text-lg text-aviation-text">{frequency.valueMHz.toFixed(2)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-aviation-muted">No frequencies returned for the active live query.</div>
+                      )}
+                    </ResultCard>
+                  </div>
+                );
+            }
+          })}
+        </section>
+      </div>
+
+      <StatusBar referenceTime={initialNow} sources={sourceStatuses} warnings={warnings} />
+    </main>
+  );
+}

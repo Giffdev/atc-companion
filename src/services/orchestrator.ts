@@ -1,0 +1,175 @@
+import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
+import { getFrequencies } from "@/services/frequencies";
+import { getNotams } from "@/services/notams";
+import { getPlates, getSids, getStars } from "@/services/plates";
+import { searchFars } from "@/services/regulatory";
+import { getTraffic } from "@/services/traffic";
+import { getMetar, getPireps, getTaf, getWeather } from "@/services/weather";
+import type { ApiResponse, DataSource } from "@/types/api";
+import type { ApproachPlate, Frequency, WeatherBundle } from "@/types/aviation";
+import type { ParsedIntent } from "@/types/intents";
+
+const ORCHESTRATOR_SOURCE: DataSource = {
+  id: "internal-query-orchestrator",
+  name: "Internal Query Orchestrator",
+  url: "internal://query-orchestrator",
+  reliability: "high",
+  refresh_interval: "on-demand"
+};
+
+export interface AirportInfoQueryPayload {
+  airport: string;
+  weather: ApiResponse<WeatherBundle>;
+  frequencies: ApiResponse<Frequency[]>;
+  plates: ApiResponse<ApproachPlate[]>;
+}
+
+export interface QueryResult {
+  intent: ParsedIntent;
+  response: ApiResponse<unknown>;
+  executionTimeMs: number;
+  timestamp: string;
+}
+
+const dedupeSources = (sources: DataSource[]): DataSource[] => {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const key = `${source.id}:${source.url}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
+
+const getClarificationResponse = (intent: ParsedIntent): ApiResponse<never> =>
+  createApiErrorResponse(
+    {
+      code: "CLARIFICATION_REQUIRED",
+      message: intent.clarificationPrompt ?? "Clarify the aviation request before dispatching data services.",
+      details: intent.rawInput ? `Original input: ${intent.rawInput}` : undefined,
+      retryable: false,
+      status: 400
+    },
+    {
+      source: intent.source,
+      fetchedAt: intent.parsedAt
+    }
+  );
+
+const executeAirportInfo = async (intent: Extract<ParsedIntent, { type: "airport_info" }>): Promise<ApiResponse<AirportInfoQueryPayload>> => {
+  const [weather, frequencies, plates] = await Promise.all([
+    getWeather(intent.airport),
+    getFrequencies(intent.airport),
+    getPlates({ airport: intent.airport })
+  ]);
+
+  if (!weather.ok && !frequencies.ok && !plates.ok) {
+    return createApiErrorResponse(
+      {
+        code: "AIRPORT_INFO_UNAVAILABLE",
+        message: `Airport information is unavailable for ${intent.airport}.`,
+        details: [weather, frequencies, plates]
+          .filter((response): response is Exclude<typeof response, { ok: true }> => !response.ok)
+          .map((response) => response.error.message)
+          .join(" | "),
+        retryable: [weather, frequencies, plates]
+          .filter((response): response is Exclude<typeof response, { ok: true }> => !response.ok)
+          .some((response) => response.error.retryable),
+        status: 503
+      },
+      {
+        source: ORCHESTRATOR_SOURCE,
+        fetchedAt: toIsoNow(),
+        supportingSources: dedupeSources([weather.source, frequencies.source, plates.source])
+      }
+    );
+  }
+
+  return createApiResponse(
+    {
+      airport: intent.airport,
+      weather,
+      frequencies,
+      plates
+    },
+    ORCHESTRATOR_SOURCE,
+    {
+      fetchedAt: toIsoNow(),
+      supportingSources: dedupeSources(
+        [weather, frequencies, plates].filter((response) => response.ok).map((response) => response.source)
+      )
+    }
+  );
+};
+
+const dispatchIntent = async (intent: ParsedIntent): Promise<ApiResponse<unknown>> => {
+  if (intent.requiresClarification || intent.type === "unknown") {
+    return getClarificationResponse(intent);
+  }
+
+  switch (intent.type) {
+    case "weather":
+      switch (intent.subtype) {
+        case "metar":
+          return getMetar(intent.airport);
+        case "taf":
+          return getTaf(intent.airport);
+        case "pirep":
+          return getPireps({ station: intent.airport, distance: intent.radius ?? 75 });
+        case "all":
+          return getWeather(intent.airport);
+      }
+    case "plates":
+      if (intent.procedure_type === "SID") {
+        return getSids(intent.airport);
+      }
+
+      if (intent.procedure_type === "STAR") {
+        return getStars(intent.airport);
+      }
+
+      return getPlates({
+        airport: intent.airport,
+        type: intent.procedure_type
+      });
+    case "traffic":
+      return getTraffic({
+        airport: intent.airport,
+        bounds: intent.bounds
+          ? {
+              minLat: intent.bounds.south,
+              minLon: intent.bounds.west,
+              maxLat: intent.bounds.north,
+              maxLon: intent.bounds.east
+            }
+          : undefined
+      });
+    case "frequency":
+      return getFrequencies(intent.facility);
+    case "notam":
+      return getNotams({
+        airport: intent.airport,
+        type_filter: intent.type_filter
+      });
+    case "regulatory":
+      return searchFars(intent.query, intent.part);
+    case "airport_info":
+      return executeAirportInfo(intent);
+  }
+};
+
+export const executeQuery = async (intent: ParsedIntent): Promise<QueryResult> => {
+  const start = performance.now();
+  const response = await dispatchIntent(intent);
+  const executionTimeMs = Number((performance.now() - start).toFixed(2));
+
+  return {
+    intent,
+    response,
+    executionTimeMs,
+    timestamp: toIsoNow()
+  };
+};

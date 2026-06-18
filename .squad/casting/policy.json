@@ -1,0 +1,6 @@
+{
+  "universes": ["apollo13", "the-right-stuff", "top-gun", "interstellar", "gravity", "hidden-figures", "for-all-mankind", "star-trek", "the-expanse", "battlestar-galactica", "firefly", "dune", "foundation", "alien", "the-usual-suspects"],
+  "default_capacity": 10,
+  "allow_overflow": true,
+  "overflow_strategy": "diegetic_expansion"
+}

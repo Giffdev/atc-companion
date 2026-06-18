@@ -1,0 +1,180 @@
+export interface ApproachFacility {
+  name: string;
+  icao: string;
+  frequencies: { valueMHz: number; sector?: string }[];
+  airports: string[];
+}
+
+export const APPROACH_FACILITIES: ApproachFacility[] = [
+  {
+    name: "Seattle Approach",
+    icao: "S46",
+    frequencies: [
+      { valueMHz: 119.2, sector: "South / Boeing Field / Renton" },
+      { valueMHz: 120.1, sector: "Tacoma Narrows" },
+      { valueMHz: 121.1, sector: "Olympia" },
+      { valueMHz: 124.2, sector: "North satellite" },
+      { valueMHz: 126.5, sector: "McChord AFB" },
+      { valueMHz: 127.1, sector: "Bremerton" }
+    ],
+    airports: ["KSEA", "KBFI", "KRNT", "KPAE", "KOLM", "KPWT", "KTIW", "KTCM"]
+  },
+  {
+    name: "Whidbey Approach",
+    icao: "NUW",
+    frequencies: [
+      { valueMHz: 118.2, sector: "West" },
+      { valueMHz: 120.7, sector: "East" }
+    ],
+    airports: ["KNUW"]
+  },
+  {
+    name: "Portland Approach",
+    icao: "P80",
+    frequencies: [
+      { valueMHz: 118.1, sector: "Primary" },
+      { valueMHz: 124.35, sector: "East / Northeast" },
+      { valueMHz: 126, sector: "North" },
+      { valueMHz: 126.9, sector: "Final" },
+      { valueMHz: 127.85, sector: "West" }
+    ],
+    airports: ["KPDX", "KHIO", "KUAO", "KTTD"]
+  },
+  {
+    name: "NorCal Approach",
+    icao: "NCT",
+    frequencies: [
+      { valueMHz: 120.9, sector: "Departure" },
+      { valueMHz: 125.35, sector: "Oakland / East Bay" },
+      { valueMHz: 128.325, sector: "San Francisco" },
+      { valueMHz: 133.95, sector: "Secondary" },
+      { valueMHz: 134.5, sector: "Initial Contact" }
+    ],
+    airports: ["KSFO", "KOAK", "KSJC", "KPAO", "KHWD", "KCCR", "KLVK", "KSQL"]
+  },
+  {
+    name: "SoCal Approach",
+    icao: "SCT",
+    frequencies: [
+      { valueMHz: 119.65, sector: "Ontario" },
+      { valueMHz: 120.4, sector: "Burbank / Van Nuys" },
+      { valueMHz: 124.3, sector: "Los Angeles" },
+      { valueMHz: 125.2, sector: "Orange County" },
+      { valueMHz: 127, sector: "Inland Empire" }
+    ],
+    airports: ["KLAX", "KBUR", "KVNY", "KONT", "KSNA", "KFUL", "KPOC", "KTOA", "KSMO", "KSEE"]
+  },
+  {
+    name: "Potomac Approach",
+    icao: "PCT",
+    frequencies: [
+      { valueMHz: 118.95, sector: "National Departure" },
+      { valueMHz: 119, sector: "Baltimore" },
+      { valueMHz: 119.85, sector: "National Approach" },
+      { valueMHz: 120.45, sector: "Dulles Approach" },
+      { valueMHz: 124.2, sector: "National Final" },
+      { valueMHz: 125.05, sector: "Dulles Departure" }
+    ],
+    airports: ["KDCA", "KIAD", "KBWI", "KHEF", "KJYO", "KGAI"]
+  },
+  {
+    name: "New York Approach",
+    icao: "N90",
+    frequencies: [
+      { valueMHz: 125.7, sector: "JFK ROBER" },
+      { valueMHz: 127.4, sector: "JFK CAMRN" },
+      { valueMHz: 132.4, sector: "JFK Final" }
+    ],
+    airports: ["KJFK", "KLGA", "KEWR", "KTEB", "KHPN", "KFRG", "KISP"]
+  },
+  {
+    name: "Chicago Approach",
+    icao: "C90",
+    frequencies: [
+      { valueMHz: 118.4, sector: "Midway" },
+      { valueMHz: 119, sector: "O’Hare" },
+      { valueMHz: 120.55, sector: "Chicago Executive" },
+      { valueMHz: 125, sector: "Departure" }
+    ],
+    airports: ["KORD", "KMDW", "KPWK", "KDPA", "KARR", "KUGN"]
+  },
+  {
+    name: "Atlanta Approach",
+    icao: "A80",
+    frequencies: [
+      { valueMHz: 119.65, sector: "ATIS / common handoff" },
+      { valueMHz: 127.9, sector: "West" },
+      { valueMHz: 128, sector: "Primary" },
+      { valueMHz: 133.475, sector: "East" }
+    ],
+    airports: ["KATL", "KPDK", "KFTY", "KAHN"]
+  },
+  {
+    name: "Denver Approach",
+    icao: "D01",
+    frequencies: [
+      { valueMHz: 119.3, sector: "Approach" },
+      { valueMHz: 120.35, sector: "Common Sector" },
+      { valueMHz: 126.1, sector: "Departure" }
+    ],
+    airports: ["KDEN", "KAPA", "KBJC", "KEIK"]
+  },
+  {
+    name: "Dallas Approach",
+    icao: "D10",
+    frequencies: [
+      { valueMHz: 118.55, sector: "Departure" },
+      { valueMHz: 119.875, sector: "DFW Regional Approach" },
+      { valueMHz: 124.3, sector: "Love Field / Addison" },
+      { valueMHz: 126.55, sector: "North Metroplex" }
+    ],
+    airports: ["KDFW", "KDAL", "KADS", "KRBD", "KGKY", "KDWH"]
+  },
+  {
+    name: "Boston Approach",
+    icao: "A90",
+    frequencies: [
+      { valueMHz: 118.25, sector: "North" },
+      { valueMHz: 120.6, sector: "West" },
+      { valueMHz: 124.4, sector: "Primary" },
+      { valueMHz: 125.05, sector: "South" },
+      { valueMHz: 127.2, sector: "South Final" }
+    ],
+    airports: ["KBOS", "KBED", "KBVY", "KOWD", "KORH"]
+  },
+  {
+    name: "Phoenix Approach",
+    icao: "P50",
+    frequencies: [
+      { valueMHz: 119.2, sector: "Northwest High" },
+      { valueMHz: 120.7, sector: "Northwest Low" },
+      { valueMHz: 123.7, sector: "South" },
+      { valueMHz: 124.1, sector: "West" },
+      { valueMHz: 126.8, sector: "East / High" },
+      { valueMHz: 128.65, sector: "Initial Contact" }
+    ],
+    airports: ["KPHX", "KSDL", "KDVT", "KFFZ", "KGYR"]
+  },
+  {
+    name: "Las Vegas Approach",
+    icao: "L30",
+    frequencies: [
+      { valueMHz: 119.4, sector: "South Arrival / Departure" },
+      { valueMHz: 120.5, sector: "East Arrival" },
+      { valueMHz: 125.025, sector: "Primary" },
+      { valueMHz: 125.9, sector: "North Arrival / Departure" },
+      { valueMHz: 133.95, sector: "West Arrival" }
+    ],
+    airports: ["KLAS", "KHND", "KVGT"]
+  }
+];
+
+const APPROACH_FACILITY_INDEX = new Map<string, ApproachFacility>();
+
+for (const facility of APPROACH_FACILITIES) {
+  APPROACH_FACILITY_INDEX.set(facility.name.toUpperCase(), facility);
+  APPROACH_FACILITY_INDEX.set(facility.icao.toUpperCase(), facility);
+}
+
+export const findApproachFacility = (nameOrCode: string): ApproachFacility | null =>
+  APPROACH_FACILITY_INDEX.get(nameOrCode.trim().toUpperCase()) ?? null;
