@@ -293,7 +293,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
   }
 
   if (!liveResult) {
-    return <p className="text-sm text-aviation-muted">Demo panels stay loaded until a live query completes.</p>;
+    return null;
   }
 
   if (!liveResult.response.ok) {
@@ -434,7 +434,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [activeIntent, setActiveIntent] = useState<ParsedIntent | null>(null);
   const [submittedQuery, setSubmittedQuery] = useState("Awaiting query");
   const [activeCard, setActiveCard] = useState<DashboardResultType>("weather");
+  const [visiblePanels, setVisiblePanels] = useState<Set<DashboardResultType>>(new Set(["weather"]));
   const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
+  const [facilityResults, setFacilityResults] = useState<Map<DashboardResultType, LiveQueryResult>>(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
@@ -461,7 +463,16 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     [selectedFacilityId]
   );
 
-  const dashboardData = useMemo(() => mergeLiveDashboardData(demoData, liveResult), [demoData, liveResult]);
+  const dashboardData = useMemo(() => {
+    let merged = mergeLiveDashboardData(demoData, liveResult);
+    // Layer in facility results for panels not covered by the active query
+    for (const [, result] of facilityResults) {
+      if (!liveResult || mapIntentToDashboardType(liveResult.intent) !== mapIntentToDashboardType(result.intent)) {
+        merged = mergeLiveDashboardData(merged, result);
+      }
+    }
+    return merged;
+  }, [demoData, liveResult, facilityResults]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(demoData.sourceStatuses, liveResult), [demoData.sourceStatuses, liveResult]);
   const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
   const selectedPlateRunway = liveResult?.intent.type === "plates" ? liveResult.intent.runway : undefined;
@@ -530,9 +541,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     const previewCard = mapIntentToDashboardType(intent);
     if (previewCard) {
       setActiveCard(previewCard);
+      setVisiblePanels(new Set([previewCard]));
     }
-
-    setSubmitError(null);
 
     try {
       const payload = await fetchLiveQuery(query);
@@ -542,12 +552,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       const returnedCard = mapIntentToDashboardType(payload.intent);
       if (returnedCard) {
         setActiveCard(returnedCard);
+        setVisiblePanels(new Set([returnedCard]));
       }
     } catch {
       const fallbackMessage =
         typeof navigator !== "undefined" && !navigator.onLine
-          ? "Offline detected. Demo data remains active until connectivity returns."
-          : "Live query failed. Demo data remains active as the fallback view.";
+          ? "Offline — check connectivity."
+          : "Query failed. Try again or rephrase.";
 
       setLiveResult(null);
       setSubmitError(fallbackMessage);
@@ -557,39 +568,53 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   };
 
   // Auto-fetch relevant data for the selected facility whenever it changes
-  // Tower → weather at that airport
-  // Approach → weather at primary airport (sector-wide view coming)
-  // Center → weather at primary airport
   useEffect(() => {
     if (!selectedFacility?.primaryAirport) {
+      setFacilityResults(new Map());
       return;
     }
 
     const airport = selectedFacility.primaryAirport;
     let cancelled = false;
 
-    const fetchFacilityData = async () => {
-      // All facility types get weather as baseline
-      const query = selectedFacility.type === "tower"
-        ? `weather at ${airport}`
-        : selectedFacility.type === "approach"
-          ? `weather at ${airport}`
-          : `weather at ${airport}`;
+    const fetchFacilityDashboard = async () => {
+      const dashboardPanels: DashboardResultType[] =
+        selectedFacility.type === "center"
+          ? ["weather", "notam"]
+          : ["weather", "notam", "traffic"];
 
+      setVisiblePanels(new Set(dashboardPanels));
+      setFacilityResults(new Map());
+
+      // Fetch weather
       try {
-        const payload = await fetchLiveQuery(query);
-        if (!cancelled) {
-          setLiveResult(payload);
-          setActiveIntent(payload.intent);
-          setActiveCard("weather");
-          setSubmittedQuery(query);
-        }
-      } catch {
-        // Silently fail — user can manually query
+        const payload = await fetchLiveQuery(`weather at ${airport}`);
+        if (cancelled) return;
+        setFacilityResults((prev) => new Map(prev).set("weather", payload));
+        setLiveResult(payload);
+        setActiveIntent(payload.intent);
+        setActiveCard("weather");
+        setSubmittedQuery(`weather at ${airport}`);
+      } catch { /* silent */ }
+
+      // Fetch NOTAMs
+      try {
+        const payload = await fetchLiveQuery(`notams for ${airport}`);
+        if (cancelled) return;
+        setFacilityResults((prev) => new Map(prev).set("notam", payload));
+      } catch { /* silent */ }
+
+      // Fetch traffic (tower/approach only)
+      if (selectedFacility.type !== "center") {
+        try {
+          const payload = await fetchLiveQuery(`traffic at ${airport}`);
+          if (cancelled) return;
+          setFacilityResults((prev) => new Map(prev).set("traffic", payload));
+        } catch { /* silent */ }
       }
     };
 
-    fetchFacilityData();
+    fetchFacilityDashboard();
 
     return () => { cancelled = true; };
   }, [selectedFacility?.primaryAirport, selectedFacility?.type, fetchLiveQuery]);
@@ -693,28 +718,26 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   </div>
                 ) : null}
               </div>
-            ) : (
-              <p className="text-sm text-aviation-muted">Submit a query above to see live results.</p>
-            )}
+            ) : null}
           </div>
 
-          <div className="mt-4 space-y-4">
-            {renderQuerySummary(liveResult, isSubmitting, submittedQuery)}
+          {liveResult ? (
+            <div className="mt-4 space-y-4">
+              {renderQuerySummary(liveResult, isSubmitting, submittedQuery)}
 
-            {liveResult ? (
               <details className="rounded-2xl border border-aviation-border bg-black/20">
                 <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">Reveal query envelope</summary>
                 <pre className="max-h-72 overflow-auto border-t border-aviation-border px-4 py-3 font-data text-xs leading-6 text-slate-300">
                   {JSON.stringify(liveResult, null, 2)}
                 </pre>
               </details>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </section>
 
-        {activeCard && liveResult ? (
+        {visiblePanels.size > 0 && (liveResult || facilityResults.size > 0) ? (
         <section className="grid gap-6 xl:grid-cols-12">
-          {orderedCards.filter((cardType) => cardType === activeCard).map((cardType) => {
+          {orderedCards.filter((cardType) => visiblePanels.has(cardType)).map((cardType) => {
             switch (cardType) {
               case "weather":
                 return (
