@@ -1,6 +1,6 @@
 import type { DataSource, SourceReliabilityRating } from "@/types/api";
 
-export type SourceAuthority = "NOAA" | "FAA" | "OpenSky Network" | "eCFR";
+export type SourceAuthority = "NOAA" | "FAA" | "OpenSky Network" | "ADSB.fi" | "eCFR";
 export type SourceDataFormat = "JSON" | "GeoJSON" | "XML" | "CSV" | "TXT" | "ZIP" | "PDF" | "HTML";
 export type SourceAuthMode = "none" | "registration-required" | "contact-provider";
 
@@ -182,6 +182,28 @@ export const AVIATION_SOURCE_REGISTRY = {
     rateLimits: "Rate limited, especially for anonymous users and broad geographic queries.",
     dataFormat: ["JSON", "HTML"],
     reliabilityNotes: "Useful operationally, but coverage varies by receiver density and it is not an FAA-certified surveillance feed."
+  }),
+  adsbFi: withSourceShape({
+    id: "adsb-fi",
+    name: "ADSB.fi Open Data",
+    baseUrl: "https://opendata.adsb.fi",
+    authority: "ADSB.fi",
+    reliability: "medium",
+    refresh_interval: "~10 seconds",
+    endpoints: [
+      {
+        name: "Nearby aircraft search",
+        url: "https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{dist}",
+        description: "Public open-data API for nearby aircraft state vectors."
+      }
+    ],
+    auth: {
+      mode: "none",
+      notes: "Public open-data feed; no API key required."
+    },
+    rateLimits: "Free-tier public feed; keep queries scoped and rely on caching to avoid excessive polling.",
+    dataFormat: ["JSON"],
+    reliabilityNotes: "Open community ADS-B feed suitable as a fallback when other public traffic services are rate limited."
   }),
   ecfr: withSourceShape({
     id: "ecfr-title-14",

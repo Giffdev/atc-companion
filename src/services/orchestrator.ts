@@ -25,6 +25,9 @@ const ORCHESTRATOR_SOURCE: DataSource = {
 
 export interface AirportInfoQueryPayload {
   airport: string;
+  airportName?: string;
+  airportCity?: string;
+  airportState?: string;
   runways: string[];
   runwayDetails?: ApiResponse<AirportRunways>;
   weather: ApiResponse<WeatherBundle>;
@@ -123,6 +126,9 @@ const executeAirportInfo = async (
   return createApiResponse(
     {
       airport: intent.airport,
+      airportName: airportReference?.name,
+      airportCity: airportReference?.city,
+      airportState: airportReference?.state,
       runways,
       runwayDetails,
       weather,

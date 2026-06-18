@@ -160,8 +160,8 @@ export const getAirportHours = async (airportCodeInput: string): Promise<ApiResp
         {
           source: NASR_SOURCE,
           query: { airportId: faaCode },
-          timeoutMs: 8000,
-          retries: 1,
+          timeoutMs: 12000,
+          retries: 2,
           parseAs: "text"
         }
       );
@@ -333,17 +333,18 @@ const inferAirportHours = (
     };
   }
 
+  // Don't claim untowered — we simply couldn't reach the FAA source
   return {
     airportIcao: icaoCode,
     airportName,
     towerHours: null,
     towerSchedule: null,
     timezone: { iana: tz, ...tzInfo },
-    isTowered: false,
-    airportUse: "Public",
+    isTowered: null as unknown as boolean,
+    airportUse: null,
     attendanceSchedule: null,
     lightingSchedule: null,
     rawChartSupplement: null,
-    source: "FAA NFDC (query result)"
+    source: "FAA NFDC (unavailable — data may load on retry)"
   };
 };

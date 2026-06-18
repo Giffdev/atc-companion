@@ -124,8 +124,8 @@ export function ResultCard({
             <span>{style.label}</span>
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-aviation-text md:text-2xl">{title}</h2>
-            <p className="mt-1 text-sm leading-6 text-aviation-muted">{subtitle}</p>
+            <h2 className="break-words text-xl font-semibold text-aviation-text md:text-2xl">{title}</h2>
+            <p className="mt-1 break-words text-sm leading-6 text-aviation-muted">{subtitle}</p>
           </div>
         </div>
         <SourceBadge fetchedAt={fetchedAt} isStale={isStale} referenceTime={referenceTime} source={source} />

@@ -44,6 +44,27 @@ import type { Notam } from "@/types/aviation";
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
 const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "frequency", "plates", "navigation", "traffic", "regulatory"];
 
+/** Format a rich airport label like "KSEA — Seattle-Tacoma Intl, WA" */
+const formatAirportLabel = (icao: string, name?: string | null, city?: string | null, state?: string | null): string => {
+  if (!name) {
+    const ref = findAirportReference(icao);
+    if (ref) return `${icao} — ${ref.name}, ${ref.city}, ${ref.state}`;
+    return icao;
+  }
+  const loc = [city, state].filter(Boolean).join(", ");
+  return loc ? `${icao} — ${name}, ${loc}` : `${icao} — ${name}`;
+};
+
+/** Shorter version for card titles */
+const formatAirportTitle = (icao: string, name?: string | null): string => {
+  if (!name) {
+    const ref = findAirportReference(icao);
+    if (ref) return `${icao} — ${ref.name}`;
+    return icao;
+  }
+  return `${icao} — ${name}`;
+};
+
 const AUTO_REFRESH_LABELS = {
   traffic: `Live • Auto-refreshing every ${TRAFFIC_REFRESH_INTERVAL_MS / 1000}s`,
   weather: `Live • Auto-refreshing every ${WEATHER_REFRESH_INTERVAL_MS / 1000}s`
@@ -335,7 +356,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
     case "weather": {
       if (liveResult.intent.subtype === "all") {
         const weather = liveResult.response.data as WeatherBundle;
-        return <p className="text-sm text-aviation-text">Weather card updated for {weather.stationIcao} with live METAR, TAF, and PIREP data.</p>;
+        return <p className="text-sm text-aviation-text">Weather card updated for {formatAirportTitle(weather.stationIcao)} with live METAR, TAF, and PIREP data.</p>;
       }
 
       if (liveResult.intent.subtype === "metar") {
@@ -406,13 +427,22 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       const freqCount = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
       const diagram = airportInfo.diagram?.ok ? airportInfo.diagram.data : null;
       const hours = airportInfo.hours?.ok ? airportInfo.hours.data : null;
+      const airportLabel = formatAirportLabel(airportInfo.airport, airportInfo.airportName, airportInfo.airportCity, airportInfo.airportState);
 
       return (
         <div className="space-y-3">
+          {/* Airport identity banner */}
+          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+            <p className="font-data text-base font-semibold text-aviation-text">{airportLabel}</p>
+            {airportInfo.airportCity && airportInfo.airportState && (
+              <p className="mt-0.5 text-xs text-aviation-muted">{airportInfo.airportCity}, {airportInfo.airportState}</p>
+            )}
+          </div>
+
           {/* Hours of operation (if requested/available) */}
           {hours && (
             <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-              <p className="data-label">Hours of Operation — {airportInfo.airport}</p>
+              <p className="data-label">Hours of Operation — {formatAirportTitle(airportInfo.airport, airportInfo.airportName)}</p>
               <div className="mt-3 space-y-3">
                 {/* Tower status and schedule */}
                 <div className="flex flex-wrap items-start gap-3">
@@ -527,6 +557,9 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
             <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
               <p className="data-label">Airport</p>
               <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.airport}</p>
+              {airportInfo.airportName && (
+                <p className="mt-0.5 text-xs text-aviation-muted">{airportInfo.airportName}</p>
+              )}
             </div>
             <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 md:col-span-1">
               <p className="data-label">Runways</p>
@@ -681,6 +714,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     if (storedFacilityId && getFacilityById(storedFacilityId)) {
       setSelectedFacilityId(storedFacilityId);
     }
+
+    // Warm up serverless functions on page load so the first real query is fast
+    fetch("/api/weather?station=KSEA&warmup=1", { priority: "low" as RequestPriority }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1083,7 +1119,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       source={dashboardData.weather.source}
                       stalenessWarning={dashboardData.weather.isStale ? dashboardData.weather.source.refresh_interval : undefined}
                       subtitle="Formatted METAR and TAF presentation with direct flight-category cues and raw observation access."
-                      title={`${dashboardData.weather.stationIcao} weather brief`}
+                      title={`${formatAirportTitle(dashboardData.weather.stationIcao)} weather brief`}
                     >
                       <div className="space-y-4">
                         {autoRefreshConfig?.intentType === "weather" ? (
@@ -1203,7 +1239,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       referenceTime={initialNow}
                       source={dashboardData.frequencies[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="High-contrast FAA field frequencies in a terminal-style list for quick eyes-on validation."
-                      title={`${activeIntent?.type === "frequency" ? activeIntent.facility : dashboardData.weather.stationIcao} core frequencies`}
+                      title={`${formatAirportTitle(activeIntent?.type === "frequency" ? activeIntent.facility : dashboardData.weather.stationIcao)} core frequencies`}
                     >
                       {loadingPanels.has("frequency") ? (
                         <div className="flex items-center gap-2 text-sm text-aviation-muted">
@@ -1211,17 +1247,28 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           Loading frequencies…
                         </div>
                       ) : dashboardData.frequencies.length ? (
-                        <div className="space-y-3">
+                        <div className="min-w-0 space-y-3 overflow-x-auto">
                           {dashboardData.frequencies.map((frequency) => (
                             <div
                               key={`${frequency.type}-${frequency.valueMHz}`}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 sm:flex-nowrap"
+                              className="min-w-0 rounded-2xl border border-aviation-border bg-black/15 px-3 py-3 sm:px-4"
                             >
-                              <div className="min-w-0">
-                                <p className="data-label">{frequency.type}</p>
-                                <p className="mt-2 break-words text-sm text-aviation-muted">{frequency.name}</p>
+                              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <div className="flex min-w-0 items-start justify-between gap-3 sm:block sm:flex-1">
+                                  <div className="min-w-0">
+                                    <p className="data-label">{frequency.type}</p>
+                                    <p className="mt-1 break-all text-xs text-aviation-muted sm:mt-2 sm:break-words sm:text-sm">
+                                      {frequency.name}
+                                    </p>
+                                  </div>
+                                  <p className="shrink-0 font-data text-sm text-aviation-text sm:hidden">
+                                    {frequency.valueMHz.toFixed(2)}
+                                  </p>
+                                </div>
+                                <p className="hidden shrink-0 font-data text-lg text-aviation-text sm:block">
+                                  {frequency.valueMHz.toFixed(2)}
+                                </p>
                               </div>
-                              <p className="shrink-0 font-data text-lg text-aviation-text">{frequency.valueMHz.toFixed(2)}</p>
                             </div>
                           ))}
                         </div>
@@ -1244,7 +1291,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       referenceTime={initialNow}
                       source={dashboardData.plates[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="Inline FAA procedure chart viewer with runway-aware plate selection and one-click alternates."
-                      title={`${platePanelAirport} charts & references`}
+                      title={`${formatAirportTitle(platePanelAirport)} charts & references`}
                     >
                       <PlateViewer
                         airportCode={platePanelAirport !== "Field" ? platePanelAirport : undefined}
@@ -1309,7 +1356,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 referenceTime={initialNow}
                 source={getDataSource("faaNasr")}
                 subtitle="Tower hours, runway information, and airport classification from FAA Chart Supplement data."
-                title={`${facilityAirportInfo.airport} airport statistics`}
+                title={`${formatAirportTitle(facilityAirportInfo.airport, facilityAirportInfo.airportName)} airport statistics`}
               >
                 <div className="space-y-4">
                   {/* Hours */}
