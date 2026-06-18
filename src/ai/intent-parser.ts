@@ -6,6 +6,7 @@ import {
 } from "@/ai/entity-extractor";
 import { classifyIntentWithLlm } from "@/ai/llm-classifier";
 import { detectIntentPatternCandidates, matchIntentPattern, type IntentPatternMatch } from "@/ai/patterns";
+import { getFacilityById } from "@/data/facilities";
 import { toIsoNow } from "@/lib/utils";
 import type { DataSource } from "@/types/api";
 import type { ParsedIntent } from "@/types/intents";
@@ -130,6 +131,28 @@ const createIntentFromPattern = (
         bounds: match.bounds,
         altitude_range: match.altitude_range
       };
+    case "navigation":
+      return match.to
+        ? match.from
+          ? {
+              ...metadata,
+              type: "navigation",
+              from: match.from,
+              to: match.to,
+              speed_knots: match.speed_knots
+            }
+          : createUnknownIntent(rawInput, parsedAt, entities, {
+              confidence: match.confidence,
+              prompt: "Which airport should I calculate the heading or distance from?",
+              reason: "missing-entity",
+              candidates: ["navigation"]
+            })
+        : createUnknownIntent(rawInput, parsedAt, entities, {
+            confidence: 0.45,
+            prompt: "Which destination airport do you want a heading or distance to?",
+            reason: "missing-entity",
+            candidates: ["navigation"]
+          });
     case "regulatory":
       return {
         ...metadata,
@@ -243,6 +266,32 @@ const createIntentFromLlm = (
         type: "traffic",
         airport: result.airport
       };
+    case "navigation": {
+      const fromAirport = result.from ?? entities.navigationFromAirport;
+      const toAirport = result.to ?? entities.navigationToAirport;
+
+      return toAirport
+        ? fromAirport
+          ? {
+              ...base,
+              type: "navigation",
+              from: fromAirport,
+              to: toAirport,
+              speed_knots: result.speed_knots ?? entities.speedKnots[0]
+            }
+          : createUnknownIntent(rawInput, parsedAt, enrichedEntities, {
+              confidence: result.confidence,
+              prompt: "Which airport should I calculate the heading or distance from?",
+              reason: "missing-entity",
+              candidates: ["navigation"]
+            })
+        : createUnknownIntent(rawInput, parsedAt, enrichedEntities, {
+            confidence: result.confidence,
+            prompt: "Which destination airport do you want a heading or distance to?",
+            reason: "missing-entity",
+            candidates: ["navigation"]
+          });
+    }
     case "regulatory":
       return {
         ...base,
@@ -268,11 +317,17 @@ const createIntentFromLlm = (
   }
 };
 
-export const parseIntent = async (input: string): Promise<ParsedIntent> => {
+export interface ParseIntentOptions {
+  facilityId?: string;
+}
+
+export const parseIntent = async (input: string, options: ParseIntentOptions = {}): Promise<ParsedIntent> => {
   const parsedAt = toIsoNow();
   const rawInput = input.trim();
   const normalizedInput = normalizeAviationText(rawInput);
-  const entities = extractEntities(normalizedInput);
+  const selectedFacility = options.facilityId ? getFacilityById(options.facilityId) : null;
+  const defaultFromAirport = selectedFacility?.primaryAirport;
+  const entities = extractEntities(normalizedInput, { defaultFromAirport });
 
   if (!rawInput) {
     return createUnknownIntent(rawInput, parsedAt, entities, {
@@ -293,7 +348,7 @@ export const parseIntent = async (input: string): Promise<ParsedIntent> => {
     });
   }
 
-  const patternMatch = matchIntentPattern(normalizedInput);
+  const patternMatch = matchIntentPattern(normalizedInput, { defaultFromAirport });
 
   if (patternMatch) {
     const parsedIntent = createIntentFromPattern(rawInput, parsedAt, entities, PATTERN_SOURCE, patternMatch);
@@ -311,7 +366,7 @@ export const parseIntent = async (input: string): Promise<ParsedIntent> => {
 
   return createUnknownIntent(rawInput, parsedAt, entities, {
     confidence: patternMatch?.confidence ?? 0.2,
-    prompt: "Can you clarify whether you need weather, NOTAMs, frequencies, plates, traffic, airport info, or a regulation lookup?",
+    prompt: "Can you clarify whether you need weather, NOTAMs, frequencies, plates, traffic, navigation, airport info, or a regulation lookup?",
     reason: patternMatch ? "low-confidence" : "ambiguous",
     candidates: patternMatch ? [patternMatch.type] : undefined
   });

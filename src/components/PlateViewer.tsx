@@ -19,6 +19,21 @@ const getPlateKey = (plate: ApproachPlate): string => `${plate.airportIcao}-${pl
 
 const getPlateUrl = (plate: ApproachPlate): string => plate.pdfUrl ?? plate.chartUrl;
 
+/** Route FAA PDF URLs through our proxy to avoid X-Frame-Options blocks */
+const getProxiedPlateUrl = (plate: ApproachPlate): string => {
+  const rawUrl = getPlateUrl(plate);
+  // Only proxy FAA domains that block iframe embedding
+  try {
+    const parsed = new URL(rawUrl);
+    if (["aeronav.faa.gov", "www.faa.gov", "nfdc.faa.gov"].includes(parsed.hostname)) {
+      return `/api/plate-proxy?url=${encodeURIComponent(rawUrl)}`;
+    }
+  } catch {
+    // If URL parsing fails, return raw
+  }
+  return rawUrl;
+};
+
 export const getPlateMatchScore = (
   plate: ApproachPlate,
   selectedProcedureType?: ProcedureType,
@@ -108,6 +123,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
   const [isLoading, setIsLoading] = useState(true);
   const selectedPlate = plates.find((plate) => getPlateKey(plate) === selectedPlateKey) ?? bestMatch;
   const selectedPlateUrl = getPlateUrl(selectedPlate);
+  const selectedPlateProxiedUrl = getProxiedPlateUrl(selectedPlate);
   const hasProcedureHint = Boolean(selectedProcedureType);
   const hasRunwayHint = Boolean(selectedRunway);
 
@@ -171,12 +187,11 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
           ) : null}
 
           <iframe
-            key={selectedPlateUrl}
+            key={selectedPlateProxiedUrl}
             className="h-[min(75vh,900px)] min-h-[600px] w-full bg-slate-950"
             onError={() => setIsLoading(false)}
             onLoad={() => setIsLoading(false)}
-            sandbox="allow-same-origin allow-scripts"
-            src={selectedPlateUrl}
+            src={selectedPlateProxiedUrl}
             title={`${selectedPlate.procedureName} PDF`}
           />
         </div>

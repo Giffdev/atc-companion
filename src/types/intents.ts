@@ -13,6 +13,7 @@ export type IntentType =
   | "frequency"
   | "plates"
   | "traffic"
+  | "navigation"
   | "regulatory"
   | "airport_info"
   | "unknown";
@@ -75,6 +76,13 @@ export interface TrafficIntent extends IntentMetadata {
   altitude_range?: [number, number];
 }
 
+export interface NavigationIntent extends IntentMetadata {
+  type: "navigation";
+  from?: string;
+  to: string;
+  speed_knots?: number;
+}
+
 export interface RegulatoryIntent extends IntentMetadata {
   type: "regulatory";
   query: string;
@@ -99,6 +107,7 @@ export type ParsedIntent =
   | FrequencyIntent
   | PlatesIntent
   | TrafficIntent
+  | NavigationIntent
   | RegulatoryIntent
   | AirportInfoIntent
   | UnknownIntent;

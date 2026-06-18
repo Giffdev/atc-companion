@@ -73,6 +73,19 @@ describe("parseIntent", () => {
     });
   });
 
+  it("parses navigation requests with facility context", async () => {
+    const intent = await parseIntent("what is the direct heading vector from my airport to KORD", {
+      facilityId: "KSEA-TWR"
+    });
+
+    expect(intent).toMatchObject({
+      type: "navigation",
+      from: "KSEA",
+      to: "KORD",
+      requiresClarification: false
+    });
+  });
+
   it("parses runway configuration and airport diagram requests as airport info", async () => {
     const [runwayIntent, diagramIntent] = await Promise.all([
       parseIntent("what is the runway configuration at KSEA"),

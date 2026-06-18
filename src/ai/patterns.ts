@@ -2,12 +2,14 @@ import {
   detectAirportInfoDetail,
   detectFrequencyType,
   detectProcedureType,
-  extractEntities
+  extractEntities,
+  extractNavigationAirports
 } from "@/ai/entity-extractor";
 import type {
   AirportInfoDetail,
   BoundingBox,
   FrequencyQueryType,
+  NavigationIntent,
   NotamTypeFilter,
   ProcedureType,
   WeatherSubtype
@@ -49,6 +51,13 @@ export type IntentPatternMatch =
       altitude_range?: [number, number];
     }
   | {
+      type: "navigation";
+      confidence: number;
+      from?: NavigationIntent["from"];
+      to?: NavigationIntent["to"];
+      speed_knots?: NavigationIntent["speed_knots"];
+    }
+  | {
       type: "regulatory";
       confidence: number;
       query: string;
@@ -69,6 +78,8 @@ const FREQUENCY_PATTERN = /\b(?:frequency|frequencies|tower|twr|ground|gnd|appro
 const PLATES_PATTERN =
   /\b(?:plate|plates|chart|charts|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|ils|rnav|vor|visual)\b/i;
 const TRAFFIC_PATTERN = /\b(?:traffic|ads-b|adsb|targets|planes?\s+(?:near|around)|aircraft\s+(?:near|around)|in the pattern)\b/i;
+const NAVIGATION_PATTERN =
+  /\b(?:heading(?:\s+vector)?|vector|direct|distance|bearing|route)\b|\bhow far is\b|\bfrom\s+(?:my airport|[A-Za-z]{3,4})\s+to\s+(?:my airport|[A-Za-z]{3,4})\b/i;
 const REGULATORY_PATTERN =
   /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
 const AIRPORT_INFO_PATTERN =
@@ -145,6 +156,9 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
   if (TRAFFIC_PATTERN.test(input)) {
     candidates.push("traffic");
   }
+  if (NAVIGATION_PATTERN.test(input)) {
+    candidates.push("navigation");
+  }
   if (REGULATORY_PATTERN.test(input)) {
     candidates.push("regulatory");
   }
@@ -167,8 +181,8 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
   return candidates;
 };
 
-export const matchIntentPattern = (input: string): IntentPatternMatch | null => {
-  const entities = extractEntities(input);
+export const matchIntentPattern = (input: string, options: { defaultFromAirport?: string } = {}): IntentPatternMatch | null => {
+  const entities = extractEntities(input, options);
   const airportInfoDetail = detectAirportInfoDetail(input);
   const isWeatherMinimumsQuery = WEATHER_MINIMUMS_PATTERN.test(input);
 
@@ -218,6 +232,18 @@ export const matchIntentPattern = (input: string): IntentPatternMatch | null => 
       airport: entities.airports[0],
       bounds: extractBounds(input),
       altitude_range: extractAltitudeRange(input)
+    };
+  }
+
+  if (NAVIGATION_PATTERN.test(input)) {
+    const navigation = extractNavigationAirports(input, options.defaultFromAirport);
+
+    return {
+      type: "navigation",
+      confidence: navigation.to ? (navigation.from ? 0.95 : 0.72) : 0.46,
+      from: navigation.from,
+      to: navigation.to,
+      speed_knots: entities.speedKnots[0]
     };
   }
 

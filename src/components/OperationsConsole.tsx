@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { FacilitySelector } from "@/components/FacilitySelector";
+import { NavigationDisplay } from "@/components/NavigationDisplay";
 import { NotamList } from "@/components/NotamList";
 import { PlateViewer } from "@/components/PlateViewer";
 import { QueryInput } from "@/components/QueryInput";
@@ -10,12 +12,15 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBar } from "@/components/StatusBar";
 import { TrafficMap } from "@/components/TrafficMap";
 import { WeatherDisplay } from "@/components/WeatherDisplay";
+import { getFacilityById } from "@/data/facilities";
 import { createDemoDashboardData, type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
 import { API_ENDPOINTS, TRAFFIC_REFRESH_INTERVAL_MS, WEATHER_REFRESH_INTERVAL_MS } from "@/lib/constants";
 import { formatTimestamp } from "@/lib/utils";
+import type { ControllerFacility } from "@/types/facility";
 import type { ApiResponse } from "@/types/api";
 import type { ApproachPlate, FarReference, Frequency, Metar, Pirep, Taf, TrafficTarget, WeatherBundle } from "@/types/aviation";
 import type { ParsedIntent } from "@/types/intents";
+import type { NavigationResult } from "@/services/navigation";
 
 type OperationsConsoleProps = {
   initialNow: string;
@@ -37,7 +42,8 @@ type AirportInfoQueryPayload = {
   diagram?: ApiResponse<ApproachPlate | null>;
 };
 
-const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "frequency", "plates", "regulatory"];
+const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
+const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "navigation", "frequency", "plates", "regulatory"];
 
 const AUTO_REFRESH_LABELS = {
   traffic: `Live • Auto-refreshing every ${TRAFFIC_REFRESH_INTERVAL_MS / 1000}s`,
@@ -53,6 +59,7 @@ const mapIntentToDashboardType = (intent: ParsedIntent | null): DashboardResultT
     intent.type === "weather" ||
     intent.type === "notam" ||
     intent.type === "traffic" ||
+    intent.type === "navigation" ||
     intent.type === "frequency" ||
     intent.type === "plates" ||
     intent.type === "regulatory"
@@ -145,6 +152,11 @@ const mergeLiveDashboardData = (
         ...dashboardData,
         traffic: liveResult.response.data as TrafficTarget[]
       };
+    case "navigation":
+      return {
+        ...dashboardData,
+        navigation: liveResult.response.data as NavigationResult
+      };
     case "frequency":
       return {
         ...dashboardData,
@@ -187,6 +199,8 @@ const mergeSourceStatuses = (statuses: SourceStatusItem[], liveResult: LiveQuery
       return applyResponseStatus(statuses, "notams", liveResult.response);
     case "traffic":
       return applyResponseStatus(statuses, "traffic", liveResult.response);
+    case "navigation":
+      return applyResponseStatus(statuses, "navigation", liveResult.response);
     case "frequency":
       return applyResponseStatus(statuses, "frequencies", liveResult.response);
     case "plates":
@@ -322,6 +336,15 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       );
     case "traffic":
       return <p className="text-sm text-aviation-text">Traffic card updated with {(liveResult.response.data as TrafficTarget[]).length} live targets.</p>;
+    case "navigation": {
+      const navigation = liveResult.response.data as NavigationResult;
+      return (
+        <p className="text-sm text-aviation-text">
+          Direct vector {navigation.from.icao} → {navigation.to.icao}: {navigation.magneticHeading.toString().padStart(3, "0")}° magnetic for{" "}
+          {navigation.distanceNm.toFixed(1)} NM.
+        </p>
+      );
+    }
     case "frequency":
       return (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -415,6 +438,33 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const storedFacilityId = window.localStorage.getItem(FACILITY_STORAGE_KEY);
+
+    if (!storedFacilityId) {
+      return;
+    }
+
+    if (getFacilityById(storedFacilityId)) {
+      setSelectedFacilityId(storedFacilityId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedFacilityId) {
+      window.localStorage.removeItem(FACILITY_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(FACILITY_STORAGE_KEY, selectedFacilityId);
+  }, [selectedFacilityId]);
+
+  const selectedFacility = useMemo<ControllerFacility | null>(
+    () => (selectedFacilityId ? getFacilityById(selectedFacilityId) : null),
+    [selectedFacilityId]
+  );
 
   const dashboardData = useMemo(() => mergeLiveDashboardData(demoData, liveResult), [demoData, liveResult]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(demoData.sourceStatuses, liveResult), [demoData.sourceStatuses, liveResult]);
@@ -451,11 +501,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ input: query, bypassCache })
+      body: JSON.stringify({ input: query, facility: selectedFacilityId ?? undefined, bypassCache })
     });
 
     return (await response.json()) as LiveQueryResult;
-  }, []);
+  }, [selectedFacilityId]);
 
   const autoRefreshConfig = useMemo(
     () =>
@@ -606,7 +656,17 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           </div>
         </header>
 
-        <QueryInput isSubmitting={isSubmitting} onPreviewChange={setActiveIntent} onSubmit={handleSubmit} />
+        <FacilitySelector
+          onSelect={(facility) => setSelectedFacilityId(facility?.id ?? null)}
+          selectedFacility={selectedFacility}
+        />
+
+        <QueryInput
+          facilityId={selectedFacilityId}
+          isSubmitting={isSubmitting}
+          onPreviewChange={setActiveIntent}
+          onSubmit={handleSubmit}
+        />
 
         <section className="aviation-panel px-5 py-5 md:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -737,6 +797,24 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           <div className="text-sm text-aviation-muted">No live traffic targets returned for the active query.</div>
                         )}
                       </div>
+                    </ResultCard>
+                  </div>
+                );
+              case "navigation":
+                return (
+                  <div key="navigation" className="xl:col-span-5">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : initialNow}
+                      isActive={activeCard === "navigation"}
+                      kind="navigation"
+                      rawData={dashboardData.navigation}
+                      referenceTime={initialNow}
+                      source={liveResult?.intent.type === "navigation" ? liveResult.response.source : demoData.sourceStatuses.find((source) => source.id === "navigation")?.source ?? demoData.sourceStatuses[0].source}
+                      subtitle="Great-circle bearing and distance calculated from airport reference coordinates, with controller-friendly magnetic vector output."
+                      title={`${dashboardData.navigation.from.icao} to ${dashboardData.navigation.to.icao} direct vector`}
+                    >
+                      <NavigationDisplay navigation={dashboardData.navigation} />
                     </ResultCard>
                   </div>
                 );

@@ -11,35 +11,42 @@ const INTENT_ROUTE_SOURCE: DataSource = {
   refresh_interval: "on-demand"
 };
 
-const readQuery = async (request: Request): Promise<string> => {
+const readQuery = async (request: Request): Promise<{ query: string; facility?: string }> => {
   if (request.method === "GET") {
-    return readRequiredSearchParam(request, "q") ?? "";
+    const url = new URL(request.url);
+    return {
+      query: readRequiredSearchParam(request, "q") ?? "",
+      facility: url.searchParams.get("facility")?.trim() || undefined
+    };
   }
 
-  const body = (await request.json().catch(() => null)) as { input?: string; q?: string } | null;
-  return body?.input?.trim() ?? body?.q?.trim() ?? "";
+  const body = (await request.json().catch(() => null)) as { input?: string; q?: string; facility?: string } | null;
+  return {
+    query: body?.input?.trim() ?? body?.q?.trim() ?? "",
+    facility: body?.facility?.trim() || undefined
+  };
 };
 
 export async function GET(request: Request) {
-  const query = await readQuery(request);
+  const { query, facility } = await readQuery(request);
 
   if (!query) {
     return createMissingParamResponse("q", INTENT_ROUTE_SOURCE);
   }
 
-  const parsed = await parseIntent(query);
+  const parsed = await parseIntent(query, { facilityId: facility });
 
   return jsonWithStandardHeaders(createApiResponse(parsed, parsed.source, { fetchedAt: parsed.parsedAt }));
 }
 
 export async function POST(request: Request) {
-  const query = await readQuery(request);
+  const { query, facility } = await readQuery(request);
 
   if (!query) {
     return createMissingParamResponse("input", INTENT_ROUTE_SOURCE);
   }
 
-  const parsed = await parseIntent(query);
+  const parsed = await parseIntent(query, { facilityId: facility });
 
   return jsonWithStandardHeaders(createApiResponse(parsed, parsed.source, { fetchedAt: parsed.parsedAt }));
 }

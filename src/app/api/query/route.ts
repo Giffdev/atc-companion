@@ -2,17 +2,20 @@ import { jsonWithStandardHeaders } from "@/app/api/route-utils";
 import { parseIntent } from "@/ai/intent-parser";
 import { executeQuery } from "@/services/orchestrator";
 
-const readRequestBody = async (request: Request): Promise<{ input: string; bypassCache: boolean }> => {
-  const body = (await request.json().catch(() => null)) as { input?: string; bypassCache?: boolean } | null;
+const readRequestBody = async (
+  request: Request
+): Promise<{ input: string; facility?: string; bypassCache: boolean }> => {
+  const body = (await request.json().catch(() => null)) as { input?: string; facility?: string; bypassCache?: boolean } | null;
 
   return {
     input: body?.input?.trim() ?? "",
+    facility: body?.facility?.trim() || undefined,
     bypassCache: body?.bypassCache === true
   };
 };
 
 export async function POST(request: Request) {
-  const { input, bypassCache } = await readRequestBody(request);
+  const { input, facility, bypassCache } = await readRequestBody(request);
 
   if (!input) {
     return jsonWithStandardHeaders(
@@ -70,8 +73,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const intent = await parseIntent(input);
-  const result = await executeQuery(intent, { bypassCache });
+  const intent = await parseIntent(input, { facilityId: facility });
+  const result = await executeQuery(intent, { bypassCache, facilityId: facility });
 
   return jsonWithStandardHeaders(result, {
     status: result.response.ok ? 200 : (result.response.error.status ?? 503)

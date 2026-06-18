@@ -111,6 +111,8 @@ export interface ExtractedEntities {
   farReferences: FarReferenceEntity[];
   radiusNm?: number;
   route: string[];
+  navigationFromAirport?: string;
+  navigationToAirport?: string;
   notamTypeFilter?: NotamTypeFilter;
   frequencyType?: FrequencyQueryType;
   procedureType?: ProcedureType;
@@ -432,6 +434,58 @@ export const extractRouteAirports = (input: string): string[] => {
   return dedupe(routeMatch.slice(1).filter((value): value is string => Boolean(value)).map((value) => value.toUpperCase()));
 };
 
+const resolveNavigationAirportToken = (token: string | undefined, defaultFromAirport?: string): string | undefined => {
+  if (!token) {
+    return undefined;
+  }
+
+  if (token.toLowerCase() === "my airport") {
+    return defaultFromAirport;
+  }
+
+  return findAirportReference(token)?.icao ?? undefined;
+};
+
+export const extractNavigationAirports = (
+  input: string,
+  defaultFromAirport?: string
+): { from?: string; to?: string } => {
+  const normalized = normalizeAviationText(input);
+  const explicitRouteMatch =
+    /\b(?:route|direct|vector|heading|bearing|distance)\s+from\s+([A-Za-z]{3,4}|my airport)\s+(?:direct\s+)?to\s+([A-Za-z]{3,4}|my airport)\b/i.exec(
+      normalized
+    ) ?? /\bfrom\s+([A-Za-z]{3,4}|my airport)\s+(?:direct\s+)?to\s+([A-Za-z]{3,4}|my airport)\b/i.exec(normalized);
+
+  if (explicitRouteMatch) {
+    return {
+      from: resolveNavigationAirportToken(explicitRouteMatch[1], defaultFromAirport),
+      to: resolveNavigationAirportToken(explicitRouteMatch[2], defaultFromAirport)
+    };
+  }
+
+  const airports = extractAirportCodes(normalized).filter((code) => !isAllSingleLetters(code));
+  const mentionsMyAirport = /\bmy airport\b/i.test(normalized);
+
+  if (airports.length >= 2) {
+    return {
+      from: mentionsMyAirport ? defaultFromAirport : airports[0],
+      to: airports[airports.length - 1]
+    };
+  }
+
+  if (airports.length === 1) {
+    return {
+      from: defaultFromAirport,
+      to: airports[0]
+    };
+  }
+
+  return {
+    from: mentionsMyAirport ? defaultFromAirport : undefined,
+    to: undefined
+  };
+};
+
 export const toIntentEntities = (entities: ExtractedEntities): IntentEntity[] => {
   const result: IntentEntity[] = [];
 
@@ -468,24 +522,37 @@ export const toIntentEntities = (entities: ExtractedEntities): IntentEntity[] =>
         : farReference.raw
     });
   }
+  if (entities.navigationFromAirport) {
+    result.push({ label: "navigation_from", value: entities.navigationFromAirport });
+  }
+  if (entities.navigationToAirport) {
+    result.push({ label: "navigation_to", value: entities.navigationToAirport });
+  }
 
   return result;
 };
 
-export const extractEntities = (input: string): ExtractedEntities => ({
-  airports: extractAirportCodes(input).filter((code) => !isAllSingleLetters(code)),
-  frequencies: extractFrequencies(input),
-  altitudesFeet: extractAltitudesFeet(input),
-  speedKnots: extractSpeedKnots(input),
-  squawkCodes: extractSquawkCodes(input),
-  callsigns: extractCallsigns(input),
-  aircraftTypes: extractAircraftTypes(input),
-  runways: extractRunways(input),
-  farReferences: extractFarReferences(input),
-  radiusNm: extractRadiusNm(input),
-  route: extractRouteAirports(input),
-  notamTypeFilter: detectNotamTypeFilter(input),
-  frequencyType: detectFrequencyType(input),
-  procedureType: detectProcedureType(input),
-  airportInfoDetail: detectAirportInfoDetail(input)
-});
+export const extractEntities = (input: string, options: { defaultFromAirport?: string } = {}): ExtractedEntities => {
+  const airports = extractAirportCodes(input).filter((code) => !isAllSingleLetters(code));
+  const navigation = extractNavigationAirports(input, options.defaultFromAirport);
+
+  return {
+    airports,
+    frequencies: extractFrequencies(input),
+    altitudesFeet: extractAltitudesFeet(input),
+    speedKnots: extractSpeedKnots(input),
+    squawkCodes: extractSquawkCodes(input),
+    callsigns: extractCallsigns(input),
+    aircraftTypes: extractAircraftTypes(input),
+    runways: extractRunways(input),
+    farReferences: extractFarReferences(input),
+    radiusNm: extractRadiusNm(input),
+    route: extractRouteAirports(input),
+    navigationFromAirport: navigation.from,
+    navigationToAirport: navigation.to,
+    notamTypeFilter: detectNotamTypeFilter(input),
+    frequencyType: detectFrequencyType(input),
+    procedureType: detectProcedureType(input),
+    airportInfoDetail: detectAirportInfoDetail(input)
+  };
+};

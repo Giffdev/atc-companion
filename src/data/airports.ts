@@ -11,7 +11,7 @@ export interface AirportReference {
   runways?: string[];
 }
 
-const AIRPORT_REFERENCES: AirportReference[] = [
+export const AIRPORT_REFERENCES: AirportReference[] = [
   { icao: "K67L", faa: "67L", iata: "MFH", name: "Mesquite Airport", city: "Mesquite", state: "NV", latitude: 36.833105, longitude: -114.055928 },
   { icao: "K76F", faa: "76F", name: "Van Zandt County Regional Airport", city: "Wills Point", state: "TX", latitude: 32.681499, longitude: -95.9841 },
   { icao: "K79J", faa: "79J", name: "South Alabama Regional At Bill Benton Field Airport", city: "Andalusia/Opp", state: "AL", latitude: 31.3088, longitude: -86.393799 },

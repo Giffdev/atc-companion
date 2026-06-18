@@ -1,10 +1,11 @@
 import { getStalenessThresholdMs } from "@/data/staleness";
 import { getDataSource } from "@/data/sources";
 import { formatTimestamp } from "@/lib/utils";
+import { getNavigationBetween, type NavigationResult } from "@/services/navigation";
 import type { DataSource } from "@/types/api";
 import type { ApproachPlate, FarReference, Frequency, Notam, TrafficTarget, WeatherBundle } from "@/types/aviation";
 
-export type DashboardResultType = "weather" | "notam" | "traffic" | "frequency" | "plates" | "regulatory";
+export type DashboardResultType = "weather" | "notam" | "traffic" | "navigation" | "frequency" | "plates" | "regulatory";
 export type SourceConnectionStatus = "online" | "standby" | "degraded";
 
 export interface SourceStatusItem {
@@ -30,6 +31,7 @@ export const createDemoDashboardData = (referenceTime: string) => {
   const frequencySource = getDataSource("faaNasr");
   const platesSource = getDataSource("faaDtpp");
   const regulatorySource = getDataSource("ecfr");
+  const navigationSource = getDataSource("faaNasr");
 
   const weatherFetchedAt = toTimestamp(referenceMs, 6 * 60 * 1000);
   const notamFetchedAt = toTimestamp(referenceMs, 74 * 60 * 1000);
@@ -37,6 +39,7 @@ export const createDemoDashboardData = (referenceTime: string) => {
   const frequencyFetchedAt = toTimestamp(referenceMs, 3 * 60 * 60 * 1000);
   const platesFetchedAt = toTimestamp(referenceMs, 5 * 24 * 60 * 60 * 1000);
   const regulatoryFetchedAt = toTimestamp(referenceMs, 8 * 24 * 60 * 60 * 1000);
+  const navigationFetchedAt = toTimestamp(referenceMs, 2 * 24 * 60 * 60 * 1000);
 
   const weather: WeatherBundle = {
     stationIcao: "KSEA",
@@ -292,6 +295,18 @@ export const createDemoDashboardData = (referenceTime: string) => {
     }
   ];
 
+  const navigation: NavigationResult =
+    getNavigationBetween("KSEA", "KORD", 250) ??
+    ({
+      from: { icao: "KSEA", name: "Seattle-Tacoma International Airport", position: { latitude: 47.449, longitude: -122.3093 } },
+      to: { icao: "KORD", name: "Chicago O'Hare International Airport", position: { latitude: 41.9742, longitude: -87.9073 } },
+      magneticHeading: 100,
+      trueHeading: 94,
+      distanceNm: 1492.4,
+      distanceSm: 1717.2,
+      estimatedTimeMinutes: 358.2
+    } satisfies NavigationResult);
+
   const sourceStatuses: SourceStatusItem[] = [
     {
       id: "weather",
@@ -317,6 +332,14 @@ export const createDemoDashboardData = (referenceTime: string) => {
       status: "degraded",
       detail: "ADS-B panel is intentionally a placeholder until live surveillance integration lands.",
       warning: "Traffic positions are older than the 30-second operational target."
+    },
+    {
+      id: "navigation",
+      label: "Navigation",
+      source: navigationSource,
+      fetchedAt: navigationFetchedAt,
+      status: "online",
+      detail: "Direct heading and distance vectors are calculated from bundled FAA airport reference coordinates."
     },
     {
       id: "frequencies",
@@ -348,6 +371,7 @@ export const createDemoDashboardData = (referenceTime: string) => {
     weather,
     notams,
     traffic,
+    navigation,
     frequencies,
     plates,
     regulatory,

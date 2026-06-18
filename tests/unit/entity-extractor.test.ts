@@ -6,6 +6,7 @@ import {
   extractEntities,
   extractFarReferences,
   extractFrequencies,
+  extractNavigationAirports,
   extractRunways
 } from "@/ai/entity-extractor";
 
@@ -56,5 +57,10 @@ describe("entity extraction", () => {
     expect(entities.frequencies).toContain("118.7");
     expect(entities.altitudesFeet).toContain(18000);
     expect(entities.runways).toContain("28R");
+  });
+
+  it("extracts navigation endpoints with optional facility context", () => {
+    expect(extractNavigationAirports("route from KSEA to KORD")).toEqual({ from: "KSEA", to: "KORD" });
+    expect(extractNavigationAirports("heading vector from my airport to KORD", "KSEA")).toEqual({ from: "KSEA", to: "KORD" });
   });
 });

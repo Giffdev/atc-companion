@@ -1,6 +1,9 @@
+import { getFacilityById } from "@/data/facilities";
+import { getDataSource } from "@/data/sources";
 import { findAirportReference } from "@/data/airports";
 import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
 import { getFrequencies } from "@/services/frequencies";
+import { getNavigationBetween } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
 import { getAirportDiagram, getPlates, getSids, getStars } from "@/services/plates";
 import { searchFars } from "@/services/regulatory";
@@ -36,6 +39,7 @@ export interface QueryResult {
 
 interface ExecuteQueryOptions {
   bypassCache?: boolean;
+  facilityId?: string;
 }
 
 const dedupeSources = (sources: DataSource[]): DataSource[] => {
@@ -170,6 +174,47 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
           : undefined,
         bypassCache: options.bypassCache
       });
+    case "navigation": {
+      const selectedFacility = options.facilityId ? getFacilityById(options.facilityId) : null;
+      const fromAirport = intent.from ?? selectedFacility?.primaryAirport;
+
+      if (!fromAirport) {
+        return createApiErrorResponse(
+          {
+            code: "NAVIGATION_FROM_REQUIRED",
+            message: "Navigation queries need an origin airport or a selected facility with a primary airport.",
+            retryable: false,
+            status: 400
+          },
+          {
+            source: ORCHESTRATOR_SOURCE,
+            fetchedAt: toIsoNow()
+          }
+        );
+      }
+
+      const navigation = getNavigationBetween(fromAirport, intent.to, intent.speed_knots);
+
+      if (!navigation) {
+        return createApiErrorResponse(
+          {
+            code: "NAVIGATION_LOOKUP_FAILED",
+            message: `Unable to resolve navigation coordinates for ${fromAirport} to ${intent.to}.`,
+            retryable: false,
+            status: 404
+          },
+          {
+            source: ORCHESTRATOR_SOURCE,
+            fetchedAt: toIsoNow()
+          }
+        );
+      }
+
+      return createApiResponse(navigation, getDataSource("faaNasr"), {
+        fetchedAt: toIsoNow(),
+        supportingSources: [ORCHESTRATOR_SOURCE]
+      });
+    }
     case "frequency":
       return getFrequencies(intent.facility, intent.freq_type);
     case "notam":

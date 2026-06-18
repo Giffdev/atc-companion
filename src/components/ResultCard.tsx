@@ -1,7 +1,7 @@
 import { SourceBadge } from "@/components/SourceBadge";
 import type { DataSource } from "@/types/api";
 
-type ResultKind = "weather" | "notam" | "traffic" | "frequency" | "plates" | "regulatory";
+type ResultKind = "weather" | "notam" | "traffic" | "navigation" | "frequency" | "plates" | "regulatory";
 
 type ResultCardProps = {
   kind: ResultKind;
@@ -50,6 +50,15 @@ const KIND_STYLES: Record<
     icon: (
       <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
         <path d="m11.5 3 2.3 6.7 5.7 2.3-5.7 2.3-2.3 6.7-2.3-6.7L3.5 12l5.7-2.3L11.5 3Z" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    )
+  },
+  navigation: {
+    label: "NAVIGATION",
+    pillClassName: "border-teal-500/25 bg-teal-500/10 text-teal-300",
+    icon: (
+      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <path d="M12 3 15.5 20 12 16.5 8.5 20 12 3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.5" />
       </svg>
     )
   },

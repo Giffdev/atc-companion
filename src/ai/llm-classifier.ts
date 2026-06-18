@@ -14,6 +14,8 @@ export interface LlmClassificationResult {
   type: ClassifiedIntentType;
   confidence: number;
   airport?: string;
+  from?: string;
+  to?: string;
   route?: string[];
   subtype?: WeatherSubtype;
   radius?: number;
@@ -22,6 +24,7 @@ export interface LlmClassificationResult {
   freq_type?: FrequencyQueryType;
   procedure_type?: ProcedureType;
   runway?: string;
+  speed_knots?: number;
   query?: string;
   part?: number;
   section?: string;
@@ -44,15 +47,18 @@ Allowed intent types:
 - frequency
 - plates
 - traffic
+- navigation
 - regulatory
 - airport_info
 - unknown
 
 JSON schema:
 {
-  "type": "weather" | "notam" | "frequency" | "plates" | "traffic" | "regulatory" | "airport_info" | "unknown",
+  "type": "weather" | "notam" | "frequency" | "plates" | "traffic" | "navigation" | "regulatory" | "airport_info" | "unknown",
   "confidence": number,
   "airport"?: string,
+  "from"?: string,
+  "to"?: string,
   "route"?: string[],
   "subtype"?: "metar" | "taf" | "pirep" | "all",
   "radius"?: number,
@@ -61,6 +67,7 @@ JSON schema:
   "freq_type"?: "TWR" | "APP" | "GND" | "DEL" | "ATIS" | "CTAF",
   "procedure_type"?: "ILS" | "RNAV" | "VOR" | "VISUAL" | "SID" | "STAR",
   "runway"?: string,
+  "speed_knots"?: number,
   "query"?: string,
   "part"?: number,
   "section"?: string,

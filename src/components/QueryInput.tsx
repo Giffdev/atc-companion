@@ -9,6 +9,7 @@ import { createVoiceRecognitionController, type VoiceRecognitionController } fro
 
 type QueryInputProps = {
   initialQuery?: string;
+  facilityId?: string | null;
   onPreviewChange?: (intent: ParsedIntent | null) => void;
   onSubmit?: (query: string, intent: ParsedIntent | null) => void | Promise<void>;
   isSubmitting?: boolean;
@@ -18,7 +19,7 @@ const SUGGESTIONS = [
   "METAR and TAF for KSEA",
   "Show TFR and runway NOTAMs for KSEA",
   "Traffic near KSEA below 12,000",
-  "Tower and ground frequencies for KSEA"
+  "Direct heading vector from my airport to KORD"
 ] as const;
 
 const intentTypeLabel = (intent: ParsedIntent): string => intent.type.replaceAll("_", " ").toUpperCase();
@@ -31,6 +32,8 @@ const summarizeIntent = (intent: ParsedIntent): string => {
       return `${intent.type_filter ?? "ALL"} • ${intent.airport ?? "ROUTE"}`;
     case "traffic":
       return `${intent.airport ?? "REGIONAL"} TRAFFIC`;
+    case "navigation":
+      return `${intent.from ?? "CTX"} → ${intent.to}`;
     case "frequency":
       return `${intent.freq_type ?? "ALL"} • ${intent.facility}`;
     case "plates":
@@ -44,7 +47,7 @@ const summarizeIntent = (intent: ParsedIntent): string => {
   }
 };
 
-export function QueryInput({ initialQuery = "", onPreviewChange, onSubmit, isSubmitting = false }: QueryInputProps) {
+export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChange, onSubmit, isSubmitting = false }: QueryInputProps) {
   const [query, setQuery] = useState<string>(initialQuery);
   const [intentPreview, setIntentPreview] = useState<ParsedIntent | null>(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -138,7 +141,7 @@ export function QueryInput({ initialQuery = "", onPreviewChange, onSubmit, isSub
             headers: {
               "Content-Type": "application/json"
             },
-            body: JSON.stringify({ input: trimmedQuery }),
+            body: JSON.stringify({ input: trimmedQuery, facility: facilityId ?? undefined }),
             signal: abortController.signal
           });
 
@@ -171,7 +174,7 @@ export function QueryInput({ initialQuery = "", onPreviewChange, onSubmit, isSub
       window.clearTimeout(timeoutId);
       abortController.abort();
     };
-  }, [onPreviewChange, query]);
+  }, [facilityId, onPreviewChange, query]);
 
   const previewTone = useMemo(() => {
     if (!intentPreview) {
