@@ -248,12 +248,22 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
         );
       }
       try {
+        if (intent.query_type === "airports") {
+          const { getFacilityById, getFacilityAirports } = await import("@/data/facilities");
+          const facility = getFacilityById(facilityId);
+          const airports = getFacilityAirports(facilityId);
+          return createApiResponse(
+            { facility: facility ? { id: facility.id, name: facility.name, type: facility.type } : { id: facilityId, name: facilityId, type: "approach" }, airports, query_type: "airports" as const },
+            ORCHESTRATOR_SOURCE,
+            { fetchedAt: toIsoNow() }
+          );
+        }
         const { getAdjacentFacilities } = await import("@/data/facility-adjacency");
         const result = getAdjacentFacilities(facilityId);
         return createApiResponse(result, ORCHESTRATOR_SOURCE, { fetchedAt: toIsoNow() });
       } catch {
         return createApiErrorResponse(
-          { code: "ADJACENCY_LOOKUP_FAILED", message: `Unable to find adjacent facilities for ${facilityId}.`, retryable: false, status: 404 },
+          { code: "FACILITY_LOOKUP_FAILED", message: `Unable to find facility information for ${facilityId}.`, retryable: false, status: 404 },
           { source: ORCHESTRATOR_SOURCE, fetchedAt: toIsoNow() }
         );
       }

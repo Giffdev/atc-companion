@@ -281,7 +281,7 @@ const parseAirportHoursFromHtml = (
   // Detect if airport has a tower mentioned at all
   const hasTower = /\bATCT\b|\bTower\b|\bTWR\b/i.test(html);
 
-  const rawTowerHours = towerHoursMatch?.[1]?.trim() ?? null;
+  const rawTowerHours = towerHoursMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null;
   const towerSchedule = rawTowerHours ? parseTowerSchedule(rawTowerHours, tz) : null;
 
   return {
@@ -291,9 +291,9 @@ const parseAirportHoursFromHtml = (
     towerSchedule,
     timezone: { iana: tz, ...tzInfo },
     isTowered: hasTower,
-    airportUse: airportUseMatch?.[1]?.trim() ?? null,
-    attendanceSchedule: attendanceMatch?.[1]?.trim() ?? null,
-    lightingSchedule: lightingMatch?.[1]?.trim() ?? null,
+    airportUse: airportUseMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
+    attendanceSchedule: attendanceMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
+    lightingSchedule: lightingMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
     rawChartSupplement: null,
     source: "FAA NFDC Airport Display"
   };

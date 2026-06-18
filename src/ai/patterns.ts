@@ -99,6 +99,9 @@ const APPROACH_PROCEDURE_CONTEXT_PATTERN =
 const FACILITY_INFO_PATTERN =
   /\b(?:(?:which|what)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)\s+(?:border|neighbor|adjacent|surround|next to|around|near)|\b(?:border|neighbor|adjacent|surrounding|adjoining)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)|\bwho\s+(?:borders?|neighbors?|is (?:adjacent|next)))\b/i;
 
+const FACILITY_AIRPORTS_PATTERN =
+  /\b(?:(?:list|show|what(?:'s| is| are)?|which)\s+(?:airports?|fields?)\s+(?:under|in|within|at|for|covered by|served by|part of)|airports?\s+(?:under|in|within|at|for)\s+(?:\w+\s+)?(?:approach|center|tracon|artcc))\b/i;
+
 const detectWeatherSubtype = (input: string): WeatherSubtype => {
   const normalized = input.toLowerCase();
   const requestedSubtypes = ["metar", "taf", "pirep"].filter((subtype) => normalized.includes(subtype));
@@ -194,6 +197,10 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
     candidates.push("facility_info");
   }
 
+  if (FACILITY_AIRPORTS_PATTERN.test(input)) {
+    candidates.push("facility_info");
+  }
+
   // Compound query detection: if 2+ data-type intents are detected,
   // collapse into airport_info so all panels show
   const dataTypeCandidates = candidates.filter(
@@ -223,6 +230,17 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
       confidence: 0.92,
       facility,
       query_type: queryType
+    };
+  }
+
+  // Facility airport listing queries (list airports under X approach)
+  if (FACILITY_AIRPORTS_PATTERN.test(input)) {
+    const facility = entities.airports[0];
+    return {
+      type: "facility_info",
+      confidence: 0.92,
+      facility,
+      query_type: "airports"
     };
   }
 

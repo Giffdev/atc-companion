@@ -589,10 +589,21 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       );
     }
     case "facility_info": {
-      if (!liveResult.response.ok) {
-        return <p className="text-sm text-aviation-muted">{liveResult.response.error.message}</p>;
+      const data = liveResult.response.data as Record<string, unknown>;
+      if (data.query_type === "airports") {
+        const airports = (data.airports as string[]) ?? [];
+        const facilityName = (data.facility as { name: string })?.name ?? "Facility";
+        const facilityType = (data.facility as { type: string })?.type === "center" ? "center" : "approach";
+        return (
+          <div className="space-y-3">
+            <p className="data-label">{facilityName} — {airports.length} airports</p>
+            <FacilityOverview facilityName={facilityName} facilityType={facilityType} airports={airports} onSelectAirport={(icao) => {
+              onFollowUp?.(`show me everything for ${icao}`);
+            }} />
+          </div>
+        );
       }
-      const adj = liveResult.response.data as {
+      const adj = data as {
         facility: { id: string; name: string; type: string };
         overlying?: { id: string; name: string; type: string };
         adjacentCenters: { id: string; name: string }[];

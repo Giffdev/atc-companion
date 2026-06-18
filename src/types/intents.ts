@@ -97,7 +97,7 @@ export interface AirportInfoIntent extends IntentMetadata {
   detail?: AirportInfoDetail;
 }
 
-export type FacilityInfoQuery = "adjacent" | "overlying" | "underlying" | "general";
+export type FacilityInfoQuery = "adjacent" | "overlying" | "underlying" | "general" | "airports";
 
 export interface FacilityInfoIntent extends IntentMetadata {
   type: "facility_info";

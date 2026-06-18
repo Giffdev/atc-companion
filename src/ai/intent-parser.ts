@@ -323,6 +323,12 @@ const createIntentFromLlm = (
             reason: "missing-entity",
             candidates: ["airport_info"]
           });
+    default:
+      return createUnknownIntent(rawInput, parsedAt, enrichedEntities, {
+        confidence: result.confidence,
+        prompt: "Can you clarify what aviation data you want me to look up?",
+        reason: "low-confidence"
+      });
   }
 };
 

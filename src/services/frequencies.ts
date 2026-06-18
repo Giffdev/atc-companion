@@ -1,14 +1,68 @@
 import { findApproachFacility, findApproachFacilityByAirport } from "@/data/approach-facilities";
 import { LOCAL_FREQUENCY_SEED } from "@/data/frequency-seed";
-import { toIcaoCode } from "@/data/airports";
+import { toFaaCode, toIcaoCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
-import type { Frequency } from "@/types/aviation";
+import type { Frequency, FrequencyType } from "@/types/aviation";
 
 const FREQUENCY_SOURCE = getDataSource("faaNasr");
 const FREQUENCY_SOURCE_URL = "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/";
+const NFDC_BASE_URL = "https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp";
+
+const NFDC_TYPE_MAP: Record<string, FrequencyType> = {
+  UNICOM: "UNICOM", CTAF: "CTAF", ATIS: "ATIS", "D-ATIS": "ATIS",
+  AWOS: "AWOS", ASOS: "AWOS", TOWER: "TWR", TWR: "TWR",
+  GROUND: "GND", GND: "GND", CLEARANCE: "DEL", "CLNC DEL": "DEL",
+  CD: "DEL", "APP/DEP": "APP", APPROACH: "APP", DEPARTURE: "APP"
+};
+
+const classifyNfdcFreqType = (label: string): FrequencyType => {
+  const upper = label.toUpperCase().replace(/[^A-Z/ -]/g, "").trim();
+  for (const [key, type] of Object.entries(NFDC_TYPE_MAP)) {
+    if (upper.includes(key)) return type;
+  }
+  if (/\bTOWER\b/.test(upper) || /\bLCL\b/.test(upper)) return "TWR";
+  if (/\bGROUND\b/.test(upper) || /\bGND\b/.test(upper)) return "GND";
+  return "UNICOM";
+};
+
+const fetchNfdcFrequencies = async (faaCode: string): Promise<Frequency[]> => {
+  const url = `${NFDC_BASE_URL}?airportId=${encodeURIComponent(faaCode)}`;
+  const response = await fetch(url, { next: { revalidate: 86400 } });
+  if (!response.ok) return [];
+
+  const html = await response.text();
+  const fetchedAt = toIsoNow();
+  const source = withSourceUrl(FREQUENCY_SOURCE, url);
+
+  const commStart = html.indexOf("COMMUNICATIONS");
+  if (commStart < 0) return [];
+  const commEnd = html.indexOf("NAVAIDS", commStart);
+  const commSection = html.substring(commStart, commEnd > 0 ? commEnd : commStart + 5000);
+
+  const frequencies: Frequency[] = [];
+  const rowPattern = /<td[^>]*>\s*([^<]*?)\s*:?\s*<\/td>\s*<td[^>]*>\s*(\d{2,3}\.\d{1,3})\s*MHz/gi;
+  let match: RegExpExecArray | null;
+  let lastLabel = "";
+
+  while ((match = rowPattern.exec(commSection)) !== null) {
+    const rawLabel = match[1].replace(/&nbsp;/g, "").trim();
+    const freqMHz = parseFloat(match[2]);
+    if (freqMHz < 108 || freqMHz > 400) continue;
+
+    const label = rawLabel || lastLabel;
+    if (rawLabel) lastLabel = rawLabel;
+
+    const type = classifyNfdcFreqType(label);
+    if (freqMHz > 225) continue; // skip military UHF
+
+    frequencies.push({ type, valueMHz: freqMHz, name: label || type, source, fetchedAt, isStale: false });
+  }
+
+  return frequencies;
+};
 
 const toApproachFacilityResponse = async (facilityLookup: string, airportCode: string): Promise<ApiResponse<Frequency[]>> => {
   const facility = findApproachFacility(facilityLookup) ?? findApproachFacilityByAirport(airportCode);
@@ -67,40 +121,59 @@ export const getFrequencies = async (airport: string, freqType?: string): Promis
   const cacheKey = createCacheKey("airport-frequencies", { airportCode });
   const lookup = LOCAL_FREQUENCY_SEED[airportCode];
 
-  if (!lookup) {
-    return createApiErrorResponse(
-      {
-        code: "AIRPORT_NOT_FOUND",
-        message: `No FAA frequency seed data is available for ${airportCode}.`,
-        details: "The local seed now covers a broad FAA NASR subset of major US airports plus expanded towered and approach-control coverage.",
-        retryable: false,
-        status: 404
-      },
-      {
-        source: withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL),
-        fetchedAt: toIsoNow(),
-        stalenessCategory: "frequency"
-      }
-    );
+  if (lookup) {
+    const { value, cache } = await getOrPopulateCache(cacheKey, getCacheTtlMs("frequencyLookup"), async () => {
+      const fetchedAt = toIsoNow();
+      const source = withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL);
+
+      return lookup.map(
+        (record): Frequency => ({
+          ...record,
+          source,
+          fetchedAt,
+          isStale: false
+        })
+      );
+    });
+
+    return createApiResponse(value, withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL), {
+      fetchedAt: value[0]?.fetchedAt ?? toIsoNow(),
+      stalenessCategory: "frequency",
+      cache
+    });
   }
 
-  const { value, cache } = await getOrPopulateCache(cacheKey, getCacheTtlMs("frequencyLookup"), async () => {
-    const fetchedAt = toIsoNow();
-    const source = withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL);
-
-    return lookup.map(
-      (record): Frequency => ({
-        ...record,
-        source,
-        fetchedAt,
-        isStale: false
-      })
+  // Fallback: fetch from FAA NFDC
+  const faaCode = toFaaCode(airport);
+  const nfdcCacheKey = createCacheKey("nfdc-frequencies", { faaCode });
+  try {
+    const { value: nfdcFreqs, cache } = await getOrPopulateCache(nfdcCacheKey, getCacheTtlMs("frequencyLookup"), () =>
+      fetchNfdcFrequencies(faaCode)
     );
-  });
 
-  return createApiResponse(value, withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL), {
-    fetchedAt: value[0]?.fetchedAt ?? toIsoNow(),
-    stalenessCategory: "frequency",
-    cache
-  });
+    if (nfdcFreqs.length > 0) {
+      return createApiResponse(nfdcFreqs, withSourceUrl(FREQUENCY_SOURCE, `${NFDC_BASE_URL}?airportId=${faaCode}`), {
+        fetchedAt: nfdcFreqs[0]?.fetchedAt ?? toIsoNow(),
+        stalenessCategory: "frequency",
+        cache
+      });
+    }
+  } catch {
+    // fall through to error
+  }
+
+  return createApiErrorResponse(
+    {
+      code: "AIRPORT_NOT_FOUND",
+      message: `No FAA frequency data found for ${airportCode}.`,
+      details: "Neither the local seed nor the FAA NFDC returned frequency data for this airport.",
+      retryable: false,
+      status: 404
+    },
+    {
+      source: withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL),
+      fetchedAt: toIsoNow(),
+      stalenessCategory: "frequency"
+    }
+  );
 };

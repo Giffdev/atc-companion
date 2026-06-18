@@ -42,8 +42,12 @@ const summarizeIntent = (intent: ParsedIntent): string => {
       return intent.part ? `FAR ${intent.part}.${intent.section ?? ""}` : "REGULATORY";
     case "airport_info":
       return `${intent.airport} • ${intent.detail ?? "ALL"}`;
+    case "facility_info":
+      return `${intent.facility ?? "FACILITY"} • ${intent.query_type ?? "INFO"}`.toUpperCase();
     case "unknown":
       return intent.clarificationPrompt ?? "Awaiting clarification";
+    default:
+      return "QUERY";
   }
 };
 
