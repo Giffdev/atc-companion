@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FacilitySelector } from "@/components/FacilitySelector";
+import { DiagramPanel } from "@/components/DiagramPanel";
 import FacilityOverview from "@/components/FacilityOverview";
 import { AtisStrip } from "@/components/AtisStrip";
 import { NavigationDisplay } from "@/components/NavigationDisplay";
@@ -504,7 +505,15 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
 
                 {!hours.towerHours && !hours.isTowered && !hours.attendanceSchedule && (
                   <p className="text-sm text-aviation-muted">
-                    Non-towered airport. Check the Chart Supplement for {airportInfo.airport} attendance and services.
+                    Non-towered airport.{" "}
+                    <a
+                      className="text-cyan-400 hover:text-cyan-300 underline"
+                      href={`https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${hours.airportIcao.replace(/^K/, "")}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      View Chart Supplement ↗
+                    </a>
                   </p>
                 )}
               </div>
@@ -568,22 +577,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
             )}
           </div>
           {diagram ? (
-            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="data-label">Airport diagram</p>
-                  <p className="mt-2 text-sm text-aviation-text">{diagram.procedureName}</p>
-                </div>
-                <a
-                  className="inline-flex items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300/50 hover:bg-cyan-500/15"
-                  href={diagram.chartUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open airport diagram
-                </a>
-              </div>
-            </div>
+            <DiagramPanel diagram={diagram} airportCode={airportInfo.airport} />
           ) : null}
         </div>
       );
