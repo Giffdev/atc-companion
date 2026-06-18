@@ -434,23 +434,17 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [activeIntent, setActiveIntent] = useState<ParsedIntent | null>(null);
   const [submittedQuery, setSubmittedQuery] = useState("Awaiting query");
   const [activeCard, setActiveCard] = useState<DashboardResultType>("weather");
-  const [dispatchMessage, setDispatchMessage] = useState("Demo cards loaded. Submit a query to replace them with live service data.");
   const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
 
-  useEffect(() => {
     const storedFacilityId = window.localStorage.getItem(FACILITY_STORAGE_KEY);
-
-    if (!storedFacilityId) {
-      return;
-    }
-
-    if (getFacilityById(storedFacilityId)) {
-      setSelectedFacilityId(storedFacilityId);
-    }
-  }, []);
+    return storedFacilityId && getFacilityById(storedFacilityId) ? storedFacilityId : null;
+  });
 
   useEffect(() => {
     if (!selectedFacilityId) {
@@ -494,6 +488,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     dashboardData.plates[0]?.airportIcao ??
     (activeIntent?.type === "plates" || activeIntent?.type === "airport_info" ? activeIntent.airport : undefined) ??
     "Field";
+  const demoNavigationSourceStatus = demoData.sourceStatuses.find((source) => source.id === "navigation") ?? demoData.sourceStatuses[0];
 
   const fetchLiveQuery = useCallback(async (query: string, bypassCache = false): Promise<LiveQueryResult> => {
     const response = await fetch(API_ENDPOINTS.query, {
@@ -536,7 +531,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       setActiveCard(previewCard);
     }
 
-    setDispatchMessage(`Dispatching ${intent?.type.replaceAll("_", " ") ?? "live"} query to live services.`);
+    setSubmitError(null);
 
     try {
       const payload = await fetchLiveQuery(query);
@@ -547,12 +542,6 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       if (returnedCard) {
         setActiveCard(returnedCard);
       }
-
-      setDispatchMessage(
-        payload.response.ok
-          ? `Live ${payload.intent.type.replaceAll("_", " ")} response received in ${Math.round(payload.executionTimeMs)} ms.`
-          : payload.response.error.message
-      );
     } catch {
       const fallbackMessage =
         typeof navigator !== "undefined" && !navigator.onLine
@@ -561,7 +550,6 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
       setLiveResult(null);
       setSubmitError(fallbackMessage);
-      setDispatchMessage(fallbackMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -592,12 +580,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
             setLiveResult(payload);
             setActiveIntent(payload.intent);
             setSubmitError(null);
-            setDispatchMessage(
-              `Live ${payload.intent.type.replaceAll("_", " ")} response auto-refreshed in ${Math.round(payload.executionTimeMs)} ms.`
-            );
           } else {
             setSubmitError(payload.response.error.message);
-            setDispatchMessage(`Auto-refresh failed: ${payload.response.error.message}`);
           }
         })
         .catch(() => {
@@ -607,7 +591,6 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
           const fallbackMessage = `Auto-refresh failed for live ${autoRefreshConfig.intentType}. Retaining the last successful result.`;
           setSubmitError(fallbackMessage);
-          setDispatchMessage(fallbackMessage);
         })
         .finally(() => {
           refreshInFlight = false;
@@ -623,36 +606,18 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   return (
     <main className="flex min-h-screen flex-col">
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">
-        <header className="aviation-panel relative overflow-hidden px-5 py-5 md:px-7">
+        <header className="aviation-panel relative overflow-hidden px-5 py-4 md:px-7">
           <div className="absolute inset-y-0 right-[-8rem] hidden w-80 rounded-full bg-cyan-500/10 blur-3xl xl:block" />
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25">
-                <div className="absolute inset-2 rounded-full border border-emerald-400/20" />
-                <div className="absolute inset-0 rounded-full border border-cyan-400/15" />
-                <div className="radar-sweep absolute left-1/2 top-1/2 h-[1px] w-7 origin-left bg-gradient-to-r from-cyan-300 to-transparent" />
-                <div className="h-2.5 w-2.5 rounded-full bg-aviation-green shadow-[0_0_18px_rgba(34,197,94,0.75)]" />
+          <div className="flex items-center gap-4">
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25">
+                <div className="absolute inset-1.5 rounded-full border border-emerald-400/20" />
+                <div className="radar-sweep absolute left-1/2 top-1/2 h-[1px] w-5 origin-left bg-gradient-to-r from-cyan-300 to-transparent" />
+                <div className="h-2 w-2 rounded-full bg-aviation-green shadow-[0_0_18px_rgba(34,197,94,0.75)]" />
               </div>
 
               <div>
-                <p className="data-label">ATC Companion</p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-aviation-text md:text-5xl">Dark aviation console built for tower workflows.</h1>
-                <p className="mt-3 max-w-4xl text-sm leading-7 text-aviation-muted md:text-base">
-                  Source-attributed weather, NOTAM, traffic, and field-frequency panels share one high-contrast surface, with intent parsing and live query dispatch integrated up front.
-                </p>
+                <h1 className="text-xl font-semibold tracking-tight text-aviation-text md:text-2xl">ATC Companion</h1>
               </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[320px]">
-              <div className="rounded-2xl border border-aviation-border bg-black/20 px-4 py-3">
-                <p className="data-label">Current Tasking</p>
-                <p className="mt-2 font-data text-sm text-aviation-text">{submittedQuery}</p>
-              </div>
-              <div className="rounded-2xl border border-aviation-border bg-black/20 px-4 py-3">
-                <p className="data-label">Dispatch</p>
-                <p className="mt-2 text-sm text-aviation-text">{dispatchMessage}</p>
-              </div>
-            </div>
           </div>
         </header>
 
@@ -668,18 +633,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           onSubmit={handleSubmit}
         />
 
-        <section className="aviation-panel px-5 py-5 md:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <p className="data-label">Live Query Result</p>
-              <h2 className="mt-2 text-2xl font-semibold text-aviation-text">Authoritative response envelope</h2>
-              <p className="mt-2 text-sm text-aviation-muted">
-                Query orchestration now dispatches intent output into live service adapters while keeping demo cards as the fallback path.
-              </p>
-            </div>
-
+        <section className="aviation-panel px-5 py-4 md:px-6">
+          <div className="flex items-center justify-between gap-4">
             {liveResult ? (
-              <div className="flex flex-col items-start gap-3 xl:items-end">
+              <div className="flex flex-wrap items-center gap-3">
                 <SourceBadge
                   fetchedAt={liveResult.response.fetchedAt}
                   isStale={liveResult.response.isStale}
@@ -696,10 +653,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   </div>
                 ) : null}
               </div>
-            ) : null}
+            ) : (
+              <p className="text-sm text-aviation-muted">Submit a query above to see live results.</p>
+            )}
           </div>
 
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-4">
             {renderQuerySummary(liveResult, isSubmitting, submittedQuery)}
 
             {liveResult ? (
@@ -805,12 +764,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="navigation" className="xl:col-span-5">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : initialNow}
+                      fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : demoNavigationSourceStatus.fetchedAt}
                       isActive={activeCard === "navigation"}
                       kind="navigation"
                       rawData={dashboardData.navigation}
                       referenceTime={initialNow}
-                      source={liveResult?.intent.type === "navigation" ? liveResult.response.source : demoData.sourceStatuses.find((source) => source.id === "navigation")?.source ?? demoData.sourceStatuses[0].source}
+                      source={liveResult?.intent.type === "navigation" ? liveResult.response.source : demoNavigationSourceStatus.source}
                       subtitle="Great-circle bearing and distance calculated from airport reference coordinates, with controller-friendly magnetic vector output."
                       title={`${dashboardData.navigation.from.icao} to ${dashboardData.navigation.to.icao} direct vector`}
                     >

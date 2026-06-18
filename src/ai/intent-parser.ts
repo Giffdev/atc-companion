@@ -195,7 +195,9 @@ const createIntentFromLlm = (
   const enrichedEntities: ExtractedEntities = {
     ...entities,
     airports: result.airport ? Array.from(new Set([result.airport, ...entities.airports])) : entities.airports,
-    route: result.route ?? entities.route
+    route: result.route ?? entities.route,
+    navigationFromAirport: result.from ?? entities.navigationFromAirport,
+    navigationToAirport: result.to ?? entities.navigationToAirport
   };
 
   const base = {
@@ -267,8 +269,8 @@ const createIntentFromLlm = (
         airport: result.airport
       };
     case "navigation": {
-      const fromAirport = result.from ?? entities.navigationFromAirport;
-      const toAirport = result.to ?? entities.navigationToAirport;
+      const fromAirport = result.from ?? enrichedEntities.navigationFromAirport;
+      const toAirport = result.to ?? enrichedEntities.navigationToAirport;
 
       return toAirport
         ? fromAirport

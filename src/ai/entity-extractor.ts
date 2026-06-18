@@ -536,8 +536,18 @@ export const extractEntities = (input: string, options: { defaultFromAirport?: s
   const airports = extractAirportCodes(input).filter((code) => !isAllSingleLetters(code));
   const navigation = extractNavigationAirports(input, options.defaultFromAirport);
 
+  // If user says "my location", "my airport", "here", "my field" etc., inject the facility airport
+  const facilityAirportMentioned =
+    options.defaultFromAirport &&
+    /\b(?:my\s+(?:airport|location|field|facility|tower|position)|(?:at|around|near)\s+(?:here|me))\b/i.test(input);
+
+  const resolvedAirports =
+    facilityAirportMentioned && !airports.includes(options.defaultFromAirport!)
+      ? [options.defaultFromAirport!, ...airports]
+      : airports;
+
   return {
-    airports,
+    airports: resolvedAirports,
     frequencies: extractFrequencies(input),
     altitudesFeet: extractAltitudesFeet(input),
     speedKnots: extractSpeedKnots(input),

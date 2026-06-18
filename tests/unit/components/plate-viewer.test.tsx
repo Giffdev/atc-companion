@@ -49,6 +49,8 @@ const PLATES: ApproachPlate[] = [
   }
 ];
 
+const proxiedUrl = (url: string): string => `/api/plate-proxy?url=${encodeURIComponent(url)}`;
+
 describe("PlateViewer", () => {
   it("scores exact procedure and runway matches highest", () => {
     expect(getPlateMatchScore(PLATES[1], "RNAV", "34L")).toBe(3);
@@ -70,12 +72,12 @@ describe("PlateViewer", () => {
       />
     );
 
-    expect(screen.getByTitle("RNAV (GPS) RWY 34L PDF")).toHaveAttribute("src", PLATES[1].chartUrl);
+    expect(screen.getByTitle("RNAV (GPS) RWY 34L PDF")).toHaveAttribute("src", proxiedUrl(PLATES[1].chartUrl));
     expect(screen.getAllByRole("link", { name: /open in new tab/i })[0]).toHaveAttribute("href", PLATES[1].chartUrl);
 
     fireEvent.click(screen.getByRole("button", { name: /ILS OR LOC RWY 34L/i }));
 
-    expect(screen.getByTitle("ILS OR LOC RWY 34L PDF")).toHaveAttribute("src", PLATES[0].chartUrl);
+    expect(screen.getByTitle("ILS OR LOC RWY 34L PDF")).toHaveAttribute("src", proxiedUrl(PLATES[0].chartUrl));
     expect(screen.getAllByRole("link", { name: /open in new tab/i })[0]).toHaveAttribute("href", PLATES[0].chartUrl);
   });
 });

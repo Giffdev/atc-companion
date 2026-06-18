@@ -73,7 +73,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
   }, [isOpen]);
 
   return (
-    <section className="aviation-panel relative px-4 py-4 md:px-5">
+    <section className="aviation-panel relative z-20 px-4 py-4 md:px-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="data-label">Controller Facility</p>
