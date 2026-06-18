@@ -35,14 +35,8 @@ type LiveQueryResult = {
   timestamp: string;
 };
 
-type AirportInfoQueryPayload = {
-  airport: string;
-  runways: string[];
-  weather: ApiResponse<WeatherBundle>;
-  frequencies: ApiResponse<Frequency[]>;
-  plates: ApiResponse<ApproachPlate[]>;
-  diagram?: ApiResponse<ApproachPlate | null>;
-};
+import type { AirportInfoQueryPayload } from "@/services/orchestrator";
+import type { AirportHours } from "@/services/airport-hours";
 
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
 const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "navigation", "frequency", "plates", "regulatory"];
@@ -285,7 +279,7 @@ const collectWarnings = (
   return [...warnings];
 };
 
-const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: boolean, submittedQuery: string) => {
+const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: boolean, submittedQuery: string, onFollowUp?: (query: string) => void) => {
   if (isSubmitting) {
     return (
       <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
@@ -382,30 +376,106 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       );
     case "airport_info": {
       const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
-      const plates = airportInfo.plates.ok ? airportInfo.plates.data.length : 0;
-      const frequencies = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
+      const plateCount = airportInfo.plates.ok ? airportInfo.plates.data.length : 0;
+      const freqCount = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
       const diagram = airportInfo.diagram?.ok ? airportInfo.diagram.data : null;
+      const hours = airportInfo.hours?.ok ? airportInfo.hours.data : null;
 
       return (
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-            <p className="data-label">Airport</p>
-            <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.airport}</p>
-          </div>
-          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-            <p className="data-label">Runways</p>
-            <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.runways.join(" • ") || "Unavailable"}</p>
-          </div>
-          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-            <p className="data-label">Frequencies</p>
-            <p className="mt-2 font-data text-sm text-aviation-text">{frequencies}</p>
-          </div>
-          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-            <p className="data-label">Plates</p>
-            <p className="mt-2 font-data text-sm text-aviation-text">{plates}</p>
+        <div className="space-y-3">
+          {/* Hours of operation (if requested/available) */}
+          {hours && (
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="data-label">Hours of Operation — {airportInfo.airport}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {hours.towerHours && (
+                  <div>
+                    <p className="text-xs text-aviation-muted">Tower</p>
+                    <p className="font-data text-sm text-aviation-text">{hours.towerHours}</p>
+                  </div>
+                )}
+                {hours.attendanceSchedule && (
+                  <div>
+                    <p className="text-xs text-aviation-muted">Attendance</p>
+                    <p className="font-data text-sm text-aviation-text">{hours.attendanceSchedule}</p>
+                  </div>
+                )}
+                {hours.lightingSchedule && (
+                  <div>
+                    <p className="text-xs text-aviation-muted">Lighting</p>
+                    <p className="font-data text-sm text-aviation-text">{hours.lightingSchedule}</p>
+                  </div>
+                )}
+                {hours.airportUse && (
+                  <div>
+                    <p className="text-xs text-aviation-muted">Use</p>
+                    <p className="font-data text-sm text-aviation-text">{hours.airportUse}</p>
+                  </div>
+                )}
+                {!hours.towerHours && !hours.attendanceSchedule && (
+                  <p className="text-sm text-aviation-muted sm:col-span-2">
+                    Specific hours not available. Check the Chart Supplement for {airportInfo.airport}.
+                  </p>
+                )}
+              </div>
+              <p className="mt-2 text-[10px] text-aviation-muted">Source: {hours.source}</p>
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="data-label">Airport</p>
+              <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.airport}</p>
+            </div>
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 md:col-span-1">
+              <p className="data-label">Runways</p>
+              {airportInfo.runwayDetails?.ok && airportInfo.runwayDetails.data.runways.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  {airportInfo.runwayDetails.data.runways.map((rwy) => (
+                    <div key={rwy.designator} className="font-data text-sm text-aviation-text">
+                      <span>{rwy.designator}</span>
+                      {rwy.lengthFeet && <span className="text-xs text-aviation-muted"> · {rwy.lengthFeet.toLocaleString()}×{rwy.widthFeet ?? "?"}ft</span>}
+                      {rwy.surface && <span className="text-xs text-aviation-muted"> · {rwy.surface}</span>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.runways.join(" • ") || "Unavailable"}</p>
+              )}
+            </div>
+            {onFollowUp ? (
+              <button
+                className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
+                type="button"
+              >
+                <p className="data-label">Frequencies</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{freqCount} <span className="text-xs text-cyan-400">→ view</span></p>
+              </button>
+            ) : (
+              <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+                <p className="data-label">Frequencies</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{freqCount}</p>
+              </div>
+            )}
+            {onFollowUp ? (
+              <button
+                className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
+                type="button"
+              >
+                <p className="data-label">Plates</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{plateCount} <span className="text-xs text-cyan-400">→ view</span></p>
+              </button>
+            ) : (
+              <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+                <p className="data-label">Plates</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{plateCount}</p>
+              </div>
+            )}
           </div>
           {diagram ? (
-            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 md:col-span-4">
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="data-label">Airport diagram</p>
@@ -746,7 +816,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
           {liveResult ? (
             <div className="mt-4 space-y-4">
-              {renderQuerySummary(liveResult, isSubmitting, submittedQuery)}
+              {renderQuerySummary(liveResult, isSubmitting, submittedQuery, (followUpQuery) => {
+                handleSubmit(followUpQuery, null);
+              })}
 
               <details className="rounded-2xl border border-aviation-border bg-black/20">
                 <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">Reveal query envelope</summary>

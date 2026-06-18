@@ -2,11 +2,13 @@ import { getFacilityById } from "@/data/facilities";
 import { getDataSource } from "@/data/sources";
 import { findAirportReference } from "@/data/airports";
 import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
+import { getAirportHours, type AirportHours } from "@/services/airport-hours";
 import { getFrequencies } from "@/services/frequencies";
 import { getNavigationBetween } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
 import { getAirportDiagram, getPlates, getSids, getStars } from "@/services/plates";
 import { searchFars } from "@/services/regulatory";
+import { getAirportRunways, type AirportRunways } from "@/services/runway-info";
 import { getTraffic } from "@/services/traffic";
 import { getMetar, getPireps, getTaf, getWeather } from "@/services/weather";
 import type { ApiResponse, DataSource } from "@/types/api";
@@ -24,10 +26,12 @@ const ORCHESTRATOR_SOURCE: DataSource = {
 export interface AirportInfoQueryPayload {
   airport: string;
   runways: string[];
+  runwayDetails?: ApiResponse<AirportRunways>;
   weather: ApiResponse<WeatherBundle>;
   frequencies: ApiResponse<Frequency[]>;
   plates: ApiResponse<ApproachPlate[]>;
   diagram?: ApiResponse<ApproachPlate | null>;
+  hours?: ApiResponse<AirportHours>;
 }
 
 export interface QueryResult {
@@ -76,26 +80,33 @@ const executeAirportInfo = async (
   intent: Extract<ParsedIntent, { type: "airport_info" }>,
   options: ExecuteQueryOptions = {}
 ): Promise<ApiResponse<AirportInfoQueryPayload>> => {
-  const airportReference = findAirportReference(intent.airport);
-  const runways = airportReference?.runways ?? [];
-  const [weather, frequencies, plates, diagram] = await Promise.all([
+  const fetchHours = intent.detail === "hours" || intent.detail === "all" || !intent.detail;
+  const [weather, frequencies, plates, diagram, hours, runwayDetails] = await Promise.all([
     getWeather(intent.airport, { bypassCache: options.bypassCache }),
     getFrequencies(intent.airport),
     getPlates({ airport: intent.airport }),
-    intent.detail === "runways" ? getAirportDiagram(intent.airport) : Promise.resolve(undefined)
+    intent.detail === "runways" ? getAirportDiagram(intent.airport) : Promise.resolve(undefined),
+    fetchHours ? getAirportHours(intent.airport) : Promise.resolve(undefined),
+    getAirportRunways(intent.airport)
   ]);
 
-  if (!weather.ok && !frequencies.ok && !plates.ok && !runways.length && !diagram?.ok) {
+  // Build runway designator list: prefer live FAA data, fall back to static
+  const airportReference = findAirportReference(intent.airport);
+  const runways = runwayDetails.ok && runwayDetails.data.runways.length > 0
+    ? runwayDetails.data.runways.map((r) => r.designator)
+    : airportReference?.runways ?? [];
+
+  if (!weather.ok && !frequencies.ok && !plates.ok && !runways.length && !diagram?.ok && !hours?.ok && !runwayDetails.ok) {
     return createApiErrorResponse(
       {
         code: "AIRPORT_INFO_UNAVAILABLE",
         message: `Airport information is unavailable for ${intent.airport}.`,
-        details: [weather, frequencies, plates, diagram]
+        details: [weather, frequencies, plates, diagram, hours, runwayDetails]
           .filter((response): response is Exclude<typeof response, undefined> => Boolean(response))
           .filter((response): response is Exclude<typeof response, { ok: true }> => !response.ok)
           .map((response) => response.error.message)
           .join(" | "),
-        retryable: [weather, frequencies, plates, diagram]
+        retryable: [weather, frequencies, plates, diagram, hours, runwayDetails]
           .filter((response): response is Exclude<typeof response, undefined> => Boolean(response))
           .filter((response): response is Exclude<typeof response, { ok: true }> => !response.ok)
           .some((response) => response.error.retryable),
@@ -104,7 +115,7 @@ const executeAirportInfo = async (
       {
         source: ORCHESTRATOR_SOURCE,
         fetchedAt: toIsoNow(),
-        supportingSources: dedupeSources([weather.source, frequencies.source, plates.source, diagram?.source].filter(isDataSource))
+        supportingSources: dedupeSources([weather.source, frequencies.source, plates.source, diagram?.source, hours?.source, runwayDetails.source].filter(isDataSource))
       }
     );
   }
@@ -113,16 +124,18 @@ const executeAirportInfo = async (
     {
       airport: intent.airport,
       runways,
+      runwayDetails,
       weather,
       frequencies,
       plates,
-      diagram
+      diagram,
+      hours
     },
     ORCHESTRATOR_SOURCE,
     {
       fetchedAt: toIsoNow(),
       supportingSources: dedupeSources(
-        [weather, frequencies, plates, diagram]
+        [weather, frequencies, plates, diagram, hours, runwayDetails]
           .filter((response): response is Exclude<typeof response, undefined> => Boolean(response))
           .filter((response) => response.ok)
           .map((response) => response.source)
