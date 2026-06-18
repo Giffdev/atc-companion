@@ -178,3 +178,6 @@ for (const facility of APPROACH_FACILITIES) {
 
 export const findApproachFacility = (nameOrCode: string): ApproachFacility | null =>
   APPROACH_FACILITY_INDEX.get(nameOrCode.trim().toUpperCase()) ?? null;
+
+export const findApproachFacilityByAirport = (airportIcao: string): ApproachFacility | null =>
+  APPROACH_FACILITIES.find((facility) => facility.airports.includes(airportIcao.trim().toUpperCase())) ?? null;

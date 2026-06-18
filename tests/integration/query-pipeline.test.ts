@@ -24,7 +24,7 @@ const executeQuery = async (
         response: intent.subtype === "metar" ? await getMetar(intent.airport) : await getWeather(intent.airport)
       };
     case "frequency":
-      return { intentType: intent.type, response: await getFrequencies(intent.facility) };
+      return { intentType: intent.type, response: await getFrequencies(intent.facility, intent.freq_type) };
     case "plates":
       return {
         intentType: intent.type,

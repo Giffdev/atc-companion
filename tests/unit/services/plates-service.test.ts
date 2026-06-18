@@ -1,6 +1,6 @@
 import { appCache } from "@/lib/cache";
 import * as utils from "@/lib/utils";
-import { getPlates } from "@/services/plates";
+import { getAirportDiagram, getPlates } from "@/services/plates";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SAMPLE_DTPP_XML, installAviationApiMock } from "../../fixtures/mock-aviation-fetch";
 
@@ -40,6 +40,23 @@ describe("plates service", () => {
 
     expect(response.data).toHaveLength(1);
     expect(response.data[0]).toMatchObject({ procedureType: "RNAV", runway: "32L" });
+  });
+
+  it("returns the airport diagram when an APD chart exists", async () => {
+    installAviationApiMock();
+
+    const response = await getAirportDiagram("KBFI");
+
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      return;
+    }
+
+    expect(response.data).toMatchObject({
+      airportIcao: "KBFI",
+      procedureName: "AIRPORT DIAGRAM",
+      chartUrl: expect.stringContaining("BFI_APD.PDF")
+    });
   });
 
   it("returns a 404 envelope when the requested airport is absent from the current cycle XML", async () => {

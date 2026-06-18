@@ -5,6 +5,7 @@ type StatusBarProps = {
   sources: SourceStatusItem[];
   warnings: string[];
   referenceTime: string;
+  liveStatus?: string | null;
 };
 
 const STATUS_DOT: Record<SourceStatusItem["status"], string> = {
@@ -13,12 +14,18 @@ const STATUS_DOT: Record<SourceStatusItem["status"], string> = {
   degraded: "bg-aviation-red"
 };
 
-export function StatusBar({ sources, warnings, referenceTime }: StatusBarProps) {
+export function StatusBar({ sources, warnings, referenceTime, liveStatus }: StatusBarProps) {
   return (
     <footer className="sticky bottom-0 z-30 mt-auto border-t border-aviation-border/80 bg-[#08101d]/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 lg:px-8">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2 text-xs text-aviation-muted">
+            {liveStatus ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-200">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-aviation-green" />
+                <span>{liveStatus}</span>
+              </div>
+            ) : null}
             {sources.map((source) => (
               <div
                 key={source.id}

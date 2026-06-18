@@ -15,6 +15,9 @@ export const API_ENDPOINTS = {
   query: "/api/query"
 } as const;
 
+export const TRAFFIC_REFRESH_INTERVAL_MS = 15_000;
+export const WEATHER_REFRESH_INTERVAL_MS = 60_000;
+
 export const AVIATION_SOURCES = {
   weather: AVIATION_SOURCE_REGISTRY.aviationWeather.baseUrl,
   notams: AVIATION_SOURCE_REGISTRY.faaNotams.baseUrl,

@@ -59,6 +59,71 @@ describe("intent parser scenarios", () => {
     });
   });
 
+  it("resolves named-airport aliases and generic airport-info phrasing used in live query testing", async () => {
+    await expect(parseIntent("what's the current weather at SeaTac")).resolves.toMatchObject({
+      type: "weather",
+      airport: "KSEA",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("give me the TAF for Denver International")).resolves.toMatchObject({
+      type: "weather",
+      subtype: "taf",
+      airport: "KDEN",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("tell me about KBFI")).resolves.toMatchObject({
+      type: "airport_info",
+      airport: "KBFI",
+      requiresClarification: false
+    });
+  });
+
+  it("keeps approach-procedure, traffic-count, and regulatory phrases out of the wrong intent buckets", async () => {
+    await expect(parseIntent("show me the ILS runway 14R approach into Boeing Field")).resolves.toMatchObject({
+      type: "plates",
+      airport: "KBFI",
+      procedure_type: "ILS",
+      runway: "14R",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("what approach plates are available for KSEA")).resolves.toMatchObject({
+      type: "plates",
+      airport: "KSEA",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("is there an instrument approach at Friday Harbor")).resolves.toMatchObject({
+      type: "plates",
+      airport: "KFHR",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("how many planes near Boeing Field")).resolves.toMatchObject({
+      type: "traffic",
+      airport: "KBFI",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("what is the speed limit below 10000 feet")).resolves.toMatchObject({
+      type: "regulatory",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("what are the VFR weather minimums in Class D airspace")).resolves.toMatchObject({
+      type: "regulatory",
+      requiresClarification: false
+    });
+
+    await expect(parseIntent("roche harbor approaches")).resolves.toMatchObject({
+      type: "plates",
+      airport: "W39",
+      requiresClarification: false
+    });
+  });
+
   it("treats empty input as a clarification flow", async () => {
     await expect(parseIntent("   ")).resolves.toMatchObject({
       type: "unknown",

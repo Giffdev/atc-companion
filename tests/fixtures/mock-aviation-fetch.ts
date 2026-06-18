@@ -87,6 +87,7 @@ export const SAMPLE_DTPP_XML = `<?xml version="1.0" encoding="utf-8"?>
   <state_code ID="WA">
     <city_name ID="SEATTLE">
       <airport_name ID="BOEING FIELD/KING COUNTY INTL" apt_ident="BFI" icao_ident="KBFI">
+        <record><chart_code>APD</chart_code><chart_name>AIRPORT DIAGRAM</chart_name><pdf_name>BFI_APD.PDF</pdf_name></record>
         <record><chart_code>IAP</chart_code><chart_name>ILS RWY 14R</chart_name><pdf_name>BFI_IAP_ILS14R.PDF</pdf_name></record>
         <record><chart_code>IAP</chart_code><chart_name>RNAV (GPS) RWY 32L</chart_name><pdf_name>BFI_IAP_RNAV32L.PDF</pdf_name></record>
         <record><chart_code>DP</chart_code><chart_name>HAROB SIX</chart_name><pdf_name>BFI_DP_HAROB6.PDF</pdf_name><faanfd18>HAROB.HAROB6</faanfd18></record>

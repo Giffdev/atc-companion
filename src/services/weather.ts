@@ -378,7 +378,11 @@ const parsePirep = (payload: AviationWeatherPirepPayload, sourceUrl: string, fet
   };
 };
 
-export const getMetar = async (station: string): Promise<ApiResponse<Metar>> => {
+type WeatherRequestOptions = {
+  bypassCache?: boolean;
+};
+
+export const getMetar = async (station: string, options: WeatherRequestOptions = {}): Promise<ApiResponse<Metar>> => {
   const normalizedStation = toIcaoCode(station);
 
   try {
@@ -387,7 +391,8 @@ export const getMetar = async (station: string): Promise<ApiResponse<Metar>> => 
       query: { ids: normalizedStation, format: "json" },
       ttlMs: getCacheTtlMs("metar"),
       cacheNamespace: "weather-metar",
-      cacheKey: createCacheKey("weather-metar", { station: normalizedStation })
+      cacheKey: createCacheKey("weather-metar", { station: normalizedStation }),
+      bypassCache: options.bypassCache
     });
 
     const payload = result.data[0];
@@ -419,7 +424,7 @@ export const getMetar = async (station: string): Promise<ApiResponse<Metar>> => 
   }
 };
 
-export const getTaf = async (station: string): Promise<ApiResponse<Taf>> => {
+export const getTaf = async (station: string, options: WeatherRequestOptions = {}): Promise<ApiResponse<Taf>> => {
   const normalizedStation = toIcaoCode(station);
 
   try {
@@ -428,7 +433,8 @@ export const getTaf = async (station: string): Promise<ApiResponse<Taf>> => {
       query: { ids: normalizedStation, format: "json" },
       ttlMs: getCacheTtlMs("taf"),
       cacheNamespace: "weather-taf",
-      cacheKey: createCacheKey("weather-taf", { station: normalizedStation })
+      cacheKey: createCacheKey("weather-taf", { station: normalizedStation }),
+      bypassCache: options.bypassCache
     });
 
     const payload = result.data[0];
@@ -460,7 +466,11 @@ export const getTaf = async (station: string): Promise<ApiResponse<Taf>> => {
   }
 };
 
-export const getPireps = async (params: { station?: string; distance?: number }): Promise<ApiResponse<Pirep[]>> => {
+export const getPireps = async (params: {
+  station?: string;
+  distance?: number;
+  bypassCache?: boolean;
+}): Promise<ApiResponse<Pirep[]>> => {
   const normalizedStation = params.station ? toIcaoCode(params.station) : undefined;
   const distance = params.distance ?? 75;
 
@@ -487,7 +497,8 @@ export const getPireps = async (params: { station?: string; distance?: number })
       query: { id: normalizedStation, distance, format: "json" },
       ttlMs: getCacheTtlMs("pirep"),
       cacheNamespace: "weather-pirep",
-      cacheKey: createCacheKey("weather-pirep", { station: normalizedStation, distance })
+      cacheKey: createCacheKey("weather-pirep", { station: normalizedStation, distance }),
+      bypassCache: params.bypassCache
     });
 
     return createApiResponse(
@@ -504,12 +515,12 @@ export const getPireps = async (params: { station?: string; distance?: number })
   }
 };
 
-export const getWeather = async (station: string): Promise<ApiResponse<WeatherBundle>> => {
+export const getWeather = async (station: string, options: WeatherRequestOptions = {}): Promise<ApiResponse<WeatherBundle>> => {
   const normalizedStation = toIcaoCode(station);
   const [metarResponse, tafResponse, pirepResponse] = await Promise.all([
-    getMetar(normalizedStation),
-    getTaf(normalizedStation),
-    getPireps({ station: normalizedStation, distance: 75 })
+    getMetar(normalizedStation, options),
+    getTaf(normalizedStation, options),
+    getPireps({ station: normalizedStation, distance: 75, bypassCache: options.bypassCache })
   ]);
 
   if (!metarResponse.ok && !tafResponse.ok && !pirepResponse.ok) {

@@ -58,6 +58,7 @@ const resolveBoundingBox = (params: { airport?: string; bounds?: BoundingBox }):
 export const getTraffic = async (params: {
   airport?: string;
   bounds?: BoundingBox;
+  bypassCache?: boolean;
 }): Promise<ApiResponse<TrafficTarget[]>> => {
   const bounds = resolveBoundingBox(params);
 
@@ -100,7 +101,8 @@ export const getTraffic = async (params: {
       cacheKey: createCacheKey("traffic-search", {
         airport: params.airport ? toIcaoCode(params.airport) : null,
         bounds
-      })
+      }),
+      bypassCache: params.bypassCache
     });
 
     const source = result.source;

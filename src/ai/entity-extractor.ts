@@ -212,7 +212,8 @@ const collectMatches = (pattern: RegExp, input: string): string[] => {
 
 export const extractAirportCodes = (input: string): string[] => {
   const normalized = normalizeAviationText(input);
-  const directCodes = collectMatches(ICAO_PATTERN, normalized).filter(
+  const uppercased = normalized.toUpperCase();
+  const directCodes = collectMatches(ICAO_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{4}$/.test(code) && (code.startsWith("K") || Boolean(findAirportReference(code)))
   );
   const contextualCodes = Array.from(normalized.matchAll(AIRPORT_CONTEXT_WORDS))
@@ -221,7 +222,7 @@ export const extractAirportCodes = (input: string): string[] => {
       (code): code is string =>
         Boolean(code) && /^[A-Z]{3,4}$/.test(code) && !AIRPORT_CODE_STOPWORDS.has(code) && Boolean(findAirportReference(code))
     );
-  const iataCodes = collectMatches(IATA_PATTERN, normalized).filter(
+  const iataCodes = collectMatches(IATA_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{3}$/.test(code) && !AIRPORT_CODE_STOPWORDS.has(code) && Boolean(findAirportReference(code))
   );
   const namedAirportCodes = findAirportReferencesInText(normalized).map((airport) => toIcaoCode(airport.icao));
@@ -398,7 +399,7 @@ export const detectNotamTypeFilter = (input: string): NotamTypeFilter | undefine
 export const detectAirportInfoDetail = (input: string): AirportInfoDetail | undefined => {
   const normalized = normalizeAviationText(input).toLowerCase();
 
-  if (/\brunway/.test(normalized)) {
+  if (/\b(?:runway|airport diagram|field layout)\b/.test(normalized)) {
     return "runways";
   }
   if (/\bfrequenc(?:y|ies)|tower|ground|atis|ctaf/.test(normalized)) {

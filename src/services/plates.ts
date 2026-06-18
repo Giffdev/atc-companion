@@ -153,6 +153,18 @@ const dedupe = <T extends { chartUrl: string }>(items: T[]): T[] => {
   });
 };
 
+const toApproachPlate = (airportData: DtppAirportPayload, record: DtppRecord, source: typeof DTPP_SOURCE): ApproachPlate => ({
+  airportIcao: airportData.icaoId,
+  procedureName: record.chart_name,
+  procedureType: inferApproachType(record.chart_name),
+  runway: extractRunway(record.chart_name),
+  chartUrl: toPdfUrl(airportData.cycle, record.pdf_name),
+  pdfUrl: toPdfUrl(airportData.cycle, record.pdf_name),
+  source,
+  fetchedAt: airportData.fetchedAt,
+  isStale: false
+});
+
 export const getPlates = async (params: { airport: string; type?: string }): Promise<ApiResponse<ApproachPlate[]>> => {
   try {
     const airportData = await getDtppAirportData(params.airport);
@@ -162,19 +174,7 @@ export const getPlates = async (params: { airport: string; type?: string }): Pro
 
     const plates = dedupe(
       records
-        .map(
-          (record): ApproachPlate => ({
-            airportIcao: airportData.icaoId,
-            procedureName: record.chart_name,
-            procedureType: inferApproachType(record.chart_name),
-            runway: extractRunway(record.chart_name),
-            chartUrl: toPdfUrl(airportData.cycle, record.pdf_name),
-            pdfUrl: toPdfUrl(airportData.cycle, record.pdf_name),
-            source,
-            fetchedAt: airportData.fetchedAt,
-            isStale: false
-          })
-        )
+        .map((record) => toApproachPlate(airportData, record, source))
         .filter((plate) => !plateTypeFilter || plate.procedureType === plateTypeFilter || plate.procedureName.toUpperCase().includes(plateTypeFilter))
     );
 
@@ -188,6 +188,31 @@ export const getPlates = async (params: { airport: string; type?: string }): Pro
   } catch (error) {
     if (error && typeof error === "object" && "ok" in error) {
       return error as ApiResponse<ApproachPlate[]>;
+    }
+
+    return toServiceErrorResponse(error, DTPP_SOURCE, "approachPlate");
+  }
+};
+
+export const getAirportDiagram = async (airport: string): Promise<ApiResponse<ApproachPlate | null>> => {
+  try {
+    const airportData = await getDtppAirportData(airport);
+    const source = { ...DTPP_SOURCE, url: airportData.sourceUrl };
+    const record = airportData.records.find((item) => item.chart_code === "APD" && item.pdf_name);
+    const diagram = record ? toApproachPlate(airportData, record, source) : null;
+
+    if (diagram) {
+      recordPlateUrl(diagram.airportIcao, diagram.procedureName, diagram.chartUrl);
+    }
+
+    return createApiResponse(diagram, source, {
+      fetchedAt: airportData.fetchedAt,
+      stalenessCategory: "approachPlate",
+      cache: airportData.cache
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "ok" in error) {
+      return error as ApiResponse<ApproachPlate | null>;
     }
 
     return toServiceErrorResponse(error, DTPP_SOURCE, "approachPlate");

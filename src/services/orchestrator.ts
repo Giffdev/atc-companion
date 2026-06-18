@@ -1,7 +1,8 @@
+import { findAirportReference } from "@/data/airports";
 import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
 import { getFrequencies } from "@/services/frequencies";
 import { getNotams } from "@/services/notams";
-import { getPlates, getSids, getStars } from "@/services/plates";
+import { getAirportDiagram, getPlates, getSids, getStars } from "@/services/plates";
 import { searchFars } from "@/services/regulatory";
 import { getTraffic } from "@/services/traffic";
 import { getMetar, getPireps, getTaf, getWeather } from "@/services/weather";
@@ -19,9 +20,11 @@ const ORCHESTRATOR_SOURCE: DataSource = {
 
 export interface AirportInfoQueryPayload {
   airport: string;
+  runways: string[];
   weather: ApiResponse<WeatherBundle>;
   frequencies: ApiResponse<Frequency[]>;
   plates: ApiResponse<ApproachPlate[]>;
+  diagram?: ApiResponse<ApproachPlate | null>;
 }
 
 export interface QueryResult {
@@ -29,6 +32,10 @@ export interface QueryResult {
   response: ApiResponse<unknown>;
   executionTimeMs: number;
   timestamp: string;
+}
+
+interface ExecuteQueryOptions {
+  bypassCache?: boolean;
 }
 
 const dedupeSources = (sources: DataSource[]): DataSource[] => {
@@ -43,6 +50,8 @@ const dedupeSources = (sources: DataSource[]): DataSource[] => {
     return true;
   });
 };
+
+const isDataSource = (source: DataSource | undefined): source is DataSource => Boolean(source);
 
 const getClarificationResponse = (intent: ParsedIntent): ApiResponse<never> =>
   createApiErrorResponse(
@@ -59,23 +68,31 @@ const getClarificationResponse = (intent: ParsedIntent): ApiResponse<never> =>
     }
   );
 
-const executeAirportInfo = async (intent: Extract<ParsedIntent, { type: "airport_info" }>): Promise<ApiResponse<AirportInfoQueryPayload>> => {
-  const [weather, frequencies, plates] = await Promise.all([
-    getWeather(intent.airport),
+const executeAirportInfo = async (
+  intent: Extract<ParsedIntent, { type: "airport_info" }>,
+  options: ExecuteQueryOptions = {}
+): Promise<ApiResponse<AirportInfoQueryPayload>> => {
+  const airportReference = findAirportReference(intent.airport);
+  const runways = airportReference?.runways ?? [];
+  const [weather, frequencies, plates, diagram] = await Promise.all([
+    getWeather(intent.airport, { bypassCache: options.bypassCache }),
     getFrequencies(intent.airport),
-    getPlates({ airport: intent.airport })
+    getPlates({ airport: intent.airport }),
+    intent.detail === "runways" ? getAirportDiagram(intent.airport) : Promise.resolve(undefined)
   ]);
 
-  if (!weather.ok && !frequencies.ok && !plates.ok) {
+  if (!weather.ok && !frequencies.ok && !plates.ok && !runways.length && !diagram?.ok) {
     return createApiErrorResponse(
       {
         code: "AIRPORT_INFO_UNAVAILABLE",
         message: `Airport information is unavailable for ${intent.airport}.`,
-        details: [weather, frequencies, plates]
+        details: [weather, frequencies, plates, diagram]
+          .filter((response): response is Exclude<typeof response, undefined> => Boolean(response))
           .filter((response): response is Exclude<typeof response, { ok: true }> => !response.ok)
           .map((response) => response.error.message)
           .join(" | "),
-        retryable: [weather, frequencies, plates]
+        retryable: [weather, frequencies, plates, diagram]
+          .filter((response): response is Exclude<typeof response, undefined> => Boolean(response))
           .filter((response): response is Exclude<typeof response, { ok: true }> => !response.ok)
           .some((response) => response.error.retryable),
         status: 503
@@ -83,7 +100,7 @@ const executeAirportInfo = async (intent: Extract<ParsedIntent, { type: "airport
       {
         source: ORCHESTRATOR_SOURCE,
         fetchedAt: toIsoNow(),
-        supportingSources: dedupeSources([weather.source, frequencies.source, plates.source])
+        supportingSources: dedupeSources([weather.source, frequencies.source, plates.source, diagram?.source].filter(isDataSource))
       }
     );
   }
@@ -91,21 +108,26 @@ const executeAirportInfo = async (intent: Extract<ParsedIntent, { type: "airport
   return createApiResponse(
     {
       airport: intent.airport,
+      runways,
       weather,
       frequencies,
-      plates
+      plates,
+      diagram
     },
     ORCHESTRATOR_SOURCE,
     {
       fetchedAt: toIsoNow(),
       supportingSources: dedupeSources(
-        [weather, frequencies, plates].filter((response) => response.ok).map((response) => response.source)
+        [weather, frequencies, plates, diagram]
+          .filter((response): response is Exclude<typeof response, undefined> => Boolean(response))
+          .filter((response) => response.ok)
+          .map((response) => response.source)
       )
     }
   );
 };
 
-const dispatchIntent = async (intent: ParsedIntent): Promise<ApiResponse<unknown>> => {
+const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions = {}): Promise<ApiResponse<unknown>> => {
   if (intent.requiresClarification || intent.type === "unknown") {
     return getClarificationResponse(intent);
   }
@@ -114,13 +136,13 @@ const dispatchIntent = async (intent: ParsedIntent): Promise<ApiResponse<unknown
     case "weather":
       switch (intent.subtype) {
         case "metar":
-          return getMetar(intent.airport);
+          return getMetar(intent.airport, { bypassCache: options.bypassCache });
         case "taf":
-          return getTaf(intent.airport);
+          return getTaf(intent.airport, { bypassCache: options.bypassCache });
         case "pirep":
-          return getPireps({ station: intent.airport, distance: intent.radius ?? 75 });
+          return getPireps({ station: intent.airport, distance: intent.radius ?? 75, bypassCache: options.bypassCache });
         case "all":
-          return getWeather(intent.airport);
+          return getWeather(intent.airport, { bypassCache: options.bypassCache });
       }
     case "plates":
       if (intent.procedure_type === "SID") {
@@ -145,10 +167,11 @@ const dispatchIntent = async (intent: ParsedIntent): Promise<ApiResponse<unknown
               maxLat: intent.bounds.north,
               maxLon: intent.bounds.east
             }
-          : undefined
+          : undefined,
+        bypassCache: options.bypassCache
       });
     case "frequency":
-      return getFrequencies(intent.facility);
+      return getFrequencies(intent.facility, intent.freq_type);
     case "notam":
       return getNotams({
         airport: intent.airport,
@@ -157,13 +180,13 @@ const dispatchIntent = async (intent: ParsedIntent): Promise<ApiResponse<unknown
     case "regulatory":
       return searchFars(intent.query, intent.part);
     case "airport_info":
-      return executeAirportInfo(intent);
+      return executeAirportInfo(intent, options);
   }
 };
 
-export const executeQuery = async (intent: ParsedIntent): Promise<QueryResult> => {
+export const executeQuery = async (intent: ParsedIntent, options: ExecuteQueryOptions = {}): Promise<QueryResult> => {
   const start = performance.now();
-  const response = await dispatchIntent(intent);
+  const response = await dispatchIntent(intent, options);
   const executionTimeMs = Number((performance.now() - start).toFixed(2));
 
   return {

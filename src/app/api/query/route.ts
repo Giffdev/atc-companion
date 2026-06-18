@@ -2,13 +2,17 @@ import { jsonWithStandardHeaders } from "@/app/api/route-utils";
 import { parseIntent } from "@/ai/intent-parser";
 import { executeQuery } from "@/services/orchestrator";
 
-const readInput = async (request: Request): Promise<string> => {
-  const body = (await request.json().catch(() => null)) as { input?: string } | null;
-  return body?.input?.trim() ?? "";
+const readRequestBody = async (request: Request): Promise<{ input: string; bypassCache: boolean }> => {
+  const body = (await request.json().catch(() => null)) as { input?: string; bypassCache?: boolean } | null;
+
+  return {
+    input: body?.input?.trim() ?? "",
+    bypassCache: body?.bypassCache === true
+  };
 };
 
 export async function POST(request: Request) {
-  const input = await readInput(request);
+  const { input, bypassCache } = await readRequestBody(request);
 
   if (!input) {
     return jsonWithStandardHeaders(
@@ -67,7 +71,7 @@ export async function POST(request: Request) {
   }
 
   const intent = await parseIntent(input);
-  const result = await executeQuery(intent);
+  const result = await executeQuery(intent, { bypassCache });
 
   return jsonWithStandardHeaders(result, {
     status: result.response.ok ? 200 : (result.response.error.status ?? 503)

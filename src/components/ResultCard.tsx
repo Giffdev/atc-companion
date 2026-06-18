@@ -1,7 +1,7 @@
 import { SourceBadge } from "@/components/SourceBadge";
 import type { DataSource } from "@/types/api";
 
-type ResultKind = "weather" | "notam" | "traffic" | "frequency";
+type ResultKind = "weather" | "notam" | "traffic" | "frequency" | "plates" | "regulatory";
 
 type ResultCardProps = {
   kind: ResultKind;
@@ -59,6 +59,26 @@ const KIND_STYLES: Record<
     icon: (
       <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
         <path d="M12 5v14M7 9.5a7 7 0 0 1 10 0M4 6.5a11 11 0 0 1 16 0" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+      </svg>
+    )
+  },
+  plates: {
+    label: "PLATES",
+    pillClassName: "border-violet-500/25 bg-violet-500/10 text-violet-300",
+    icon: (
+      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <path d="M7 4.75h7.5L18 8.25V19a1.25 1.25 0 0 1-1.25 1.25h-9.5A1.25 1.25 0 0 1 6 19V6A1.25 1.25 0 0 1 7.25 4.75Z" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M14.5 4.75V8.5H18M8.75 12h6.5M8.75 15.5h6.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+      </svg>
+    )
+  },
+  regulatory: {
+    label: "REGULATORY",
+    pillClassName: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+    icon: (
+      <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <path d="M12 4 5 7.5V11c0 4.22 2.9 8.15 7 9 4.1-.85 7-4.78 7-9V7.5L12 4Z" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M9.5 12.25 11 13.75l3.5-3.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
       </svg>
     )
   }

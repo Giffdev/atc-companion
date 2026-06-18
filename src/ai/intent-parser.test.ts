@@ -73,6 +73,26 @@ describe("parseIntent", () => {
     });
   });
 
+  it("parses runway configuration and airport diagram requests as airport info", async () => {
+    const [runwayIntent, diagramIntent] = await Promise.all([
+      parseIntent("what is the runway configuration at KSEA"),
+      parseIntent("show me the airport diagram for KSEA")
+    ]);
+
+    expect(runwayIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KSEA",
+      detail: "runways",
+      requiresClarification: false
+    });
+    expect(diagramIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KSEA",
+      detail: "runways",
+      requiresClarification: false
+    });
+  });
+
   it("parses regulatory requests", async () => {
     const [intent, atcIntent] = await Promise.all([
       parseIntent("FAR 91.113"),

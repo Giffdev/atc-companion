@@ -2,9 +2,9 @@ import { getStalenessThresholdMs } from "@/data/staleness";
 import { getDataSource } from "@/data/sources";
 import { formatTimestamp } from "@/lib/utils";
 import type { DataSource } from "@/types/api";
-import type { Frequency, Notam, TrafficTarget, WeatherBundle } from "@/types/aviation";
+import type { ApproachPlate, FarReference, Frequency, Notam, TrafficTarget, WeatherBundle } from "@/types/aviation";
 
-export type DashboardResultType = "weather" | "notam" | "traffic" | "frequency";
+export type DashboardResultType = "weather" | "notam" | "traffic" | "frequency" | "plates" | "regulatory";
 export type SourceConnectionStatus = "online" | "standby" | "degraded";
 
 export interface SourceStatusItem {
@@ -28,11 +28,15 @@ export const createDemoDashboardData = (referenceTime: string) => {
   const notamSource = getDataSource("faaNotams");
   const trafficSource = getDataSource("openSkyNetwork");
   const frequencySource = getDataSource("faaNasr");
+  const platesSource = getDataSource("faaDtpp");
+  const regulatorySource = getDataSource("ecfr");
 
   const weatherFetchedAt = toTimestamp(referenceMs, 6 * 60 * 1000);
   const notamFetchedAt = toTimestamp(referenceMs, 74 * 60 * 1000);
   const trafficFetchedAt = toTimestamp(referenceMs, 92 * 1000);
   const frequencyFetchedAt = toTimestamp(referenceMs, 3 * 60 * 60 * 1000);
+  const platesFetchedAt = toTimestamp(referenceMs, 5 * 24 * 60 * 60 * 1000);
+  const regulatoryFetchedAt = toTimestamp(referenceMs, 8 * 24 * 60 * 60 * 1000);
 
   const weather: WeatherBundle = {
     stationIcao: "KSEA",
@@ -240,6 +244,54 @@ export const createDemoDashboardData = (referenceTime: string) => {
     }
   ];
 
+  const plates: ApproachPlate[] = [
+    {
+      airportIcao: "KSEA",
+      procedureName: "ILS OR LOC RWY 16L",
+      procedureType: "ILS",
+      runway: "16L",
+      chartUrl: "https://aeronav.faa.gov/d-tpp/2607/SEA_IAP_ILS16L.PDF",
+      pdfUrl: "https://aeronav.faa.gov/d-tpp/2607/SEA_IAP_ILS16L.PDF",
+      source: platesSource,
+      fetchedAt: platesFetchedAt,
+      isStale: false
+    },
+    {
+      airportIcao: "KSEA",
+      procedureName: "RNAV (GPS) RWY 34R",
+      procedureType: "RNAV",
+      runway: "34R",
+      chartUrl: "https://aeronav.faa.gov/d-tpp/2607/SEA_IAP_RNAV34R.PDF",
+      pdfUrl: "https://aeronav.faa.gov/d-tpp/2607/SEA_IAP_RNAV34R.PDF",
+      source: platesSource,
+      fetchedAt: platesFetchedAt,
+      isStale: false
+    }
+  ];
+
+  const regulatory: FarReference[] = [
+    {
+      title: "14",
+      part: "91",
+      section: "113",
+      text: "In converging situations, the aircraft to the other's right has the right-of-way.",
+      effectiveDate: "2016-12-30",
+      source: regulatorySource,
+      fetchedAt: regulatoryFetchedAt,
+      isStale: false
+    },
+    {
+      title: "14",
+      part: "91",
+      section: "123",
+      text: "When an ATC clearance has been obtained, no pilot in command may deviate from that clearance except in an emergency.",
+      effectiveDate: "2016-12-30",
+      source: regulatorySource,
+      fetchedAt: regulatoryFetchedAt,
+      isStale: false
+    }
+  ];
+
   const sourceStatuses: SourceStatusItem[] = [
     {
       id: "weather",
@@ -273,6 +325,22 @@ export const createDemoDashboardData = (referenceTime: string) => {
       fetchedAt: frequencyFetchedAt,
       status: "online",
       detail: "Reference frequencies are loaded from the FAA NASR source model."
+    },
+    {
+      id: "plates",
+      label: "Plates",
+      source: platesSource,
+      fetchedAt: platesFetchedAt,
+      status: "standby",
+      detail: "FAA DTPP procedure charts are staged for live query replacement."
+    },
+    {
+      id: "regulatory",
+      label: "Regulatory",
+      source: regulatorySource,
+      fetchedAt: regulatoryFetchedAt,
+      status: "standby",
+      detail: "Reference FAR text is available for live regulatory lookups."
     }
   ];
 
@@ -281,6 +349,8 @@ export const createDemoDashboardData = (referenceTime: string) => {
     notams,
     traffic,
     frequencies,
+    plates,
+    regulatory,
     sourceStatuses
   };
 };

@@ -44,7 +44,7 @@ const summarizeIntent = (intent: ParsedIntent): string => {
   }
 };
 
-export function QueryInput({ initialQuery = SUGGESTIONS[0], onPreviewChange, onSubmit, isSubmitting = false }: QueryInputProps) {
+export function QueryInput({ initialQuery = "", onPreviewChange, onSubmit, isSubmitting = false }: QueryInputProps) {
   const [query, setQuery] = useState<string>(initialQuery);
   const [intentPreview, setIntentPreview] = useState<ParsedIntent | null>(null);
   const [isParsing, setIsParsing] = useState(false);

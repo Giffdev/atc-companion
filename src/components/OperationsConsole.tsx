@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { NotamList } from "@/components/NotamList";
+import { PlateViewer } from "@/components/PlateViewer";
 import { QueryInput } from "@/components/QueryInput";
 import { ResultCard } from "@/components/ResultCard";
 import { SourceBadge } from "@/components/SourceBadge";
@@ -10,7 +11,7 @@ import { StatusBar } from "@/components/StatusBar";
 import { TrafficMap } from "@/components/TrafficMap";
 import { WeatherDisplay } from "@/components/WeatherDisplay";
 import { createDemoDashboardData, type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
-import { API_ENDPOINTS } from "@/lib/constants";
+import { API_ENDPOINTS, TRAFFIC_REFRESH_INTERVAL_MS, WEATHER_REFRESH_INTERVAL_MS } from "@/lib/constants";
 import { formatTimestamp } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
 import type { ApproachPlate, FarReference, Frequency, Metar, Pirep, Taf, TrafficTarget, WeatherBundle } from "@/types/aviation";
@@ -29,24 +30,46 @@ type LiveQueryResult = {
 
 type AirportInfoQueryPayload = {
   airport: string;
+  runways: string[];
   weather: ApiResponse<WeatherBundle>;
   frequencies: ApiResponse<Frequency[]>;
   plates: ApiResponse<ApproachPlate[]>;
+  diagram?: ApiResponse<ApproachPlate | null>;
 };
 
-const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "frequency"];
+const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "frequency", "plates", "regulatory"];
+
+const AUTO_REFRESH_LABELS = {
+  traffic: `Live • Auto-refreshing every ${TRAFFIC_REFRESH_INTERVAL_MS / 1000}s`,
+  weather: `Live • Auto-refreshing every ${WEATHER_REFRESH_INTERVAL_MS / 1000}s`
+} as const;
 
 const mapIntentToDashboardType = (intent: ParsedIntent | null): DashboardResultType | null => {
   if (!intent) {
     return null;
   }
 
-  if (intent.type === "weather" || intent.type === "notam" || intent.type === "traffic" || intent.type === "frequency") {
+  if (
+    intent.type === "weather" ||
+    intent.type === "notam" ||
+    intent.type === "traffic" ||
+    intent.type === "frequency" ||
+    intent.type === "plates" ||
+    intent.type === "regulatory"
+  ) {
     return intent.type;
   }
 
   if (intent.type === "airport_info") {
-    return intent.detail === "frequencies" ? "frequency" : "weather";
+    if (intent.detail === "frequencies") {
+      return "frequency";
+    }
+
+    if (intent.detail === "runways") {
+      return "plates";
+    }
+
+    return "weather";
   }
 
   return null;
@@ -127,17 +150,26 @@ const mergeLiveDashboardData = (
         ...dashboardData,
         frequencies: liveResult.response.data as Frequency[]
       };
+    case "plates":
+      return {
+        ...dashboardData,
+        plates: liveResult.response.data as ApproachPlate[]
+      };
+    case "regulatory":
+      return {
+        ...dashboardData,
+        regulatory: liveResult.response.data as FarReference[]
+      };
     case "airport_info": {
       const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
 
       return {
         ...dashboardData,
         weather: airportInfo.weather.ok ? airportInfo.weather.data : dashboardData.weather,
-        frequencies: airportInfo.frequencies.ok ? airportInfo.frequencies.data : dashboardData.frequencies
+        frequencies: airportInfo.frequencies.ok ? airportInfo.frequencies.data : dashboardData.frequencies,
+        plates: airportInfo.plates.ok ? airportInfo.plates.data : dashboardData.plates
       };
     }
-    case "plates":
-    case "regulatory":
     case "unknown":
       return dashboardData;
   }
@@ -157,18 +189,24 @@ const mergeSourceStatuses = (statuses: SourceStatusItem[], liveResult: LiveQuery
       return applyResponseStatus(statuses, "traffic", liveResult.response);
     case "frequency":
       return applyResponseStatus(statuses, "frequencies", liveResult.response);
+    case "plates":
+      return applyResponseStatus(statuses, "plates", liveResult.response);
+    case "regulatory":
+      return applyResponseStatus(statuses, "regulatory", liveResult.response);
     case "airport_info":
       if (!liveResult.response.ok) {
         return statuses;
       }
 
       return applyResponseStatus(
-        applyResponseStatus(statuses, "weather", (liveResult.response.data as AirportInfoQueryPayload).weather),
-        "frequencies",
-        (liveResult.response.data as AirportInfoQueryPayload).frequencies
+        applyResponseStatus(
+          applyResponseStatus(statuses, "weather", (liveResult.response.data as AirportInfoQueryPayload).weather),
+          "frequencies",
+          (liveResult.response.data as AirportInfoQueryPayload).frequencies
+        ),
+        "plates",
+        (liveResult.response.data as AirportInfoQueryPayload).diagram ?? (liveResult.response.data as AirportInfoQueryPayload).plates
       );
-    case "plates":
-    case "regulatory":
     case "unknown":
       return statuses;
   }
@@ -212,7 +250,11 @@ const collectWarnings = (
   if (liveResult.intent.type === "airport_info") {
     const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
 
-    [airportInfo.weather, airportInfo.frequencies, airportInfo.plates].forEach((response) => {
+    [airportInfo.weather, airportInfo.frequencies, airportInfo.plates, airportInfo.diagram].forEach((response) => {
+      if (!response) {
+        return;
+      }
+
       if (!response.ok) {
         warnings.add(response.error.message);
         return;
@@ -294,20 +336,12 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       );
     case "plates":
       return (
-        <div className="space-y-3">
-          {(liveResult.response.data as ApproachPlate[]).slice(0, 6).map((plate) => (
-            <a
-              key={`${plate.airportIcao}-${plate.procedureName}`}
-              className="flex items-center justify-between rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-sm text-aviation-text hover:border-cyan-400/30"
-              href={plate.chartUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <span>{plate.procedureName}</span>
-              <span className="font-data text-xs text-aviation-muted">{plate.procedureType}</span>
-            </a>
-          ))}
-        </div>
+        <PlateViewer
+          plates={liveResult.response.data as ApproachPlate[]}
+          referenceTime={liveResult.timestamp}
+          selectedProcedureType={liveResult.intent.procedure_type}
+          selectedRunway={liveResult.intent.runway}
+        />
       );
     case "regulatory":
       return (
@@ -326,12 +360,17 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
       const plates = airportInfo.plates.ok ? airportInfo.plates.data.length : 0;
       const frequencies = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
+      const diagram = airportInfo.diagram?.ok ? airportInfo.diagram.data : null;
 
       return (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
             <p className="data-label">Airport</p>
             <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.airport}</p>
+          </div>
+          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+            <p className="data-label">Runways</p>
+            <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.runways.join(" • ") || "Unavailable"}</p>
           </div>
           <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
             <p className="data-label">Frequencies</p>
@@ -341,6 +380,24 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
             <p className="data-label">Plates</p>
             <p className="mt-2 font-data text-sm text-aviation-text">{plates}</p>
           </div>
+          {diagram ? (
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 md:col-span-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="data-label">Airport diagram</p>
+                  <p className="mt-2 text-sm text-aviation-text">{diagram.procedureName}</p>
+                </div>
+                <a
+                  className="inline-flex items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300/50 hover:bg-cyan-500/15"
+                  href={diagram.chartUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Open airport diagram
+                </a>
+              </div>
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -352,7 +409,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
 export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const demoData = useMemo(() => createDemoDashboardData(initialNow), [initialNow]);
   const [activeIntent, setActiveIntent] = useState<ParsedIntent | null>(null);
-  const [submittedQuery, setSubmittedQuery] = useState("METAR and TAF for KSEA");
+  const [submittedQuery, setSubmittedQuery] = useState("Awaiting query");
   const [activeCard, setActiveCard] = useState<DashboardResultType>("weather");
   const [dispatchMessage, setDispatchMessage] = useState("Demo cards loaded. Submit a query to replace them with live service data.");
   const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
@@ -361,6 +418,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
   const dashboardData = useMemo(() => mergeLiveDashboardData(demoData, liveResult), [demoData, liveResult]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(demoData.sourceStatuses, liveResult), [demoData.sourceStatuses, liveResult]);
+  const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
+  const selectedPlateRunway = liveResult?.intent.type === "plates" ? liveResult.intent.runway : undefined;
 
   const warnings = useMemo(
     () => collectWarnings(activeIntent, liveResult, submitError, sourceStatuses),
@@ -381,6 +440,41 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     });
   }, [activeCard]);
 
+  const platePanelAirport =
+    dashboardData.plates[0]?.airportIcao ??
+    (activeIntent?.type === "plates" || activeIntent?.type === "airport_info" ? activeIntent.airport : undefined) ??
+    "Field";
+
+  const fetchLiveQuery = useCallback(async (query: string, bypassCache = false): Promise<LiveQueryResult> => {
+    const response = await fetch(API_ENDPOINTS.query, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ input: query, bypassCache })
+    });
+
+    return (await response.json()) as LiveQueryResult;
+  }, []);
+
+  const autoRefreshConfig = useMemo(
+    () =>
+      liveResult?.intent.type === "traffic"
+        ? {
+            intentType: "traffic" as const,
+            intervalMs: TRAFFIC_REFRESH_INTERVAL_MS,
+            label: AUTO_REFRESH_LABELS.traffic
+          }
+        : liveResult?.intent.type === "weather"
+          ? {
+              intentType: "weather" as const,
+              intervalMs: WEATHER_REFRESH_INTERVAL_MS,
+              label: AUTO_REFRESH_LABELS.weather
+            }
+          : null,
+    [liveResult?.intent.type]
+  );
+
   const handleSubmit = async (query: string, intent: ParsedIntent | null) => {
     setSubmittedQuery(query);
     setActiveIntent(intent);
@@ -395,15 +489,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     setDispatchMessage(`Dispatching ${intent?.type.replaceAll("_", " ") ?? "live"} query to live services.`);
 
     try {
-      const response = await fetch(API_ENDPOINTS.query, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ input: query })
-      });
-
-      const payload = (await response.json()) as LiveQueryResult;
+      const payload = await fetchLiveQuery(query);
       setLiveResult(payload);
       setActiveIntent(payload.intent);
 
@@ -430,6 +516,59 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!autoRefreshConfig || !submittedQuery || submittedQuery === "Awaiting query") {
+      return undefined;
+    }
+
+    let refreshInFlight = false;
+    let cancelled = false;
+
+    const intervalId = window.setInterval(() => {
+      if (refreshInFlight) {
+        return;
+      }
+
+      refreshInFlight = true;
+
+      fetchLiveQuery(submittedQuery, true)
+        .then((payload) => {
+          if (cancelled) {
+            return;
+          }
+
+          if (payload.response.ok) {
+            setLiveResult(payload);
+            setActiveIntent(payload.intent);
+            setSubmitError(null);
+            setDispatchMessage(
+              `Live ${payload.intent.type.replaceAll("_", " ")} response auto-refreshed in ${Math.round(payload.executionTimeMs)} ms.`
+            );
+          } else {
+            setSubmitError(payload.response.error.message);
+            setDispatchMessage(`Auto-refresh failed: ${payload.response.error.message}`);
+          }
+        })
+        .catch(() => {
+          if (cancelled) {
+            return;
+          }
+
+          const fallbackMessage = `Auto-refresh failed for live ${autoRefreshConfig.intentType}. Retaining the last successful result.`;
+          setSubmitError(fallbackMessage);
+          setDispatchMessage(fallbackMessage);
+        })
+        .finally(() => {
+          refreshInFlight = false;
+        });
+    }, autoRefreshConfig.intervalMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [autoRefreshConfig, fetchLiveQuery, submittedQuery]);
 
   return (
     <main className="flex min-h-screen flex-col">
@@ -467,7 +606,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           </div>
         </header>
 
-        <QueryInput initialQuery={submittedQuery} isSubmitting={isSubmitting} onPreviewChange={setActiveIntent} onSubmit={handleSubmit} />
+        <QueryInput isSubmitting={isSubmitting} onPreviewChange={setActiveIntent} onSubmit={handleSubmit} />
 
         <section className="aviation-panel px-5 py-5 md:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -490,6 +629,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 <div className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-xs text-aviation-muted">
                   {Math.round(liveResult.executionTimeMs)} ms
                 </div>
+                {autoRefreshConfig ? (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-aviation-green" />
+                    <span>{autoRefreshConfig.label}</span>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -527,7 +672,15 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       subtitle="Formatted METAR and TAF presentation with direct flight-category cues and raw observation access."
                       title={`${dashboardData.weather.stationIcao} weather brief`}
                     >
-                      <WeatherDisplay weather={dashboardData.weather} />
+                      <div className="space-y-4">
+                        {autoRefreshConfig?.intentType === "weather" ? (
+                          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-aviation-green" />
+                            <span>{autoRefreshConfig.label}</span>
+                          </div>
+                        ) : null}
+                        <WeatherDisplay weather={dashboardData.weather} />
+                      </div>
                     </ResultCard>
                   </div>
                 );
@@ -571,11 +724,19 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       subtitle="Live or fallback traffic picture with callsign labels and altitude-based color coding."
                       title="Surface and terminal traffic picture"
                     >
-                      {dashboardData.traffic.length ? (
-                        <TrafficMap traffic={dashboardData.traffic} />
-                      ) : (
-                        <div className="text-sm text-aviation-muted">No live traffic targets returned for the active query.</div>
-                      )}
+                      <div className="space-y-4">
+                        {autoRefreshConfig?.intentType === "traffic" ? (
+                          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200">
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-aviation-green" />
+                            <span>{autoRefreshConfig.label}</span>
+                          </div>
+                        ) : null}
+                        {dashboardData.traffic.length ? (
+                          <TrafficMap traffic={dashboardData.traffic} />
+                        ) : (
+                          <div className="text-sm text-aviation-muted">No live traffic targets returned for the active query.</div>
+                        )}
+                      </div>
                     </ResultCard>
                   </div>
                 );
@@ -614,12 +775,72 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                     </ResultCard>
                   </div>
                 );
+              case "plates":
+                return (
+                  <div key="plates" className="xl:col-span-7">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={dashboardData.plates[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.plates[0].fetchedAt}
+                      isActive={activeCard === "plates"}
+                      isStale={dashboardData.plates.some((plate) => plate.isStale)}
+                      kind="plates"
+                      rawData={dashboardData.plates}
+                      referenceTime={initialNow}
+                      source={dashboardData.plates[0]?.source ?? liveResult?.response.source ?? demoData.plates[0].source}
+                      subtitle="Inline FAA procedure chart viewer with runway-aware plate selection and one-click alternates."
+                      title={`${platePanelAirport} terminal procedures`}
+                    >
+                      {dashboardData.plates.length ? (
+                        <PlateViewer
+                          plates={dashboardData.plates}
+                          referenceTime={initialNow}
+                          selectedProcedureType={selectedPlateProcedureType}
+                          selectedRunway={selectedPlateRunway}
+                        />
+                      ) : (
+                        <div className="text-sm text-aviation-muted">No approach plates returned for the active live query.</div>
+                      )}
+                    </ResultCard>
+                  </div>
+                );
+              case "regulatory":
+                return (
+                  <div key="regulatory" className="xl:col-span-5">
+                    <ResultCard
+                      className="h-full"
+                      fetchedAt={dashboardData.regulatory[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.regulatory[0].fetchedAt}
+                      isActive={activeCard === "regulatory"}
+                      isStale={dashboardData.regulatory.some((reference) => reference.isStale)}
+                      kind="regulatory"
+                      rawData={dashboardData.regulatory}
+                      referenceTime={initialNow}
+                      source={dashboardData.regulatory[0]?.source ?? liveResult?.response.source ?? demoData.regulatory[0].source}
+                      subtitle="Source-attributed FAR references surfaced for rapid procedural and legal cross-checking."
+                      title="Regulatory references"
+                    >
+                      {dashboardData.regulatory.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.regulatory.map((reference) => (
+                            <div key={`${reference.part}-${reference.section}`} className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+                              <p className="font-data text-sm text-aviation-text">
+                                FAR {reference.part}.{reference.section}
+                              </p>
+                              <p className="mt-2 text-sm leading-6 text-aviation-muted">{reference.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-aviation-muted">No regulatory references returned for the active live query.</div>
+                      )}
+                    </ResultCard>
+                  </div>
+                );
             }
           })}
         </section>
       </div>
 
-      <StatusBar referenceTime={initialNow} sources={sourceStatuses} warnings={warnings} />
+      <StatusBar liveStatus={autoRefreshConfig?.label ?? null} referenceTime={initialNow} sources={sourceStatuses} warnings={warnings} />
     </main>
   );
 }

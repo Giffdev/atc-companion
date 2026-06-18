@@ -84,6 +84,17 @@ describe("traffic service", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("bypasses cache when explicitly requested", async () => {
+    const fetchMock = installAviationApiMock();
+
+    const first = await getTraffic({ airport: "KBFI" });
+    const second = await getTraffic({ airport: "KBFI", bypassCache: true });
+
+    expect(first.cache?.status).toBe("miss");
+    expect(second.cache?.status).toBe("bypass");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("flags stale ADS-B results once the freshness window is exceeded", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-18T05:00:45.000Z"));

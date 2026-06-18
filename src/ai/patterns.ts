@@ -66,12 +66,17 @@ const WEATHER_PATTERN =
   /\b(?:weather|metar|taf|pirep|wx)\b|\b(?:metar|taf|pirep)\s+[A-Za-z]{3,4}\b|\bweather\s+(?:at|for|near)\s+[A-Za-z]{3,4}\b/i;
 const NOTAM_PATTERN = /\b(?:notam|notams|fdc|tfr)\b/i;
 const FREQUENCY_PATTERN = /\b(?:frequency|frequencies|tower|twr|ground|gnd|approach|app|departure|delivery|del|atis|ctaf)\b/i;
-const PLATES_PATTERN = /\b(?:plate|plates|chart|charts|approach plate|sid|star|ils|rnav|vor|visual)\b/i;
-const TRAFFIC_PATTERN = /\b(?:traffic|ads-b|adsb|targets)\b/i;
+const PLATES_PATTERN =
+  /\b(?:plate|plates|chart|charts|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|ils|rnav|vor|visual)\b/i;
+const TRAFFIC_PATTERN = /\b(?:traffic|ads-b|adsb|targets|planes?\s+(?:near|around)|aircraft\s+(?:near|around)|in the pattern)\b/i;
 const REGULATORY_PATTERN =
-  /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
-const AIRPORT_INFO_PATTERN = /\b(?:airport info|airport information|airport details|runways? at|frequencies? at)\b/i;
-const APPROACH_PROCEDURE_CONTEXT_PATTERN = /\b(?:approach\s+(?:plate|chart|procedure)|(?:plate|chart|procedure).*\bapproach)\b/i;
+  /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
+const AIRPORT_INFO_PATTERN =
+  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout)\b/i;
+const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on))\b/i;
+const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
+const APPROACH_PROCEDURE_CONTEXT_PATTERN =
+  /\b(?:approach\s+(?:plate|plates|chart|charts|procedure|procedures)|instrument approach(?:es)?|(?:plate|plates|chart|charts|procedure|procedures).*\bapproach(?:es)?|\bapproaches?\s+(?:at|for|into))\b/i;
 
 const detectWeatherSubtype = (input: string): WeatherSubtype => {
   const normalized = input.toLowerCase();
@@ -122,14 +127,16 @@ const extractBounds = (input: string): BoundingBox | undefined => {
 export const detectIntentPatternCandidates = (input: string): IntentPatternMatch["type"][] => {
   const entities = extractEntities(input);
   const candidates: IntentPatternMatch["type"][] = [];
+  const airportInfoDetail = detectAirportInfoDetail(input);
+  const isWeatherMinimumsQuery = WEATHER_MINIMUMS_PATTERN.test(input);
 
-  if (WEATHER_PATTERN.test(input)) {
+  if (WEATHER_PATTERN.test(input) && !isWeatherMinimumsQuery) {
     candidates.push("weather");
   }
   if (NOTAM_PATTERN.test(input)) {
     candidates.push("notam");
   }
-  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input)) {
+  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input)) {
     candidates.push("frequency");
   }
   if (PLATES_PATTERN.test(input)) {
@@ -142,11 +149,17 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
     candidates.push("regulatory");
   }
   if (
-    AIRPORT_INFO_PATTERN.test(input) ||
-    (detectAirportInfoDetail(input) &&
-      entities.airports.length > 0 &&
-      !FREQUENCY_PATTERN.test(input) &&
-      !PLATES_PATTERN.test(input))
+    (AIRPORT_INFO_PATTERN.test(input) ||
+      (GENERIC_AIRPORT_INFO_PATTERN.test(input) && entities.airports.length > 0) ||
+      (airportInfoDetail &&
+        airportInfoDetail !== "frequencies" &&
+        entities.airports.length > 0 &&
+        !FREQUENCY_PATTERN.test(input) &&
+        !PLATES_PATTERN.test(input))) &&
+    !FREQUENCY_PATTERN.test(input) &&
+    !PLATES_PATTERN.test(input) &&
+    !WEATHER_PATTERN.test(input) &&
+    !TRAFFIC_PATTERN.test(input)
   ) {
     candidates.push("airport_info");
   }
@@ -156,8 +169,10 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
 
 export const matchIntentPattern = (input: string): IntentPatternMatch | null => {
   const entities = extractEntities(input);
+  const airportInfoDetail = detectAirportInfoDetail(input);
+  const isWeatherMinimumsQuery = WEATHER_MINIMUMS_PATTERN.test(input);
 
-  if (WEATHER_PATTERN.test(input)) {
+  if (WEATHER_PATTERN.test(input) && !isWeatherMinimumsQuery) {
     return {
       type: "weather",
       confidence: entities.airports.length > 0 ? 0.95 : 0.68,
@@ -177,7 +192,7 @@ export const matchIntentPattern = (input: string): IntentPatternMatch | null => 
     };
   }
 
-  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input)) {
+  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input)) {
     return {
       type: "frequency",
       confidence: entities.airports.length > 0 ? 0.94 : 0.69,
@@ -218,12 +233,15 @@ export const matchIntentPattern = (input: string): IntentPatternMatch | null => 
     };
   }
 
-  if (AIRPORT_INFO_PATTERN.test(input) || (detectAirportInfoDetail(input) && entities.airports.length > 0)) {
+  if (
+    (AIRPORT_INFO_PATTERN.test(input) || (GENERIC_AIRPORT_INFO_PATTERN.test(input) && entities.airports.length > 0)) ||
+    (airportInfoDetail && airportInfoDetail !== "frequencies" && entities.airports.length > 0)
+  ) {
     return {
       type: "airport_info",
       confidence: entities.airports.length > 0 ? 0.91 : 0.68,
       airport: entities.airports[0],
-      detail: detectAirportInfoDetail(input)
+      detail: airportInfoDetail
     };
   }
 

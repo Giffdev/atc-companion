@@ -94,6 +94,17 @@ describe("weather service", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("bypasses cache for weather refreshes when requested", async () => {
+    const fetchMock = installAviationApiMock();
+
+    const first = await getMetar("KBFI");
+    const second = await getMetar("KBFI", { bypassCache: true });
+
+    expect(first.cache?.status).toBe("miss");
+    expect(second.cache?.status).toBe("bypass");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("flags stale weather responses when fetchedAt falls outside the freshness window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-18T08:00:00.000Z"));

@@ -196,7 +196,7 @@ const AIRPORT_REFERENCES: AirportReference[] = [
   { icao: "KDCA", faa: "DCA", iata: "DCA", name: "Ronald Reagan Washington National", city: "Washington", state: "DC", latitude: 38.8521, longitude: -77.037697, aliases: ["Potomac Approach", "Potomac"] },
   { icao: "KDDC", faa: "DDC", iata: "DDC", name: "Dodge City Regional Airport", city: "Dodge City", state: "KS", latitude: 37.763401, longitude: -99.965599 },
   { icao: "KDEC", faa: "DEC", iata: "DEC", name: "Decatur Airport", city: "Decatur", state: "IL", latitude: 39.834599, longitude: -88.8657 },
-  { icao: "KDEN", faa: "DEN", iata: "DEN", name: "Denver Intl", city: "Denver", state: "CO", latitude: 39.860027, longitude: -104.673792, aliases: ["Denver Approach", "D01"] },
+  { icao: "KDEN", faa: "DEN", iata: "DEN", name: "Denver Intl", city: "Denver", state: "CO", latitude: 39.860027, longitude: -104.673792, aliases: ["Denver Approach", "Denver International", "Denver International Airport", "D01"] },
   { icao: "KDET", faa: "DET", iata: "DET", name: "Coleman A. Young Municipal Airport", city: "Detroit", state: "MI", latitude: 42.409199, longitude: -83.009903 },
   { icao: "KDFW", faa: "DFW", iata: "DFW", name: "Dallas/Fort Worth Intl", city: "Dallas-Fort Worth", state: "TX", latitude: 32.896801, longitude: -97.038002, aliases: ["Dallas Approach", "D10"] },
   { icao: "KDHN", faa: "DHN", iata: "DHN", name: "Dothan Regional Airport", city: "Dothan", state: "AL", latitude: 31.321301, longitude: -85.4496 },
@@ -266,6 +266,7 @@ const AIRPORT_REFERENCES: AirportReference[] = [
   { icao: "KFDY", faa: "FDY", iata: "FDY", name: "Findlay Airport", city: "Findlay", state: "OH", latitude: 41.0135, longitude: -83.668701 },
   { icao: "KFFO", faa: "FFO", iata: "FFO", name: "Wright-Patterson Air Force Base", city: "Dayton", state: "OH", latitude: 39.826099, longitude: -84.048302 },
   { icao: "KFHR", faa: "FHR", iata: "FRD", name: "Friday Harbor Airport", city: "Friday Harbor", state: "WA", latitude: 48.523654, longitude: -123.024645 },
+  { icao: "W39", faa: "W39", name: "Roche Harbor Airport", city: "Roche Harbor", state: "WA", latitude: 48.6128, longitude: -123.1582, aliases: ["Roche Harbor"] },
   { icao: "KFHU", faa: "FHU", iata: "FHU", name: "Sierra Vista Municipal Airport / Libby Army Air Field", city: "Fort Huachuca / Sierra Vista", state: "AZ", latitude: 31.587383, longitude: -110.348225 },
   { icao: "KFKL", faa: "FKL", iata: "FKL", name: "Venango Regional Airport", city: "Franklin", state: "PA", latitude: 41.377899, longitude: -79.860397 },
   { icao: "KFLG", faa: "FLG", iata: "FLG", name: "Flagstaff Pulliam Airport", city: "Flagstaff", state: "AZ", latitude: 35.139757, longitude: -111.669826 },
@@ -701,7 +702,7 @@ const AIRPORT_REFERENCES: AirportReference[] = [
   { icao: "KSDF", faa: "SDF", iata: "SDF", name: "Louisville Muhammad Ali International Airport", city: "Louisville", state: "KY", latitude: 38.1706, longitude: -85.735076 },
   { icao: "KSDM", faa: "SDM", iata: "SDM", name: "Brown Field Municipal Airport", city: "San Diego", state: "CA", latitude: 32.572639, longitude: -116.980019 },
   { icao: "KSDY", faa: "SDY", iata: "SDY", name: "Sidney - Richland Regional Airport", city: "Sidney", state: "MT", latitude: 47.705141, longitude: -104.194422 },
-  { icao: "KSEA", faa: "SEA", iata: "SEA", name: "Seattle-Tacoma Intl", city: "Seattle", state: "WA", latitude: 47.447943, longitude: -122.310276, aliases: ["Seattle Approach"] },
+  { icao: "KSEA", faa: "SEA", iata: "SEA", name: "Seattle-Tacoma Intl", city: "Seattle", state: "WA", latitude: 47.447943, longitude: -122.310276, aliases: ["Seattle Approach", "Seattle Tacoma International", "Seattle Tacoma International Airport", "SeaTac", "Sea Tac", "Sea-Tac"], runways: ["16L", "16C", "16R", "34L", "34C", "34R"] },
   { icao: "KSFB", faa: "SFB", iata: "SFB", name: "Orlando Sanford International Airport", city: "Orlando", state: "FL", latitude: 28.774277, longitude: -81.234626 },
   { icao: "KSFF", faa: "SFF", iata: "SFF", name: "Felts Field", city: "Spokane", state: "WA", latitude: 47.682899, longitude: -117.321925 },
   { icao: "KSFO", faa: "SFO", iata: "SFO", name: "San Francisco Intl", city: "San Francisco", state: "CA", latitude: 37.619806, longitude: -122.374821, aliases: ["NorCal Approach", "NorCal"] },
@@ -938,8 +939,67 @@ const normalizeAirportLookupKey = (value: string): string =>
     .replace(/[^\w\s/]/g, " ")
     .replace(/\s+/g, " ");
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const AIRPORT_SUFFIX_PATTERNS = [
+  /\bINTERNATIONAL AIRPORT\b/g,
+  /\bREGIONAL AIRPORT\b/g,
+  /\bMUNICIPAL AIRPORT\b/g,
+  /\bAIRPORT\b/g,
+  /\bINTL\b/g,
+  /\bFIELD\b/g
+] as const;
+
+const stripAirportSuffixes = (value: string): string => {
+  let stripped = normalizeAirportLookupKey(value);
+
+  for (const pattern of AIRPORT_SUFFIX_PATTERNS) {
+    stripped = stripped.replace(pattern, " ").replace(/\s+/g, " ").trim();
+  }
+
+  return stripped;
+};
+
+const appendKey = (keys: Array<{ key: string; partial: boolean }>, key: string, partial: boolean): void => {
+  const normalized = normalizeAirportLookupKey(key);
+
+  if (!normalized) {
+    return;
+  }
+
+  if (partial && normalized.length < 5) {
+    return;
+  }
+
+  if (keys.some((entry) => entry.key === normalized && entry.partial === partial)) {
+    return;
+  }
+
+  keys.push({ key: normalized, partial });
+};
+
+const createAirportSearchKeys = (airport: AirportReference): Array<{ key: string; partial: boolean }> => {
+  const keys: Array<{ key: string; partial: boolean }> = [];
+  const names = [airport.name, ...(airport.aliases ?? [])].filter((value): value is string => Boolean(value));
+
+  for (const name of names) {
+    appendKey(keys, name, false);
+
+    const stripped = stripAirportSuffixes(name);
+    if (stripped !== normalizeAirportLookupKey(name)) {
+      appendKey(keys, stripped, true);
+    }
+  }
+
+  appendKey(keys, airport.city, true);
+  const strippedCity = stripAirportSuffixes(airport.city);
+  if (strippedCity !== normalizeAirportLookupKey(airport.city)) {
+    appendKey(keys, strippedCity, true);
+  }
+
+  return keys;
+};
+
 const findAirportKeyPosition = (input: string, key: string): number => {
-  const match = new RegExp(`(?:^| )${escapeRegExp(key)}(?: |$)`).exec(input);
+  const match = new RegExp(`(?:^| )${escapeRegExp(key)}`).exec(input);
   return match ? match.index : -1;
 };
 
@@ -953,8 +1013,8 @@ for (const airport of AIRPORT_REFERENCES) {
     AIRPORT_INDEX.set(airport.iata, airport);
   }
 
-  for (const alias of airport.aliases ?? []) {
-    AIRPORT_INDEX.set(normalizeAirportLookupKey(alias), airport);
+  for (const { key } of createAirportSearchKeys(airport)) {
+    AIRPORT_INDEX.set(key, airport);
   }
 }
 
@@ -964,15 +1024,49 @@ export const findAirportReference = (code: string): AirportReference | null =>
 export const findAirportReferencesInText = (input: string): AirportReference[] => {
   const normalizedInput = normalizeAirportLookupKey(input);
   const matches = AIRPORT_REFERENCES.map((airport) => {
-    const keys = [airport.name, ...(airport.aliases ?? [])]
-      .filter((value): value is string => Boolean(value))
-      .map(normalizeAirportLookupKey);
-    const positions = keys.map((key) => findAirportKeyPosition(normalizedInput, key)).filter((position) => position >= 0);
+    const keyMatches = createAirportSearchKeys(airport)
+      .map(({ key, partial }) => ({
+        key,
+        partial,
+        position: findAirportKeyPosition(normalizedInput, key)
+      }))
+      .filter((match) => match.position >= 0);
 
-    return positions.length ? { airport, position: Math.min(...positions) } : null;
+    if (!keyMatches.length) {
+      return null;
+    }
+
+    const bestMatch = keyMatches.sort((left, right) => {
+      if (left.position !== right.position) {
+        return left.position - right.position;
+      }
+
+      if (left.partial !== right.partial) {
+        return Number(left.partial) - Number(right.partial);
+      }
+
+      return right.key.length - left.key.length;
+    })[0];
+
+    return {
+      airport,
+      position: bestMatch.position,
+      keyLength: bestMatch.key.length,
+      partial: bestMatch.partial
+    };
   })
-    .filter((value): value is { airport: AirportReference; position: number } => value !== null)
-    .sort((left, right) => left.position - right.position);
+    .filter((value): value is { airport: AirportReference; position: number; keyLength: number; partial: boolean } => value !== null)
+    .sort((left, right) => {
+      if (left.position !== right.position) {
+        return left.position - right.position;
+      }
+
+      if (left.partial !== right.partial) {
+        return Number(left.partial) - Number(right.partial);
+      }
+
+      return right.keyLength - left.keyLength;
+    });
 
   const seen = new Set<string>();
   return matches
