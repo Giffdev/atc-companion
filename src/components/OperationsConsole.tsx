@@ -465,13 +465,26 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   );
 
   const dashboardData = useMemo(() => {
-    let merged = mergeLiveDashboardData(demoData, liveResult);
-    // Layer in facility results for panels not covered by the active query
+    // Start from demo base, then layer facility results, then active query result
+    let merged = { ...demoData };
+
+    // Apply all facility results first (these are the baseline for the selected facility)
     for (const [, result] of facilityResults) {
-      if (!liveResult || mapIntentToDashboardType(liveResult.intent) !== mapIntentToDashboardType(result.intent)) {
-        merged = mergeLiveDashboardData(merged, result);
+      merged = mergeLiveDashboardData(merged, result);
+    }
+
+    // Layer the active live query result on top (user's explicit query takes precedence)
+    if (liveResult && liveResult.response.ok) {
+      const liveType = mapIntentToDashboardType(liveResult.intent);
+      // Only override if it's an explicit user query, not a facility auto-fetch
+      // Check: if the facilityResults already has this type, liveResult IS the facility result
+      const isFacilityResult = facilityResults.has(liveType as DashboardResultType) &&
+        facilityResults.get(liveType as DashboardResultType) === liveResult;
+      if (!isFacilityResult) {
+        merged = mergeLiveDashboardData(merged, liveResult);
       }
     }
+
     return merged;
   }, [demoData, liveResult, facilityResults]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(demoData.sourceStatuses, liveResult), [demoData.sourceStatuses, liveResult]);
@@ -586,6 +599,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
       setVisiblePanels(new Set(dashboardPanels));
       setFacilityResults(new Map());
+      setLiveResult(null);
+      setActiveIntent(null);
+      setSubmittedQuery("");
 
       // Fetch weather
       try {

@@ -93,7 +93,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
           <div className="relative" ref={containerRef}>
             <button
               aria-expanded={isOpen}
-              className="flex min-w-[280px] items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-black/25 px-4 py-3 text-left transition hover:border-cyan-400/35"
+              className="flex min-w-[280px] items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-[#0b1526] px-4 py-3 text-left transition hover:border-cyan-400/35"
               onClick={() => setIsOpen((current) => !current)}
               type="button"
             >
@@ -116,13 +116,13 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
             </button>
 
             {isOpen ? (
-              <div className="absolute right-0 top-[calc(100%+0.75rem)] z-40 w-[min(38rem,90vw)] rounded-3xl border border-aviation-border bg-[#08101d]/98 p-4 shadow-2xl shadow-black/50">
+              <div className="absolute right-0 top-[calc(100%+0.75rem)] z-40 w-[min(38rem,90vw)] rounded-3xl border border-aviation-border bg-[#08101d] p-4 shadow-2xl shadow-black/60">
                 <div className="space-y-3">
                   <label className="block">
                     <span className="sr-only">Search facilities</span>
                     <input
                       autoFocus
-                      className="h-12 w-full rounded-2xl border border-aviation-border bg-black/30 px-4 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70"
+                      className="h-12 w-full rounded-2xl border border-aviation-border bg-[#0b1526] px-4 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70"
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Search by ICAO, airport, city, or type"
                       type="text"
@@ -142,7 +142,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                             {groupedResults[group].map((facility) => (
                               <button
                                 key={facility.id}
-                                className="w-full rounded-2xl border border-aviation-border bg-black/20 px-4 py-3 text-left transition hover:border-cyan-400/35 hover:bg-cyan-500/10"
+                                className="w-full rounded-2xl border border-aviation-border bg-[#0d1a2e] px-4 py-3 text-left transition hover:border-cyan-400/35 hover:bg-cyan-500/10"
                                 onClick={() => {
                                   onSelect(facility);
                                   setIsOpen(false);
@@ -169,7 +169,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                       ) : null
                     )}
 
-                    {!results.length ? <p className="rounded-2xl border border-aviation-border bg-black/20 px-4 py-4 text-sm text-aviation-muted">No facilities matched that search.</p> : null}
+                    {!results.length ? <p className="rounded-2xl border border-aviation-border bg-[#0d1a2e] px-4 py-4 text-sm text-aviation-muted">No facilities matched that search.</p> : null}
                   </div>
                 </div>
               </div>
