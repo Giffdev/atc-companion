@@ -21,7 +21,7 @@ export function StatusBar({ sources, warnings, referenceTime, liveStatus }: Stat
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2 text-xs text-aviation-muted">
             {liveStatus ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-200">
+              <div className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-200">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-aviation-green" />
                 <span>{liveStatus}</span>
               </div>
@@ -29,11 +29,11 @@ export function StatusBar({ sources, warnings, referenceTime, liveStatus }: Stat
             {sources.map((source) => (
               <div
                 key={source.id}
-                className="inline-flex items-center gap-2 rounded-full border border-aviation-border bg-aviation-panelAlt px-3 py-1.5"
+                className="inline-flex min-h-[44px] max-w-full items-center gap-2 rounded-full border border-aviation-border bg-aviation-panelAlt px-3 py-1.5"
                 title={`${source.label} • ${formatTimestamp(source.fetchedAt)}`}
               >
                 <span className={`h-2 w-2 rounded-full ${STATUS_DOT[source.status]}`} />
-                <span className="text-aviation-text">{source.label}</span>
+                <span className="truncate text-aviation-text">{source.label}</span>
                 <span className="hidden text-slate-600 md:inline">/</span>
                 <span className="font-data hidden md:inline">{formatRelativeTime(source.fetchedAt, referenceTime)}</span>
               </div>
@@ -45,14 +45,14 @@ export function StatusBar({ sources, warnings, referenceTime, liveStatus }: Stat
               warnings.map((warning) => (
                 <div
                   key={warning}
-                  className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-amber-200"
+                  className="inline-flex min-h-[44px] max-w-full items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-amber-200"
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-aviation-amber" />
-                  <span>{warning}</span>
+                  <span className="break-words">{warning}</span>
                 </div>
               ))
             ) : (
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-200">
+              <div className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-aviation-green" />
                 <span>Sources within expected refresh windows.</span>
               </div>

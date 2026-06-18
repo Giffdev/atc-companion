@@ -314,7 +314,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
   if (isSubmitting) {
     return (
       <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
-        Dispatching live query for <span className="font-data">{submittedQuery}</span>…
+        Dispatching live query for <span className="break-words font-data">{submittedQuery}</span>…
       </div>
     );
   }
@@ -353,7 +353,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       return (
         <div className="space-y-2">
           <p className="text-sm text-aviation-text">Returned {(liveResult.response.data as DashboardData["notams"]).length} live NOTAMs.</p>
-          <p className="font-data text-xs text-aviation-muted">
+          <p className="break-words font-data text-xs text-aviation-muted">
             {(liveResult.response.data as DashboardData["notams"])
               .slice(0, 3)
               .map((notam) => notam.notamId)
@@ -416,7 +416,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               <p className="data-label">Hours of Operation — {airportInfo.airport}</p>
               <div className="mt-3 space-y-3">
                 {/* Tower status and schedule */}
-                <div className="flex items-start gap-3">
+                <div className="flex flex-wrap items-start gap-3">
                   <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                     hours.isTowered
                       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
@@ -425,7 +425,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                     {hours.isTowered ? "✦ Towered" : "Non-Towered"}
                   </span>
                   {hours.timezone && (
-                    <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[10px] text-aviation-muted">
+                    <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
                       {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST active" : ""}
                     </span>
                   )}
@@ -439,13 +439,13 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                     ) : (
                       <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
                         <div>
-                          <p className="text-[10px] text-aviation-muted">Local</p>
+                          <p className="text-xs text-aviation-muted">Local</p>
                           <p className="font-data text-sm text-aviation-text">
                             {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-aviation-muted">Zulu</p>
+                          <p className="text-xs text-aviation-muted">Zulu</p>
                           <p className="font-data text-sm text-cyan-200">
                             {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
                           </p>
@@ -453,7 +453,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                       </div>
                     )}
                     {hours.towerSchedule.rawText && !hours.towerSchedule.is24Hour && (
-                      <p className="mt-1.5 font-data text-[10px] text-aviation-muted">Raw: {hours.towerSchedule.rawText}</p>
+                      <p className="mt-1.5 break-words font-data text-xs text-aviation-muted">Raw: {hours.towerSchedule.rawText}</p>
                     )}
                   </div>
                 ) : hours.towerHours ? (
@@ -517,7 +517,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                   </p>
                 )}
               </div>
-              <p className="mt-2 text-[10px] text-aviation-muted">
+              <p className="mt-2 text-xs text-aviation-muted">
                 Source: {hours.source}
                 {hours.timezone?.isDst ? " · Times reflect current DST offset" : ""}
               </p>
@@ -547,7 +547,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
             </div>
             {onFollowUp ? (
               <button
-                className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                className="min-h-[44px] rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
                 onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
                 type="button"
               >
@@ -562,7 +562,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
             )}
             {onFollowUp ? (
               <button
-                className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                className="min-h-[44px] rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
                 onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
                 type="button"
               >
@@ -576,9 +576,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               </div>
             )}
           </div>
-          {diagram ? (
-            <DiagramPanel diagram={diagram} airportCode={airportInfo.airport} />
-          ) : null}
+          <DiagramPanel diagram={diagram} airportCode={airportInfo.airport} />
         </div>
       );
     }
@@ -608,14 +606,14 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
         <div className="space-y-3">
           <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
             <p className="data-label">Facility</p>
-            <p className="mt-2 font-data text-sm text-aviation-text">{adj.facility.name} ({adj.facility.id})</p>
+            <p className="mt-2 break-words font-data text-sm text-aviation-text">{adj.facility.name} ({adj.facility.id})</p>
             <p className="mt-1 text-xs text-aviation-muted capitalize">{adj.facility.type}</p>
           </div>
 
           {adj.overlying && (
             <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
               <p className="data-label">Overlying Facility</p>
-              <p className="mt-2 font-data text-sm text-aviation-text">{adj.overlying.name} ({adj.overlying.id})</p>
+              <p className="mt-2 break-words font-data text-sm text-aviation-text">{adj.overlying.name} ({adj.overlying.id})</p>
               <p className="mt-1 text-xs text-aviation-muted capitalize">{adj.overlying.type}</p>
             </div>
           )}
@@ -625,7 +623,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               <p className="data-label">Adjacent Centers</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {adj.adjacentCenters.map((c) => (
-                  <span key={c.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text">
+                  <span key={c.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text break-words">
                     {c.name}
                   </span>
                 ))}
@@ -638,7 +636,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               <p className="data-label">Adjacent Approach Controls</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {adj.adjacentApproach.map((a) => (
-                  <span key={a.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text">
+                  <span key={a.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text break-words">
                     {a.name}
                   </span>
                 ))}
@@ -651,7 +649,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               <p className="data-label">Nearby Towers</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {adj.adjacentTowers.map((t) => (
-                  <span key={t.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text">
+                  <span key={t.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text break-words">
                     {t.name}
                   </span>
                 ))}
@@ -1048,7 +1046,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
               })}
 
               <details className="rounded-2xl border border-aviation-border bg-black/20">
-                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">Reveal query envelope</summary>
+                <summary className="min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">Reveal query envelope</summary>
                 <pre className="max-h-72 overflow-auto border-t border-aviation-border px-4 py-3 font-data text-xs leading-6 text-slate-300">
                   {JSON.stringify(liveResult, null, 2)}
                 </pre>
@@ -1130,7 +1128,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       ) : (
                         <div className="space-y-2 text-sm text-aviation-muted">
                           <p>NOTAMs require an FAA API key.</p>
-                          <p className="text-xs">Register free at <a href="https://api.faa.gov" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">api.faa.gov</a>, then add <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-[11px]">FAA_NOTAM_API_KEY=your-key</code> to <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-[11px]">.env.local</code></p>
+                          <p className="break-words text-xs">Register free at <a href="https://api.faa.gov" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">api.faa.gov</a>, then add <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-xs">FAA_NOTAM_API_KEY=your-key</code> to <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-xs">.env.local</code></p>
                         </div>
                       )}
                     </ResultCard>
@@ -1219,13 +1217,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           {dashboardData.frequencies.map((frequency) => (
                             <div
                               key={`${frequency.type}-${frequency.valueMHz}`}
-                              className="flex items-center justify-between rounded-2xl border border-aviation-border bg-black/15 px-4 py-3"
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 sm:flex-nowrap"
                             >
-                              <div>
+                              <div className="min-w-0">
                                 <p className="data-label">{frequency.type}</p>
-                                <p className="mt-2 text-sm text-aviation-muted">{frequency.name}</p>
+                                <p className="mt-2 break-words text-sm text-aviation-muted">{frequency.name}</p>
                               </div>
-                              <p className="font-data text-lg text-aviation-text">{frequency.valueMHz.toFixed(2)}</p>
+                              <p className="shrink-0 font-data text-lg text-aviation-text">{frequency.valueMHz.toFixed(2)}</p>
                             </div>
                           ))}
                         </div>
@@ -1321,7 +1319,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                     const hours = facilityAirportInfo.hours!.data;
                     return (
                       <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                        <div className="flex items-start gap-3 mb-3">
+                        <div className="mb-3 flex flex-wrap items-start gap-3">
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                             hours.isTowered
                               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
@@ -1330,12 +1328,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                             {hours.isTowered ? "✦ Towered" : "Non-Towered"}
                           </span>
                           {hours.timezone && (
-                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[10px] text-aviation-muted">
+                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
                               {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST" : ""}
                             </span>
                           )}
                           {hours.airportUse && (
-                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[10px] text-aviation-muted">
+                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
                               {hours.airportUse}
                             </span>
                           )}
@@ -1348,13 +1346,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           ) : (
                             <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
                               <div>
-                                <p className="text-[10px] text-aviation-muted">Local</p>
+                                <p className="text-xs text-aviation-muted">Local</p>
                                 <p className="font-data text-sm text-aviation-text">
                                   {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[10px] text-aviation-muted">Zulu</p>
+                                <p className="text-xs text-aviation-muted">Zulu</p>
                                 <p className="font-data text-sm text-cyan-200">
                                   {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
                                 </p>
@@ -1373,16 +1371,16 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   {/* Runways */}
                   {facilityAirportInfo.runwayDetails?.ok && facilityAirportInfo.runwayDetails.data.runways.length > 0 && (
                     <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted mb-2">Runways</p>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Runways</p>
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {facilityAirportInfo.runwayDetails.data.runways.map((rwy) => (
                           <div key={rwy.designator} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
                             <p className="font-data text-sm text-aviation-text">{rwy.designator}</p>
-                            <p className="font-data text-[11px] text-aviation-muted">
+                            <p className="break-words font-data text-xs text-aviation-muted">
                               {rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}×${rwy.widthFeet ?? "?"}ft` : ""}
                               {rwy.surface ? ` · ${rwy.surface}` : ""}
                             </p>
-                            {rwy.lighting && <p className="font-data text-[10px] text-aviation-muted">{rwy.lighting}</p>}
+                            {rwy.lighting && <p className="break-words font-data text-xs text-aviation-muted">{rwy.lighting}</p>}
                           </div>
                         ))}
                       </div>
@@ -1392,7 +1390,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   {/* Diagram link */}
                   {facilityAirportInfo.diagram?.ok && facilityAirportInfo.diagram.data && (
                     <a
-                      className="flex items-center justify-between rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3 transition hover:border-cyan-300/40 hover:bg-cyan-500/10"
+                      className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3 transition hover:border-cyan-300/40 hover:bg-cyan-500/10"
                       href={facilityAirportInfo.diagram.data.chartUrl}
                       rel="noreferrer"
                       target="_blank"

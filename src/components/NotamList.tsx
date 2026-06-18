@@ -24,19 +24,19 @@ export function NotamList({ notams }: NotamListProps) {
     <div className="space-y-3">
       {sortedNotams.map((notam) => (
         <details key={notam.notamId} className="rounded-2xl border border-aviation-border bg-black/15">
-          <summary className="cursor-pointer list-none px-4 py-4">
+          <summary className="min-h-[44px] cursor-pointer list-none px-4 py-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
                 <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${TYPE_TONE[notam.type]}`}>
                   {notam.type === "TFR" ? "TFR • HIGH PRIORITY" : `${notam.type} NOTAM`}
                 </div>
                 <div>
-                  <p className="font-data text-sm text-aviation-text">{notam.notamId}</p>
-                  <p className="mt-2 text-sm leading-6 text-aviation-muted">{notam.text.slice(0, 108)}...</p>
+                  <p className="break-all font-data text-sm text-aviation-text">{notam.notamId}</p>
+                  <p className="mt-2 break-words text-sm leading-6 text-aviation-muted">{notam.text.slice(0, 108)}...</p>
                 </div>
               </div>
 
-              <div className="grid gap-2 text-right">
+              <div className="grid gap-2 text-left lg:text-right">
                 <div>
                   <p className="data-label">Effective</p>
                   <p className="font-data text-xs text-aviation-text">{formatTimestamp(notam.effectiveAt)}</p>
@@ -52,7 +52,7 @@ export function NotamList({ notams }: NotamListProps) {
           </summary>
 
           <div className="border-t border-aviation-border px-4 py-4">
-            <p className="font-data text-sm leading-7 text-aviation-text">{notam.text}</p>
+            <p className="break-words font-data text-sm leading-7 text-aviation-text">{notam.text}</p>
           </div>
         </details>
       ))}

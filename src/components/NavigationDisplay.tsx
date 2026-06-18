@@ -41,7 +41,7 @@ export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
           <p className="data-label">Mag heading</p>
@@ -82,16 +82,16 @@ export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
             <text x={midPoint.x + 12} y={midPoint.y - 12} fill="#67e8f9" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
               {navigation.magneticHeading.toString().padStart(3, "0")}°M • {navigation.distanceNm.toFixed(1)}NM
             </text>
-            <text x="20" y="28" fill="#7dd3fc" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
+            <text x="20" y="28" fill="#7dd3fc" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
               N
             </text>
-            <text x={ROUTE_WIDTH - 28} y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
+            <text x={ROUTE_WIDTH - 28} y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
               E
             </text>
-            <text x="18" y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
+            <text x="18" y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
               W
             </text>
-            <text x={ROUTE_WIDTH / 2 - 4} y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
+            <text x={ROUTE_WIDTH / 2 - 4} y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
               S
             </text>
           </svg>
@@ -100,10 +100,10 @@ export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
         <div className="space-y-4">
           <div className="rounded-3xl border border-aviation-border bg-black/20 p-4">
             <p className="data-label">Route</p>
-            <p className="mt-2 font-data text-lg text-aviation-text">
+            <p className="mt-2 break-words font-data text-lg text-aviation-text">
               {navigation.from.icao} → {navigation.to.icao}
             </p>
-            <p className="mt-2 text-sm text-aviation-muted">{navigation.from.name} to {navigation.to.name}</p>
+            <p className="mt-2 break-words text-sm text-aviation-muted">{navigation.from.name} to {navigation.to.name}</p>
           </div>
         </div>
       </div>

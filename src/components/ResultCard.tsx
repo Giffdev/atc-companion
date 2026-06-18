@@ -118,8 +118,8 @@ export function ResultCard({
       ].join(" ")}
     >
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-3">
-          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] tracking-[0.24em] ${style.pillClassName}`}>
+        <div className="min-w-0 space-y-3">
+          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-[0.24em] ${style.pillClassName}`}>
             {style.icon}
             <span>{style.label}</span>
           </div>
@@ -141,7 +141,7 @@ export function ResultCard({
 
       {rawData ? (
         <details className="rounded-2xl border border-aviation-border bg-black/20">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">
+          <summary className="min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">
             Reveal raw data
           </summary>
           <pre className="max-h-72 overflow-auto border-t border-aviation-border px-4 py-3 font-data text-xs leading-6 text-slate-300">

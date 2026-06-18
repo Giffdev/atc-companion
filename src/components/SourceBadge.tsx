@@ -28,13 +28,13 @@ const isNavigableSource = (url: string): boolean => /^https?:\/\//u.test(url);
 export function SourceBadge({ source, fetchedAt, isStale, referenceTime }: SourceBadgeProps) {
   const content = (
     <>
-      <span className={`h-2.5 w-2.5 rounded-full ${getFreshnessTone(fetchedAt, referenceTime, isStale)}`} />
-      <span className="truncate text-aviation-text">{source.name}</span>
-      <span aria-hidden="true" className="text-slate-600">
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getFreshnessTone(fetchedAt, referenceTime, isStale)}`} />
+      <span className="min-w-0 truncate text-aviation-text">{source.name}</span>
+      <span aria-hidden="true" className="hidden text-slate-600 sm:inline">
         /
       </span>
       <time
-        className="font-data text-[11px] text-aviation-muted"
+        className="shrink-0 font-data text-xs text-aviation-muted"
         dateTime={fetchedAt}
         title={formatTimestamp(fetchedAt)}
       >
@@ -44,7 +44,7 @@ export function SourceBadge({ source, fetchedAt, isStale, referenceTime }: Sourc
   );
 
   const className =
-    "inline-flex max-w-full items-center gap-2 rounded-full border border-aviation-border bg-aviation-panelAlt px-3 py-1.5 text-xs";
+    "inline-flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-full border border-aviation-border bg-aviation-panelAlt px-3 py-1.5 text-xs sm:flex-nowrap";
 
   if (!isNavigableSource(source.url)) {
     return <div className={className}>{content}</div>;

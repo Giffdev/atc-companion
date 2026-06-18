@@ -54,7 +54,7 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
 
   if (activeEntries.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-aviation-border bg-black/15 px-3 py-2">
+      <div className="flex min-h-[44px] items-center gap-2 rounded-xl border border-aviation-border bg-black/15 px-3 py-2">
         <span className="text-xs text-aviation-muted">Loading ATIS...</span>
       </div>
     );
@@ -67,7 +67,7 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
         {activeEntries.map(({ icao, atis }) => (
           <button
             key={icao}
-            className={`group relative flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-data text-xs transition-all
+            className={`group relative flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 font-data text-xs transition-all
               ${expandedAirport === icao
                 ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-100"
                 : "border-aviation-border bg-black/20 text-aviation-text hover:border-cyan-500/30 hover:bg-cyan-500/10"
@@ -77,16 +77,16 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
             type="button"
           >
             <span className="text-aviation-muted">{icao.replace(/^K/, "")}</span>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-sm font-bold text-amber-300">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-sm font-bold text-amber-300">
               {atis.letter}
             </span>
             {atis.type !== "combined" && (
-              <span className="text-[10px] text-aviation-muted">{atis.type === "departure" ? "DEP" : "ARR"}</span>
+              <span className="text-xs text-aviation-muted">{atis.type === "departure" ? "DEP" : "ARR"}</span>
             )}
           </button>
         ))}
         {lastFetch && (
-          <span className="ml-auto text-[10px] text-aviation-muted">
+          <span className="w-full text-right text-xs text-aviation-muted sm:ml-auto sm:w-auto">
             Updated {new Date(lastFetch).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}Z
           </span>
         )}
@@ -94,19 +94,19 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
 
       {expandedAirport && atisData[expandedAirport] && (
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-data text-xs font-semibold text-cyan-200">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="break-words font-data text-xs font-semibold text-cyan-200">
               {expandedAirport} Information {atisData[expandedAirport]!.letter}
             </span>
             <button
-              className="text-xs text-aviation-muted hover:text-cyan-200"
+              className="min-h-[44px] min-w-[44px] text-xs text-aviation-muted hover:text-cyan-200"
               onClick={() => setExpandedAirport(null)}
               type="button"
             >
               ✕
             </button>
           </div>
-          <p className="mt-2 font-data text-xs leading-relaxed text-aviation-text">
+          <p className="mt-2 break-words font-data text-xs leading-relaxed text-aviation-text">
             {atisData[expandedAirport]!.fullText}
           </p>
         </div>

@@ -152,8 +152,8 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-aviation-border bg-black/20 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="font-data text-xs text-aviation-muted">
               {zoom}x{ringNm ? ` · ~${ringNm} NM ring` : ""}
             </span>
@@ -163,9 +163,9 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-xs text-aviation-muted transition hover:border-cyan-400/40 hover:text-cyan-200"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-muted transition hover:border-cyan-400/40 hover:text-cyan-200"
               onClick={resetView}
               title="Reset view"
               type="button"
@@ -173,7 +173,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
               ⟳
             </button>
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
               disabled={zoomIndex === 0}
               onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
               title="Zoom out"
@@ -182,7 +182,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
               −
             </button>
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
               disabled={zoomIndex === ZOOM_LEVELS.length - 1}
               onClick={() => setZoomIndex((i) => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
               title="Zoom in"
@@ -216,10 +216,10 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
           <path d={`M${PADDING} ${SVG_HEIGHT / 2}h${SVG_WIDTH - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
 
           {/* Compass labels */}
-          <text fill="rgba(34,197,94,0.35)" fontSize="9" textAnchor="middle" x={SVG_WIDTH / 2} y={PADDING - 4}>N</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="9" textAnchor="middle" x={SVG_WIDTH / 2} y={SVG_HEIGHT - PADDING + 12}>S</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="9" textAnchor="end" x={PADDING - 5} y={SVG_HEIGHT / 2 + 3}>W</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="9" x={SVG_WIDTH - PADDING + 5} y={SVG_HEIGHT / 2 + 3}>E</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={SVG_WIDTH / 2} y={PADDING - 4}>N</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={SVG_WIDTH / 2} y={SVG_HEIGHT - PADDING + 12}>S</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={PADDING - 5} y={SVG_HEIGHT / 2 + 3}>W</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" x={SVG_WIDTH - PADDING + 5} y={SVG_HEIGHT / 2 + 3}>E</text>
 
           {/* Airport reference marker */}
           {airportPx && (
@@ -228,7 +228,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
               <line x1={airportPx.x - 8} y1={airportPx.y} x2={airportPx.x + 8} y2={airportPx.y} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
               <line x1={airportPx.x} y1={airportPx.y - 8} x2={airportPx.x} y2={airportPx.y + 8} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
               <circle cx={airportPx.x} cy={airportPx.y} r="4" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeOpacity="0.5" />
-              <text fill="#22c55e" fillOpacity="0.7" fontSize="9" fontFamily="monospace" x={airportPx.x + 10} y={airportPx.y - 6}>
+              <text fill="#22c55e" fillOpacity="0.7" fontSize="12" fontFamily="monospace" x={airportPx.x + 10} y={airportPx.y - 6}>
                 {airportIcao}
               </text>
             </g>
@@ -238,10 +238,10 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
           {normalizedTraffic.map(({ target, x, y }) => (
             <g key={target.icao24} style={{ color: getAltitudeTone(target.altitudeFeet) }} transform={`translate(${x} ${y})`}>
               <AircraftGlyph trackDegrees={target.trackDegrees} />
-              <text className="font-data" fill="#e2e8f0" fontSize="10" x="14" y="-2">
+              <text className="font-data" fill="#e2e8f0" fontSize="12" x="14" y="-2">
                 {target.callsign ?? target.icao24.toUpperCase()}
               </text>
-              <text className="font-data" fill="#94a3b8" fontSize="9" x="14" y="11">
+              <text className="font-data" fill="#94a3b8" fontSize="12" x="14" y="12">
                 {target.altitudeFeet?.toLocaleString() ?? "UNK"} ft
               </text>
             </g>
@@ -256,21 +256,21 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
         </svg>
 
         {/* Legend */}
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-aviation-muted">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-aviation-muted">
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#22c55e" }} />{"<3k"}</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#06b6d4" }} />3-6k</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#3b82f6" }} />6-10k</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#f59e0b" }} />{">10k ft"}</span>
-          <span className="ml-auto">Drag to pan</span>
+          <span className="w-full sm:ml-auto sm:w-auto">Drag to pan</span>
         </div>
       </div>
 
       {traffic.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[...traffic].sort((a, b) => (a.altitudeFeet ?? -1) - (b.altitudeFeet ?? -1)).map((target) => (
             <div key={`${target.icao24}-legend`} className="rounded-2xl border border-aviation-border bg-black/15 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-data text-sm text-aviation-text">{target.callsign ?? target.icao24.toUpperCase()}</p>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <p className="truncate font-data text-sm text-aviation-text">{target.callsign ?? target.icao24.toUpperCase()}</p>
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getAltitudeTone(target.altitudeFeet) }} />
               </div>
               <p className="mt-2 text-xs text-aviation-muted">

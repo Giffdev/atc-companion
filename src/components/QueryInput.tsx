@@ -238,8 +238,8 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
   };
 
   return (
-    <section className="aviation-panel-strong aviation-grid relative overflow-hidden p-5 md:p-7">
-      <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+    <section className="aviation-panel-strong aviation-grid relative overflow-hidden p-4 sm:p-5 md:p-7">
+      <div className="absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent sm:inset-x-8" />
 
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -253,9 +253,9 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
             </p>
           </div>
 
-          <div className="hidden sm:flex flex-wrap items-center gap-2 text-xs text-aviation-muted">
-            <span className="rounded-full border border-aviation-border px-3 py-1 font-data">ENTER • submit</span>
-            <span className="rounded-full border border-aviation-border px-3 py-1 font-data">CTRL+SPACE • voice</span>
+          <div className="hidden flex-wrap items-center gap-2 text-xs text-aviation-muted sm:flex">
+            <span className="rounded-full border border-aviation-border px-3 py-1.5 font-data">ENTER • submit</span>
+            <span className="rounded-full border border-aviation-border px-3 py-1.5 font-data">CTRL+SPACE • voice</span>
           </div>
         </div>
 
@@ -263,7 +263,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           <label className="space-y-2">
             <span className="data-label">Operational Query</span>
             <input
-              className="h-16 w-full rounded-2xl border border-aviation-border bg-black/30 px-5 font-data text-base text-aviation-text placeholder:text-aviation-muted/70"
+              className="h-16 w-full rounded-2xl border border-aviation-border bg-black/30 px-4 font-data text-base text-aviation-text placeholder:text-aviation-muted/70 sm:px-5"
               disabled={isSubmitting}
               onChange={(event) => updateQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -308,7 +308,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           </button>
 
           <button
-            className="h-16 rounded-2xl bg-cyan-400 px-6 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
+            className="h-16 min-h-[44px] rounded-2xl bg-cyan-400 px-6 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isSubmitting}
             id="atc-query-submit"
             onClick={handleSubmit}
@@ -350,7 +350,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           {SUGGESTIONS.map((suggestion) => (
             <button
               key={suggestion}
-              className="rounded-full border border-aviation-border bg-black/10 px-3 py-1.5 text-xs text-aviation-muted hover:border-cyan-400/30 hover:text-aviation-text"
+              className="min-h-[44px] rounded-full border border-aviation-border bg-black/10 px-3 py-1.5 text-left text-xs text-aviation-muted hover:border-cyan-400/30 hover:text-aviation-text"
               onClick={() => updateQuery(suggestion)}
               type="button"
             >

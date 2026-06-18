@@ -80,20 +80,20 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
           <p className="mt-1 text-sm text-aviation-muted">Set your working position to personalize queries like &ldquo;weather at my facility.&rdquo;</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
           {selectedFacility ? (
             <button
-              className="rounded-full border border-aviation-border bg-black/20 px-3 py-1.5 text-xs text-aviation-muted transition hover:border-cyan-400/35 hover:text-cyan-200"
+              className="min-h-[44px] rounded-full border border-aviation-border bg-black/20 px-3 py-1.5 text-xs text-aviation-muted transition hover:border-cyan-400/35 hover:text-cyan-200"
               onClick={() => onSelect(null)}
               type="button"
             >
               Clear
             </button>
           ) : null}
-          <div className="relative" ref={containerRef}>
+          <div className="relative w-full sm:w-auto" ref={containerRef}>
             <button
               aria-expanded={isOpen}
-              className="flex min-w-[280px] items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-[#0b1526] px-4 py-3 text-left transition hover:border-cyan-400/35"
+              className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-[#0b1526] px-4 py-3 text-left transition hover:border-cyan-400/35 sm:min-w-[280px]"
               onClick={() => setIsOpen((current) => { if (!current) setQuery(""); return !current; })}
               type="button"
             >
@@ -112,11 +112,11 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                   {selectedFacility ? `${selectedFacility.name}${selectedFacility.primaryAirport ? ` • ${selectedFacility.primaryAirport}` : ""}` : "Choose tower, approach, or center context"}
                 </p>
               </div>
-              <span className="font-data text-xs text-aviation-muted">{isOpen ? "CLOSE" : "SELECT"}</span>
+              <span className="shrink-0 font-data text-xs text-aviation-muted">{isOpen ? "CLOSE" : "SELECT"}</span>
             </button>
 
             {isOpen ? (
-              <div className="absolute right-0 top-[calc(100%+0.75rem)] z-40 w-[min(38rem,90vw)] rounded-3xl border border-aviation-border bg-[#08101d] p-4 shadow-2xl shadow-black/60">
+              <div className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-40 w-full max-w-[38rem] rounded-3xl border border-aviation-border bg-[#08101d] p-4 shadow-2xl shadow-black/60 sm:left-auto sm:right-0 sm:w-[min(38rem,90vw)]">
                 <div className="space-y-3">
                   <label className="block">
                     <span className="sr-only">Search facilities</span>
@@ -136,13 +136,13 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                         <div key={group} className="space-y-2">
                           <div className="flex items-center justify-between">
                             <p className="data-label">{GROUP_LABELS[group]}</p>
-                            <span className="text-[11px] text-aviation-muted">{groupedResults[group].length} shown</span>
+                            <span className="text-xs text-aviation-muted">{groupedResults[group].length} shown</span>
                           </div>
                           <div className="space-y-2">
                             {groupedResults[group].map((facility) => (
                               <button
                                 key={facility.id}
-                                className="w-full rounded-2xl border border-aviation-border bg-[#0d1a2e] px-4 py-3 text-left transition hover:border-cyan-400/35 hover:bg-cyan-500/10"
+                                className="min-h-[44px] w-full rounded-2xl border border-aviation-border bg-[#0d1a2e] px-4 py-3 text-left transition hover:border-cyan-400/35 hover:bg-cyan-500/10"
                                 onClick={() => {
                                   onSelect(facility);
                                   setIsOpen(false);
@@ -158,7 +158,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                                         {facility.location ? ` • ${facility.location}` : facility.primaryAirport ? ` • ${facility.primaryAirport}` : ""}
                                     </p>
                                   </div>
-                                  <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] tracking-[0.18em] text-cyan-200">
+                                  <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-xs tracking-[0.18em] text-cyan-200">
                                     {FACILITY_TYPE_BADGE[group]}
                                   </span>
                                 </div>

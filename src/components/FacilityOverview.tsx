@@ -65,7 +65,7 @@ const WeatherSkeletonCard = ({ icao }: { icao: string }) => (
         <div className="h-7 w-12 rounded-full bg-slate-700/50" />
       </div>
       <div className="h-7 w-16 rounded-full bg-slate-700/50" />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <div className="h-3 w-10 rounded bg-slate-800/60" />
           <div className="h-4 w-full rounded bg-slate-700/50" />
@@ -95,18 +95,18 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, onSelectAirport
   return (
     <article className="flex h-full flex-col rounded-2xl border border-aviation-border bg-black/15 p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-data text-2xl font-semibold tracking-[0.16em] text-aviation-text">{icao}</h3>
-          <p className="mt-1 text-sm text-aviation-muted">{getAirportName(icao)}</p>
+        <div className="min-w-0">
+          <h3 className="break-words font-data text-xl font-semibold tracking-[0.16em] text-aviation-text sm:text-2xl">{icao}</h3>
+          <p className="mt-1 break-words text-sm text-aviation-muted">{getAirportName(icao)}</p>
         </div>
         {atis ? (
           <div className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-center">
-            <p className="data-label text-[9px] text-amber-300">ATIS</p>
+            <p className="data-label text-xs text-amber-300">ATIS</p>
             <p className="font-data text-sm font-semibold text-amber-200">{atis.letter}</p>
           </div>
         ) : atisChecked ? (
           <div className="rounded-full border border-slate-600/30 bg-slate-700/20 px-2.5 py-1 text-center" title="D-ATIS not available — voice ATIS only">
-            <p className="font-data text-[9px] text-slate-500">No D-ATIS</p>
+            <p className="font-data text-xs text-slate-500">No D-ATIS</p>
           </div>
         ) : null}
       </div>
@@ -115,7 +115,7 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, onSelectAirport
         {flightCategory}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <p className="data-label">Wind</p>
           <p className="mt-2 font-data text-sm text-aviation-text">{formatWind(weather?.metar?.wind)}</p>
@@ -131,7 +131,7 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, onSelectAirport
       ) : null}
 
       <button
-        className="mt-auto rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-left text-sm font-medium text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/15"
+        className="mt-auto min-h-[44px] rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-left text-sm font-medium text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/15"
         onClick={() => onSelectAirport(icao)}
         type="button"
       >
@@ -216,7 +216,7 @@ export default function FacilityOverview({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="data-label">{facilityType === "approach" ? "Approach facility" : "Center facility"}</p>
-          <h2 className="text-2xl font-semibold text-aviation-text">{facilityName} — Airports</h2>
+          <h2 className="text-xl font-semibold text-aviation-text sm:text-2xl">{facilityName} — Airports</h2>
           <p className="mt-2 text-sm text-aviation-muted">
             Quick weather and ATIS across {normalizedAirports.length} airports. Drill into any field for full operational details.
           </p>
@@ -228,7 +228,7 @@ export default function FacilityOverview({
           No airports are mapped to this facility yet.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {isLoading
             ? normalizedAirports.map((icao) => <WeatherSkeletonCard key={icao} icao={icao} />)
             : normalizedAirports.map((icao) => (

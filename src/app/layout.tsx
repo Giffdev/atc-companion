@@ -27,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${sans.variable} ${mono.variable} min-h-screen bg-aviation-night font-sans text-aviation-text`} suppressHydrationWarning>
+      <body className={`${sans.variable} ${mono.variable} min-h-screen overflow-x-hidden bg-aviation-night font-sans text-aviation-text`} suppressHydrationWarning>
         {children}
       </body>
     </html>

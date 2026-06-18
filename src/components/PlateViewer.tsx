@@ -141,22 +141,22 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 font-data text-[11px] tracking-[0.2em] text-emerald-200">
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 font-data text-xs tracking-[0.2em] text-emerald-200">
               {selectedPlate.procedureType}
             </span>
             {selectedPlate.runway ? (
-              <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 font-data text-[11px] tracking-[0.2em] text-cyan-200">
+              <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 font-data text-xs tracking-[0.2em] text-cyan-200">
                 RWY {selectedPlate.runway}
               </span>
             ) : null}
-            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[11px] tracking-[0.2em] text-aviation-muted">
+            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs tracking-[0.2em] text-aviation-muted">
               {selectedPlate.airportIcao}
             </span>
           </div>
 
           <div>
             <p className="data-label">Displayed plate</p>
-            <p className="mt-2 text-lg font-semibold text-aviation-text">{selectedPlate.procedureName}</p>
+            <p className="mt-2 break-words text-lg font-semibold text-aviation-text">{selectedPlate.procedureName}</p>
             <p className="mt-2 text-sm text-aviation-muted">
               {hasProcedureHint || hasRunwayHint
                 ? `Best match for ${selectedProcedureType ?? "any procedure"}${hasProcedureHint && hasRunwayHint ? " • " : ""}${
@@ -169,7 +169,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
 
         <div className="flex flex-col items-start gap-3 lg:items-end">
           <a
-            className="inline-flex items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300/50 hover:bg-cyan-500/15"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300/50 hover:bg-cyan-500/15"
             href={selectedPlateUrl}
             rel="noreferrer"
             target="_blank"
@@ -186,7 +186,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="data-label">Available plates</p>
           <p className="font-data text-xs text-aviation-muted">
             {plates.length} option{plates.length === 1 ? "" : "s"}
@@ -202,7 +202,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
               <button
                 key={plateKey}
                 className={[
-                  "min-w-[220px] rounded-2xl border px-4 py-3 text-left transition",
+                  "min-h-[44px] min-w-[min(220px,85vw)] rounded-2xl border px-4 py-3 text-left transition",
                   isSelected
                     ? "border-cyan-400/70 bg-cyan-500/10 shadow-[0_0_24px_rgba(6,182,212,0.18)]"
                     : "border-aviation-border bg-black/15 hover:border-cyan-400/40 hover:bg-cyan-500/5"
@@ -214,17 +214,17 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
                 type="button"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 font-data text-[10px] tracking-[0.2em] text-violet-300">
+                  <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 font-data text-xs tracking-[0.2em] text-violet-300">
                     {plate.procedureType}
                   </span>
                   {plate.runway ? (
-                    <span className="rounded-full border border-aviation-border bg-black/20 px-2 py-1 font-data text-[10px] tracking-[0.2em] text-aviation-text">
+                    <span className="rounded-full border border-aviation-border bg-black/20 px-2 py-1 font-data text-xs tracking-[0.2em] text-aviation-text">
                       RWY {plate.runway}
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-3 text-sm font-semibold text-aviation-text">{plate.procedureName}</p>
-                <p className="mt-1 text-xs text-aviation-muted">{plate.source.name}</p>
+                <p className="mt-3 break-words text-sm font-semibold text-aviation-text">{plate.procedureName}</p>
+                <p className="mt-1 truncate text-xs text-aviation-muted">{plate.source.name}</p>
               </button>
             );
           })}
@@ -234,7 +234,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
       {/* Mobile: open in new tab instead of iframe */}
       <div className="block sm:hidden">
         <a
-          className="flex items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 font-data text-sm text-cyan-100 hover:bg-cyan-500/20 transition-colors"
+          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 font-data text-sm text-cyan-100 transition-colors hover:bg-cyan-500/20"
           href={selectedPlateUrl}
           rel="noreferrer"
           target="_blank"
@@ -243,7 +243,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
             <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
             <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
           </svg>
-          Open {selectedPlate.procedureName} chart
+          <span className="break-words text-center">Open {selectedPlate.procedureName} chart</span>
         </a>
       </div>
 
@@ -269,9 +269,9 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
         </div>
       </div>
 
-      <p className="hidden sm:block text-xs text-aviation-muted">
+      <p className="hidden text-xs text-aviation-muted sm:block">
         Your browser doesn&apos;t support inline PDF viewing.{" "}
-        <a href={selectedPlateUrl} rel="noreferrer" target="_blank">
+        <a className="underline underline-offset-2" href={selectedPlateUrl} rel="noreferrer" target="_blank">
           Open the chart in a new tab
         </a>
         .

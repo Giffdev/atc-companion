@@ -40,18 +40,18 @@ const WindArrow = ({ heading }: { heading: number | null | undefined }) => (
 
 const ForecastBlock = ({ group }: { group: TafForecastGroup }) => (
   <div className="rounded-2xl border border-aviation-border bg-black/15 p-3">
-    <div className="flex items-center justify-between gap-3">
+  <div className="flex flex-wrap items-center justify-between gap-3">
       <span className="font-data text-xs text-cyan-300">{group.groupType}</span>
       <span className="font-data text-xs text-aviation-muted">{formatTimestamp(group.validFrom)}</span>
     </div>
     <div className="mt-3 grid gap-2 sm:grid-cols-2">
       <div>
         <p className="data-label">Wind</p>
-        <p className="data-readout">{group.wind ? formatWind(group.wind.directionDegrees, group.wind.speedKnots) : "Calm / N/A"}</p>
+        <p className="break-words data-readout">{group.wind ? formatWind(group.wind.directionDegrees, group.wind.speedKnots) : "Calm / N/A"}</p>
       </div>
       <div>
         <p className="data-label">Ceiling / Vis</p>
-        <p className="data-readout">
+        <p className="break-words data-readout">
           {formatCeiling(group.ceiling?.minimumBrokenOrOvercastFeetAgl)} • {formatVisibility(group.visibility?.prevailingStatuteMiles)}
         </p>
       </div>
@@ -78,7 +78,7 @@ export function WeatherDisplay({ weather }: WeatherDisplayProps) {
         <div className="flex flex-col items-center justify-center rounded-2xl border border-aviation-border bg-black/15 p-4">
           <WindArrow heading={metar.wind?.directionDegrees} />
           <p className="mt-3 data-label">Surface Wind</p>
-          <p className="mt-2 data-readout">{metar.wind ? formatWind(metar.wind.directionDegrees, metar.wind.speedKnots, metar.wind.gustKnots) : "Unavailable"}</p>
+          <p className="mt-2 break-words text-center data-readout">{metar.wind ? formatWind(metar.wind.directionDegrees, metar.wind.speedKnots, metar.wind.gustKnots) : "Unavailable"}</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -107,11 +107,11 @@ export function WeatherDisplay({ weather }: WeatherDisplayProps) {
 
       <div className="rounded-2xl border border-aviation-border bg-black/15 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="data-label">Latest METAR</p>
-            <p className="mt-2 font-data text-sm leading-7 text-aviation-text">{metar.rawText}</p>
+            <p className="mt-2 break-words font-data text-sm leading-7 text-aviation-text">{metar.rawText}</p>
           </div>
-          <div className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-xs text-aviation-muted">
+          <div className="shrink-0 rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-xs text-aviation-muted">
             Obs {formatTimestamp(metar.observedAt)}
           </div>
         </div>
@@ -119,7 +119,7 @@ export function WeatherDisplay({ weather }: WeatherDisplayProps) {
 
       {taf ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="data-label">TAF Trend</p>
             <span className="font-data text-xs text-aviation-muted">{formatTimestamp(taf.issuedAt)}</span>
           </div>
