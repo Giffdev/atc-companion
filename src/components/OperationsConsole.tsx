@@ -13,6 +13,7 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBar } from "@/components/StatusBar";
 import { TrafficMap } from "@/components/TrafficMap";
 import { WeatherDisplay } from "@/components/WeatherDisplay";
+import { findAirportReference } from "@/data/airports";
 import { getFacilityById, getFacilityAirports } from "@/data/facilities";
 import { createDemoDashboardData, type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
 import { API_ENDPOINTS, TRAFFIC_REFRESH_INTERVAL_MS, WEATHER_REFRESH_INTERVAL_MS } from "@/lib/constants";
@@ -358,15 +359,14 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
           ))}
         </div>
       );
-    case "plates":
+    case "plates": {
+      const plates = liveResult.response.data as ApproachPlate[];
       return (
-        <PlateViewer
-          plates={liveResult.response.data as ApproachPlate[]}
-          referenceTime={liveResult.timestamp}
-          selectedProcedureType={liveResult.intent.procedure_type}
-          selectedRunway={liveResult.intent.runway}
-        />
+        <p className="text-sm text-aviation-text">
+          Found {plates.length} procedure{plates.length !== 1 ? "s" : ""} — see the terminal procedures panel below.
+        </p>
       );
+    }
     case "regulatory":
       return (
         <div className="space-y-3">
@@ -515,6 +515,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     (activeIntent?.type === "plates" || activeIntent?.type === "airport_info" ? activeIntent.airport : undefined) ??
     "Field";
   const demoNavigationSourceStatus = demoData.sourceStatuses.find((source) => source.id === "navigation") ?? demoData.sourceStatuses[0];
+
+  const trafficAirportIcao = selectedFacility?.primaryAirport ?? undefined;
+  const trafficAirportRef = trafficAirportIcao ? findAirportReference(trafficAirportIcao) : null;
+  const trafficAirportPosition = trafficAirportRef
+    ? { latitude: trafficAirportRef.latitude, longitude: trafficAirportRef.longitude }
+    : selectedFacility?.position ?? undefined;
 
   const fetchLiveQuery = useCallback(async (query: string, bypassCache = false): Promise<LiveQueryResult> => {
     const response = await fetch(API_ENDPOINTS.query, {
@@ -835,7 +841,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           </div>
                         ) : null}
                         {dashboardData.traffic.length ? (
-                          <TrafficMap traffic={dashboardData.traffic} />
+                          <TrafficMap
+                            traffic={dashboardData.traffic}
+                            airportIcao={trafficAirportIcao}
+                            airportPosition={trafficAirportPosition}
+                          />
                         ) : (
                           <div className="text-sm text-aviation-muted">No live traffic targets returned for the active query.</div>
                         )}
