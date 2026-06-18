@@ -3,14 +3,20 @@
 import { useMemo, useState } from "react";
 
 import { SourceBadge } from "@/components/SourceBadge";
+import { toFaaCode } from "@/data/airports";
 import type { ProcedureType } from "@/types/intents";
 import type { ApproachPlate } from "@/types/aviation";
+
+type PlateViewerTab = "procedures" | "diagram" | "supplement";
 
 type PlateViewerProps = {
   plates: ApproachPlate[];
   referenceTime?: string;
   selectedProcedureType?: ProcedureType;
   selectedRunway?: string;
+  airportCode?: string;
+  diagram?: ApproachPlate | null;
+  defaultTab?: PlateViewerTab;
 };
 
 const normalizeValue = (value?: string | null): string => value?.trim().toUpperCase() ?? "";
@@ -92,7 +98,7 @@ export const pickBestMatchingPlate = (
   return bestPlate;
 };
 
-export function PlateViewer({ plates, referenceTime, selectedProcedureType, selectedRunway }: PlateViewerProps) {
+export function PlateViewer({ plates, referenceTime, selectedProcedureType, selectedRunway, airportCode, diagram, defaultTab }: PlateViewerProps) {
   const bestMatch = useMemo(
     () => pickBestMatchingPlate(plates, selectedProcedureType, selectedRunway),
     [plates, selectedProcedureType, selectedRunway]
@@ -107,19 +113,121 @@ export function PlateViewer({ plates, referenceTime, selectedProcedureType, sele
     [plates, selectedProcedureType, selectedRunway]
   );
 
-  if (!bestMatch) {
-    return <div className="text-sm text-aviation-muted">No approach plates available for this airport.</div>;
-  }
+  const initialTab = defaultTab ?? "procedures";
+  const [activeTab, setActiveTab] = useState<PlateViewerTab>(initialTab);
+  const [refLoading, setRefLoading] = useState(true);
+
+  const faaCode = airportCode ? toFaaCode(airportCode) : null;
+  const supplementUrl = faaCode ? `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}` : null;
+  const proxiedSupplementUrl = supplementUrl ? `/api/plate-proxy?url=${encodeURIComponent(supplementUrl)}` : null;
+  const diagramUrl = diagram ? (diagram.pdfUrl ?? diagram.chartUrl) : null;
+  const proxiedDiagramUrl = diagramUrl ? getProxiedPlateUrl(diagram!) : null;
+
+  const tabs: { id: PlateViewerTab; label: string; available: boolean }[] = [
+    { id: "procedures", label: `Procedures (${plates.length})`, available: plates.length > 0 },
+    { id: "diagram", label: "Airport Diagram", available: Boolean(proxiedDiagramUrl) },
+    { id: "supplement", label: "Chart Supplement", available: Boolean(proxiedSupplementUrl) }
+  ];
 
   return (
-    <PlateViewerBody
-      key={viewerKey}
-      bestMatch={bestMatch}
-      plates={plates}
-      referenceTime={referenceTime}
-      selectedProcedureType={selectedProcedureType}
-      selectedRunway={selectedRunway}
-    />
+    <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex flex-wrap gap-1 border-b border-aviation-border pb-2">
+        {tabs.filter(t => t.available).map((tab) => (
+          <button
+            key={tab.id}
+            className={`rounded-t-lg px-3 py-2 text-xs font-medium transition ${
+              activeTab === tab.id
+                ? "border-b-2 border-cyan-400 text-cyan-200 bg-cyan-500/10"
+                : "text-aviation-muted hover:text-aviation-text hover:bg-white/5"
+            }`}
+            onClick={() => { setActiveTab(tab.id); setRefLoading(true); }}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Procedures tab */}
+      {activeTab === "procedures" && (
+        bestMatch ? (
+          <PlateViewerBody
+            key={viewerKey}
+            bestMatch={bestMatch}
+            plates={plates}
+            referenceTime={referenceTime}
+            selectedProcedureType={selectedProcedureType}
+            selectedRunway={selectedRunway}
+          />
+        ) : (
+          <div className="text-sm text-aviation-muted">No approach plates available for this airport.</div>
+        )
+      )}
+
+      {/* Airport Diagram tab */}
+      {activeTab === "diagram" && proxiedDiagramUrl && (
+        <ReferenceIframe
+          isLoading={refLoading}
+          label="AIRPORT DIAGRAM"
+          onLoad={() => setRefLoading(false)}
+          rawUrl={diagramUrl!}
+          src={proxiedDiagramUrl}
+          title="Airport Diagram"
+        />
+      )}
+
+      {/* Chart Supplement tab */}
+      {activeTab === "supplement" && proxiedSupplementUrl && (
+        <ReferenceIframe
+          isLoading={refLoading}
+          label="CHART SUPPLEMENT"
+          onLoad={() => setRefLoading(false)}
+          rawUrl={supplementUrl!}
+          src={proxiedSupplementUrl}
+          title="FAA Chart Supplement"
+        />
+      )}
+    </div>
+  );
+}
+
+function ReferenceIframe({ src, title, rawUrl, label, isLoading, onLoad }: {
+  src: string; title: string; rawUrl: string; label: string; isLoading: boolean; onLoad: () => void;
+}) {
+  return (
+    <>
+      {/* Mobile: link out */}
+      <div className="block sm:hidden">
+        <a
+          className="flex items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 font-data text-sm text-cyan-100 hover:bg-cyan-500/20 transition-colors"
+          href={rawUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Open {title} ↗
+        </a>
+      </div>
+      {/* Desktop: inline iframe */}
+      <div className="hidden sm:block overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
+        <div className="relative min-h-[500px]">
+          {isLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm">
+              <div className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 font-data text-xs tracking-[0.2em] text-cyan-100">
+                LOADING {label}…
+              </div>
+            </div>
+          )}
+          <iframe
+            className="h-[min(75vh,900px)] min-h-[500px] w-full bg-slate-950"
+            onError={onLoad}
+            onLoad={onLoad}
+            src={src}
+            title={title}
+          />
+        </div>
+      </div>
+    </>
   );
 }
 

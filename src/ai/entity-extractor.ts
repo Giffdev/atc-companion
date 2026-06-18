@@ -423,6 +423,9 @@ export const detectNotamTypeFilter = (input: string): NotamTypeFilter | undefine
 export const detectAirportInfoDetail = (input: string): AirportInfoDetail | undefined => {
   const normalized = normalizeAviationText(input).toLowerCase();
 
+  if (/\bchart\s+supplement\b/.test(normalized)) {
+    return "supplement";
+  }
   if (/\b(?:runway|airport diagram|field layout)\b/.test(normalized)) {
     return "runways";
   }

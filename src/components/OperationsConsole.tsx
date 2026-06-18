@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FacilitySelector } from "@/components/FacilitySelector";
-import { DiagramPanel } from "@/components/DiagramPanel";
 import FacilityOverview from "@/components/FacilityOverview";
 import { AtisStrip } from "@/components/AtisStrip";
 import { NavigationDisplay } from "@/components/NavigationDisplay";
@@ -95,7 +94,7 @@ const mapIntentToDashboardType = (intent: ParsedIntent | null): DashboardResultT
       return "frequency";
     }
 
-    if (intent.detail === "runways") {
+    if (intent.detail === "runways" || intent.detail === "supplement") {
       return "plates";
     }
 
@@ -576,11 +575,6 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               </div>
             )}
           </div>
-          <DiagramPanel
-            diagram={diagram}
-            airportCode={airportInfo.airport}
-            autoExpand={liveResult.intent.type === "airport_info" && liveResult.intent.detail === "runways" ? "diagram" : undefined}
-          />
         </div>
       );
     }
@@ -1250,18 +1244,18 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       referenceTime={initialNow}
                       source={dashboardData.plates[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="Inline FAA procedure chart viewer with runway-aware plate selection and one-click alternates."
-                      title={`${platePanelAirport} terminal procedures`}
+                      title={`${platePanelAirport} charts & references`}
                     >
-                      {dashboardData.plates.length ? (
-                        <PlateViewer
-                          plates={dashboardData.plates}
-                          referenceTime={initialNow}
-                          selectedProcedureType={selectedPlateProcedureType}
-                          selectedRunway={selectedPlateRunway}
-                        />
-                      ) : (
-                        <div className="text-sm text-aviation-muted">No approach plates returned for the active live query.</div>
-                      )}
+                      <PlateViewer
+                        airportCode={platePanelAirport !== "Field" ? platePanelAirport : undefined}
+                        defaultTab={liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "supplement" ? "supplement"
+                          : liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "runways" ? "diagram"
+                          : "procedures"}
+                        plates={dashboardData.plates}
+                        referenceTime={initialNow}
+                        selectedProcedureType={selectedPlateProcedureType}
+                        selectedRunway={selectedPlateRunway}
+                      />
                     </ResultCard>
                   </div>
                 );

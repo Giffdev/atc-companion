@@ -23,7 +23,7 @@ export type WeatherSubtype = "metar" | "taf" | "pirep" | "all";
 export type NotamTypeFilter = "D" | "FDC" | "TFR";
 export type FrequencyQueryType = "TWR" | "APP" | "GND" | "DEL" | "ATIS" | "CTAF";
 export type ProcedureType = "ILS" | "RNAV" | "VOR" | "VISUAL" | "SID" | "STAR";
-export type AirportInfoDetail = "runways" | "frequencies" | "hours" | "all";
+export type AirportInfoDetail = "runways" | "frequencies" | "hours" | "supplement" | "all";
 export type ClarificationReason = "ambiguous" | "low-confidence" | "missing-entity" | "empty-input";
 
 export interface IntentEntity {

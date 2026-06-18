@@ -82,15 +82,16 @@ const WEATHER_PATTERN =
   /\b(?:weather|metar|taf|pirep|wx)\b|\b(?:metar|taf|pirep)\s+[A-Za-z]{3,4}\b|\bweather\s+(?:at|for|near)\s+[A-Za-z]{3,4}\b/i;
 const NOTAM_PATTERN = /\b(?:notam|notams|fdc|tfr)\b/i;
 const FREQUENCY_PATTERN = /\b(?:frequency|frequencies|tower|twr|ground|gnd|approach|app|departure|delivery|del|atis|ctaf)\b/i;
+const CHART_SUPPLEMENT_PATTERN = /\bchart\s+supplement\b/i;
 const PLATES_PATTERN =
-  /\b(?:plate|plates|chart|charts|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|ils|rnav|vor|visual)\b/i;
+  /\b(?:plate|plates|chart(?!\s+supplement)|charts(?!\s+supplement)|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|ils|rnav|vor|visual)\b/i;
 const TRAFFIC_PATTERN = /\b(?:traffic|ads-b|adsb|targets|planes?\s+(?:near|around)|aircraft\s+(?:near|around)|in the pattern)\b/i;
 const NAVIGATION_PATTERN =
   /\b(?:heading(?:\s+vector)?|vector|direct|distance|bearing|route)\b|\bhow far is\b|\bfrom\s+(?:my airport|[A-Za-z]{3,4})\s+to\s+(?:my airport|[A-Za-z]{3,4})\b/i;
 const REGULATORY_PATTERN =
   /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
 const AIRPORT_INFO_PATTERN =
-  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed))\b/i;
+  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout|chart supplement|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed))\b/i;
 const HOURS_CONTEXT_PATTERN = /\b(?:hours|open|close|closing|operat|schedule|staffed|manned|unmanned|part.?time|24.?hour)\b/i;
 const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on)|show me (?:everything|all|all data)|everything (?:for|on|about|at)|all (?:data|info) (?:for|on|about|at)|give me (?:everything|all))\b/i;
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
@@ -100,7 +101,7 @@ const FACILITY_INFO_PATTERN =
   /\b(?:(?:which|what)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)\s+(?:border|neighbor|adjacent|surround|next to|around|near)|\b(?:border|neighbor|adjacent|surrounding|adjoining)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)|\bwho\s+(?:borders?|neighbors?|is (?:adjacent|next)))\b/i;
 
 const FACILITY_AIRPORTS_PATTERN =
-  /\b(?:(?:list|show|what(?:'s| is| are)?|which|give me|relevant|data for)\s+(?:(?:the\s+)?(?:relevant\s+)?(?:data|info|information|weather|atis)\s+(?:for|on)\s+)?(?:airports?|fields?)\s+(?:under|in|within|at|for|covered by|served by|part of)|(?:airports?|data)\s+(?:under|in|within|at|for)\s+(?:\w+\s+)?(?:approach|center|tracon|artcc)|(?:show|give|list|display)\s+(?:me\s+)?(?:the\s+)?(?:relevant\s+)?(?:data|info|airports?|weather)\s+(?:for\s+)?(?:airports?\s+)?(?:under|in|within|at|for)\s+(?:\w+\s+)?(?:approach|center|tracon|artcc))\b/i;
+  /(?:(?:airports?|fields?)\s+(?:under|in|within|at|for|covered by|served by|part of|does)\b.*\b(?:approach|center|tracon|artcc|cover)\b|\b(?:approach|center|tracon|artcc)\s+(?:cover|have|include|serve)|\b(?:list|show|what|which|give|display)\b.*\bairports?\b.*\b(?:under|in|within|at|for|part of)\b.*\b(?:approach|center|tracon|artcc)\b)/i;
 
 const detectWeatherSubtype = (input: string): WeatherSubtype => {
   const normalized = input.toLowerCase();
@@ -294,6 +295,15 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
       confidence: entities.airports.length > 0 ? 0.94 : 0.69,
       facility: entities.airports[0],
       freq_type: detectFrequencyType(input)
+    };
+  }
+
+  if (CHART_SUPPLEMENT_PATTERN.test(input)) {
+    return {
+      type: "airport_info",
+      confidence: 0.95,
+      airport: entities.airports[0],
+      detail: "supplement" as AirportInfoDetail
     };
   }
 
