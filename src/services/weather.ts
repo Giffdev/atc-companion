@@ -1,4 +1,4 @@
-import { toIcaoCode } from "@/data/airports";
+import { findNearestWeatherStations, toIcaoCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
@@ -523,26 +523,48 @@ export const getWeather = async (station: string, options: WeatherRequestOptions
     getPireps({ station: normalizedStation, distance: 75, bypassCache: options.bypassCache })
   ]);
 
-  if (!metarResponse.ok && !tafResponse.ok && !pirepResponse.ok) {
-    return metarResponse;
+  // If no METAR found, try nearest weather-reporting stations
+  let effectiveMetar = metarResponse;
+  let nearestStationNote: string | undefined;
+  if (!metarResponse.ok) {
+    const nearbyStations = findNearestWeatherStations(station, 3);
+    for (const candidate of nearbyStations) {
+      if (candidate.distanceNm === 0) continue;
+      const fallback = await getMetar(candidate.icao, options);
+      if (fallback.ok) {
+        effectiveMetar = fallback;
+        nearestStationNote = `No weather station at ${normalizedStation}. Showing nearest: ${candidate.icao} (${candidate.name}, ${Math.round(candidate.distanceNm)}nm away)`;
+        break;
+      }
+    }
+  }
+
+  if (!effectiveMetar.ok && !tafResponse.ok && !pirepResponse.ok) {
+    return createApiErrorResponse(
+      !metarResponse.ok ? metarResponse.error : { code: "NO_DATA", message: "No weather data available" },
+      { source: metarResponse.source, fetchedAt: toIsoNow() }
+    );
   }
 
   const fetchedAt = toIsoNow();
-  const primarySource = metarResponse.ok ? metarResponse.source : tafResponse.ok ? tafResponse.source : pirepResponse.source;
+  const primarySource = effectiveMetar.ok ? effectiveMetar.source : tafResponse.ok ? tafResponse.source : pirepResponse.source;
   const supportingSources = [tafResponse, pirepResponse]
     .filter((response) => response.ok)
     .map((response) => response.source)
     .filter((source, index, all) => all.findIndex((candidate) => candidate.url === source.url) === index);
-  const cache = metarResponse.cache ?? tafResponse.cache ?? pirepResponse.cache;
+  const cache = effectiveMetar.cache ?? tafResponse.cache ?? pirepResponse.cache;
 
   const bundle: WeatherBundle = {
-    stationIcao: normalizedStation,
-    metar: metarResponse.ok ? metarResponse.data : null,
+    stationIcao: effectiveMetar.ok && effectiveMetar.data.stationIcao !== normalizedStation
+      ? effectiveMetar.data.stationIcao
+      : normalizedStation,
+    metar: effectiveMetar.ok ? effectiveMetar.data : null,
     taf: tafResponse.ok ? tafResponse.data : null,
     pireps: pirepResponse.ok ? pirepResponse.data : [],
     source: primarySource,
     fetchedAt,
-    isStale: false
+    isStale: false,
+    nearestStationNote
   };
 
   return createApiResponse(bundle, primarySource, {

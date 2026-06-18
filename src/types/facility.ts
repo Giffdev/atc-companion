@@ -7,4 +7,5 @@ export interface ControllerFacility {
   primaryAirport?: string;
   position: { latitude: number; longitude: number };
   artcc?: string;
+  location?: string;
 }

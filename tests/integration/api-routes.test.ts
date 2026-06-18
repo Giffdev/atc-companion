@@ -1,3 +1,4 @@
+import { GET as getAdjacentRoute } from "@/app/api/adjacent/route";
 import { GET as getFrequenciesRoute } from "@/app/api/frequencies/route";
 import { GET as getIntentRoute, POST as postIntentRoute } from "@/app/api/intent/route";
 import { GET as getNotamsRoute } from "@/app/api/notams/route";
@@ -194,9 +195,40 @@ describe("API route integration", () => {
     });
   });
 
+  it("returns adjacency data for center, approach, and tower facilities", async () => {
+    const [centerResponse, approachResponse, towerResponse] = await Promise.all([
+      getAdjacentRoute(new Request("http://localhost/api/adjacent?facility=ZSE")),
+      getAdjacentRoute(new Request("http://localhost/api/adjacent?facility=S46")),
+      getAdjacentRoute(new Request("http://localhost/api/adjacent?facility=KSEA-TWR"))
+    ]);
+
+    expect(centerResponse.status).toBe(200);
+    await expect(parseJson(centerResponse)).resolves.toMatchObject({
+      facility: { id: "ZSE", type: "center" },
+      adjacentCenters: expect.arrayContaining([expect.objectContaining({ id: "ZOA" })])
+    });
+
+    expect(approachResponse.status).toBe(200);
+    await expect(parseJson(approachResponse)).resolves.toMatchObject({
+      facility: { id: "S46", type: "approach" },
+      overlying: { id: "ZSE", type: "center" },
+      adjacentApproach: expect.arrayContaining([expect.objectContaining({ id: "P80" })]),
+      adjacentTowers: expect.arrayContaining([expect.objectContaining({ id: "KSEA-TWR" })])
+    });
+
+    expect(towerResponse.status).toBe(200);
+    await expect(parseJson(towerResponse)).resolves.toMatchObject({
+      facility: { id: "KSEA-TWR", type: "tower" },
+      overlying: { id: "S46", type: "approach" },
+      adjacentCenters: expect.arrayContaining([expect.objectContaining({ id: "ZSE" })]),
+      adjacentApproach: [{ id: "S46", name: "Seattle Approach" }]
+    });
+  });
+
   it("returns 400 errors when required query parameters are missing", async () => {
-    const [weather, notams, frequencies, plates, traffic, search, regulatory, intentGet, intentPost, queryPost] =
+    const [adjacent, weather, notams, frequencies, plates, traffic, search, regulatory, intentGet, intentPost, queryPost] =
       await Promise.all([
+      getAdjacentRoute(new Request("http://localhost/api/adjacent")),
       getWeatherRoute(new Request("http://localhost/api/weather")),
       getNotamsRoute(new Request("http://localhost/api/notams")),
       getFrequenciesRoute(new Request("http://localhost/api/frequencies")),
@@ -220,6 +252,11 @@ describe("API route integration", () => {
         })
       )
       ]);
+
+    expect(adjacent.status).toBe(400);
+    await expect(parseJson(adjacent)).resolves.toMatchObject({
+      error: "Missing 'facility' query parameter"
+    });
 
     for (const response of [weather, notams, frequencies, plates, traffic, search, regulatory, intentGet, intentPost]) {
       expect(response.status).toBe(400);

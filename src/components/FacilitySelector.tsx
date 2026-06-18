@@ -155,7 +155,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                                     <p className="truncate text-sm font-medium text-aviation-text">{facility.name}</p>
                                     <p className="mt-1 truncate font-data text-xs text-aviation-muted">
                                       {facility.id}
-                                      {facility.primaryAirport ? ` • ${facility.primaryAirport}` : ""}
+                                        {facility.location ? ` • ${facility.location}` : facility.primaryAirport ? ` • ${facility.primaryAirport}` : ""}
                                     </p>
                                   </div>
                                   <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] tracking-[0.18em] text-cyan-200">

@@ -22,8 +22,10 @@ const projectPoint = (
 export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
   const latitudes = [navigation.from.position.latitude, navigation.to.position.latitude];
   const longitudes = [navigation.from.position.longitude, navigation.to.position.longitude];
-  const latitudePadding = Math.max(Math.abs(latitudes[0] - latitudes[1]) * 0.25, 0.8);
-  const longitudePadding = Math.max(Math.abs(longitudes[0] - longitudes[1]) * 0.25, 0.8);
+  const latSpan = Math.abs(latitudes[0] - latitudes[1]);
+  const lonSpan = Math.abs(longitudes[0] - longitudes[1]);
+  const latitudePadding = Math.max(latSpan * 0.3, 0.05);
+  const longitudePadding = Math.max(lonSpan * 0.3, 0.05);
   const bounds = {
     minLat: Math.min(...latitudes) - latitudePadding,
     maxLat: Math.max(...latitudes) + latitudePadding,
@@ -37,7 +39,6 @@ export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
     x: (fromPoint.x + toPoint.x) / 2,
     y: (fromPoint.y + toPoint.y) / 2
   };
-  const compassRotation = navigation.trueHeading - 90;
 
   return (
     <div className="space-y-5">
@@ -103,25 +104,6 @@ export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
               {navigation.from.icao} → {navigation.to.icao}
             </p>
             <p className="mt-2 text-sm text-aviation-muted">{navigation.from.name} to {navigation.to.name}</p>
-          </div>
-
-          <div className="rounded-3xl border border-aviation-border bg-black/20 p-4">
-            <p className="data-label">Compass rose</p>
-            <div className="mt-4 flex items-center justify-center">
-              <svg aria-label="Compass rose" height="160" viewBox="0 0 160 160" width="160">
-                <circle cx="80" cy="80" r="58" fill="rgba(2,6,23,0.45)" stroke="rgba(56,189,248,0.2)" />
-                <path d="M80 18V34M80 126V142M18 80H34M126 80H142" stroke="#64748b" strokeLinecap="round" strokeWidth="2" />
-                <text x="76" y="16" fill="#7dd3fc" fontSize="12">N</text>
-                <text x="76" y="154" fill="#64748b" fontSize="12">S</text>
-                <text x="8" y="84" fill="#64748b" fontSize="12">W</text>
-                <text x="146" y="84" fill="#64748b" fontSize="12">E</text>
-                <g transform={`rotate(${compassRotation} 80 80)`}>
-                  <path d="M80 28 L92 82 L80 72 L68 82 Z" fill="#22d3ee" />
-                  <path d="M80 132 L92 78 L80 88 L68 78 Z" fill="#0f172a" stroke="#22d3ee" strokeWidth="1" />
-                </g>
-              </svg>
-            </div>
-            <p className="mt-2 text-center font-data text-sm text-aviation-text">{navigation.trueHeading.toString().padStart(3, "0")}° true</p>
           </div>
         </div>
       </div>

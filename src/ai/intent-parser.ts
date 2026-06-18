@@ -175,6 +175,13 @@ const createIntentFromPattern = (
             reason: "missing-entity",
             candidates: ["airport_info"]
           });
+    case "facility_info":
+      return {
+        ...metadata,
+        type: "facility_info",
+        facility: match.facility,
+        query_type: match.query_type
+      };
   }
 };
 

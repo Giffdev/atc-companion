@@ -17,7 +17,7 @@ export const APPROACH_FACILITIES: ApproachFacility[] = [
       { valueMHz: 126.5, sector: "McChord AFB" },
       { valueMHz: 127.1, sector: "Bremerton" }
     ],
-    airports: ["KSEA", "KBFI", "KRNT", "KPAE", "KOLM", "KPWT", "KTIW", "KTCM"]
+    airports: ["KSEA", "KBFI", "KRNT", "KPAE", "KOLM", "KPWT", "KTIW", "KTCM", "KAWO", "KPLU"]
   },
   {
     name: "Whidbey Approach",
@@ -38,7 +38,19 @@ export const APPROACH_FACILITIES: ApproachFacility[] = [
       { valueMHz: 126.9, sector: "Final" },
       { valueMHz: 127.85, sector: "West" }
     ],
-    airports: ["KPDX", "KHIO", "KUAO", "KTTD"]
+    airports: ["KPDX", "KHIO", "KTTD", "KVUO", "KSPB", "KUAO", "KSLE"]
+  },
+  {
+    name: "Boise Approach",
+    icao: "BOI",
+    frequencies: [{ valueMHz: 119.1 }],
+    airports: ["KBOI", "KEUL", "KMAN"]
+  },
+  {
+    name: "Spokane Approach",
+    icao: "GEG",
+    frequencies: [{ valueMHz: 119.2 }],
+    airports: ["KGEG", "KSFF", "KSKA", "KDEW"]
   },
   {
     name: "NorCal Approach",
@@ -171,139 +183,139 @@ export const APPROACH_FACILITIES: ApproachFacility[] = [
     name: "Greensboro Approach",
     icao: "GSO",
     frequencies: [{ valueMHz: 124.35 }],
-    airports: ["KGSO", "KINT"]
+    airports: ["KGSO", "KINT", "KBUY", "KEXX"]
   },
   {
     name: "Charlotte Approach",
     icao: "CLT",
     frequencies: [{ valueMHz: 125.3 }],
-    airports: ["KCLT", "KJQF"]
+    airports: ["KCLT", "KJQF", "KRUQ", "KAKH", "KIPJ"]
   },
   {
     name: "Raleigh-Durham Approach",
     icao: "RDU",
     frequencies: [{ valueMHz: 124.85 }],
-    airports: ["KRDU", "KFAY"]
+    airports: ["KRDU", "KFAY", "KLHZ", "KSOP"]
   },
   {
     name: "Nashville Approach",
     icao: "BNA",
     frequencies: [{ valueMHz: 125.45 }],
-    airports: ["KBNA"]
+    airports: ["KBNA", "KMQY", "KJWN"]
   },
   {
     name: "Memphis Approach",
     icao: "MEM",
     frequencies: [{ valueMHz: 124.15 }],
-    airports: ["KMEM"]
+    airports: ["KMEM", "KNQA", "KOLV"]
   },
   {
     name: "St. Louis Approach",
     icao: "STL",
     frequencies: [{ valueMHz: 124.7 }],
-    airports: ["KSTL", "KSUS"]
+    airports: ["KSTL", "KCPS", "KSUS", "KALN", "KBLV", "KSET"]
   },
   {
     name: "Salt Lake City Approach",
     icao: "SLC",
     frequencies: [{ valueMHz: 124.3 }],
-    airports: ["KSLC", "KOGD"]
+    airports: ["KSLC", "KOGD", "KPVU", "KHIF"]
   },
   {
     name: "Tampa Approach",
     icao: "TPA",
     frequencies: [{ valueMHz: 119.9 }],
-    airports: ["KTPA", "KPIE", "KMCF"]
+    airports: ["KTPA", "KPIE", "KMCF", "KVDF", "KZPH"]
   },
   {
     name: "Orlando Approach",
     icao: "MCO",
     frequencies: [{ valueMHz: 124.8 }],
-    airports: ["KMCO", "KSFB", "KORL"]
+    airports: ["KMCO", "KSFB", "KORL", "KISM"]
   },
   {
     name: "Minneapolis Approach",
     icao: "MSP",
     frequencies: [{ valueMHz: 124.7 }],
-    airports: ["KMSP", "KFCM", "KSTP"]
+    airports: ["KMSP", "KSTP", "KFCM", "KANE", "KMIC"]
   },
   {
     name: "Indianapolis Approach",
     icao: "IND",
     frequencies: [{ valueMHz: 124.05 }],
-    airports: ["KIND"]
+    airports: ["KIND", "KEYE", "KMQJ"]
   },
   {
     name: "Cincinnati Approach",
     icao: "CVG",
     frequencies: [{ valueMHz: 119.7 }],
-    airports: ["KCVG", "KLUK"]
+    airports: ["KCVG", "KLUK", "KHAO"]
   },
   {
     name: "Pittsburgh Approach",
     icao: "PIT",
     frequencies: [{ valueMHz: 124.75 }],
-    airports: ["KPIT", "KAGC"]
+    airports: ["KPIT", "KAGC", "KBTP"]
   },
   {
     name: "Kansas City Approach",
     icao: "MCI",
     frequencies: [{ valueMHz: 124.3 }],
-    airports: ["KMCI", "KOJC"]
+    airports: ["KMCI", "KIXD", "KOJC", "KMKC"]
   },
   {
     name: "San Antonio Approach",
     icao: "SAT",
     frequencies: [{ valueMHz: 119.55 }],
-    airports: ["KSAT", "KSKF"]
+    airports: ["KSAT", "KSKF", "KSSF", "KRND"]
   },
   {
     name: "Austin Approach",
     icao: "AUS",
     frequencies: [{ valueMHz: 119 }],
-    airports: ["KAUS"]
+    airports: ["KAUS", "KGTU", "KEDC", "KHYI"]
   },
   {
     name: "Honolulu Approach",
     icao: "HCF",
     frequencies: [{ valueMHz: 118.3 }],
-    airports: ["PHNL", "PHOG"]
+    airports: ["PHNL", "PHNG", "PHHI", "PHJH"]
   },
   {
     name: "San Diego Approach",
     icao: "NKX",
     frequencies: [{ valueMHz: 119.6 }],
-    airports: ["KSAN", "KNKX"]
+    airports: ["KSAN", "KNKX", "KNZY", "KMYF", "KSEE", "KSDM", "KRNM", "KCRQ"]
   },
   {
     name: "Detroit Approach",
     icao: "DTW",
     frequencies: [{ valueMHz: 124.2 }],
-    airports: ["KDTW", "KYIP", "KPTK"]
+    airports: ["KDTW", "KYIP", "KPTK", "KDET"]
   },
   {
     name: "Milwaukee Approach",
     icao: "MKE",
     frequencies: [{ valueMHz: 124.35 }],
-    airports: ["KMKE"]
+    airports: ["KMKE", "KMWC", "KUES", "KRAC"]
   },
   {
     name: "Cleveland Approach",
     icao: "CLE",
     frequencies: [{ valueMHz: 124 }],
-    airports: ["KCLE", "KCGF"]
+    airports: ["KCLE", "KCGF", "KBKL", "KLPR"]
   },
   {
     name: "Baltimore Approach",
     icao: "BWI",
     frequencies: [{ valueMHz: 124.45 }],
-    airports: ["KBWI"]
+    airports: ["KBWI", "KMTN", "KANP"]
   },
   {
     name: "Jacksonville Approach",
     icao: "JAX",
     frequencies: [{ valueMHz: 118 }],
-    airports: ["KJAX", "KNIP"]
+    airports: ["KJAX", "KNIP", "KCRG", "KVQQ", "KSGJ"]
   }
 ];
 

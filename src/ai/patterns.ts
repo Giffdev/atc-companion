@@ -8,6 +8,7 @@ import {
 import type {
   AirportInfoDetail,
   BoundingBox,
+  FacilityInfoQuery,
   FrequencyQueryType,
   NavigationIntent,
   NotamTypeFilter,
@@ -69,6 +70,12 @@ export type IntentPatternMatch =
       confidence: number;
       airport?: string;
       detail?: AirportInfoDetail;
+    }
+  | {
+      type: "facility_info";
+      confidence: number;
+      facility?: string;
+      query_type: FacilityInfoQuery;
     };
 
 const WEATHER_PATTERN =
@@ -89,6 +96,8 @@ const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
 const APPROACH_PROCEDURE_CONTEXT_PATTERN =
   /\b(?:approach\s+(?:plate|plates|chart|charts|procedure|procedures)|instrument approach(?:es)?|(?:plate|plates|chart|charts|procedure|procedures).*\bapproach(?:es)?|\bapproaches?\s+(?:at|for|into))\b/i;
+const FACILITY_INFO_PATTERN =
+  /\b(?:(?:which|what)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)\s+(?:border|neighbor|adjacent|surround|next to|around|near)|\b(?:border|neighbor|adjacent|surrounding|adjoining)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)|\bwho\s+(?:borders?|neighbors?|is (?:adjacent|next)))\b/i;
 
 const detectWeatherSubtype = (input: string): WeatherSubtype => {
   const normalized = input.toLowerCase();
@@ -181,6 +190,10 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
     candidates.push("airport_info");
   }
 
+  if (FACILITY_INFO_PATTERN.test(input)) {
+    candidates.push("facility_info");
+  }
+
   // Compound query detection: if 2+ data-type intents are detected,
   // collapse into airport_info so all panels show
   const dataTypeCandidates = candidates.filter(
@@ -197,6 +210,21 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
   const entities = extractEntities(input, options);
   const airportInfoDetail = detectAirportInfoDetail(input);
   const isWeatherMinimumsQuery = WEATHER_MINIMUMS_PATTERN.test(input);
+
+  // Facility info queries (bordering, adjacent, neighboring facilities)
+  if (FACILITY_INFO_PATTERN.test(input)) {
+    const facility = entities.airports[0];
+    const queryType: FacilityInfoQuery =
+      /\b(?:overlying|above|over)\b/i.test(input) ? "overlying"
+        : /\b(?:underlying|below|under)\b/i.test(input) ? "underlying"
+          : "adjacent";
+    return {
+      type: "facility_info",
+      confidence: 0.92,
+      facility,
+      query_type: queryType
+    };
+  }
 
   // Compound query detection: if 2+ data types are mentioned with an airport,
   // treat as a broad airport_info request instead of picking just one

@@ -90,15 +90,18 @@ export const withQueryParam = (baseUrl: string, key: string, value: string): str
   return url.toString();
 };
 
-export const formatTimestamp = (timestamp: string): string =>
-  new Intl.DateTimeFormat("en-US", {
+export const formatTimestamp = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp || "Unknown";
+  return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     month: "short",
     day: "numeric",
     year: "numeric",
     timeZoneName: "short"
-  }).format(new Date(timestamp));
+  }).format(date);
+};
 
 const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
 
@@ -111,7 +114,9 @@ const RELATIVE_TIME_UNITS = [
 
 export const formatRelativeTime = (timestamp: string, referenceTime: string | number = Date.now()): string => {
   const referenceMs = typeof referenceTime === "string" ? new Date(referenceTime).getTime() : referenceTime;
-  const deltaMs = new Date(timestamp).getTime() - referenceMs;
+  const tsMs = new Date(timestamp).getTime();
+  if (Number.isNaN(tsMs) || Number.isNaN(referenceMs)) return "unknown";
+  const deltaMs = tsMs - referenceMs;
 
   for (const [unit, unitMs] of RELATIVE_TIME_UNITS) {
     if (Math.abs(deltaMs) >= unitMs || unit === "second") {

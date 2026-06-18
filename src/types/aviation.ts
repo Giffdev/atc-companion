@@ -296,4 +296,5 @@ export interface WeatherBundle extends SourceTracked {
   metar: Metar | null;
   taf: Taf | null;
   pireps: Pirep[];
+  nearestStationNote?: string;
 }

@@ -206,6 +206,8 @@ const mergeLiveDashboardData = (
     }
     case "unknown":
       return dashboardData;
+    case "facility_info":
+      return dashboardData;
   }
 };
 
@@ -244,6 +246,8 @@ const mergeSourceStatuses = (statuses: SourceStatusItem[], liveResult: LiveQuery
         (liveResult.response.data as AirportInfoQueryPayload).diagram ?? (liveResult.response.data as AirportInfoQueryPayload).plates
       );
     case "unknown":
+      return statuses;
+    case "facility_info":
       return statuses;
   }
 };
@@ -581,6 +585,74 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               </div>
             </div>
           ) : null}
+        </div>
+      );
+    }
+    case "facility_info": {
+      if (!liveResult.response.ok) {
+        return <p className="text-sm text-aviation-muted">{liveResult.response.error.message}</p>;
+      }
+      const adj = liveResult.response.data as {
+        facility: { id: string; name: string; type: string };
+        overlying?: { id: string; name: string; type: string };
+        adjacentCenters: { id: string; name: string }[];
+        adjacentApproach: { id: string; name: string }[];
+        adjacentTowers: { id: string; name: string }[];
+      };
+      return (
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+            <p className="data-label">Facility</p>
+            <p className="mt-2 font-data text-sm text-aviation-text">{adj.facility.name} ({adj.facility.id})</p>
+            <p className="mt-1 text-xs text-aviation-muted capitalize">{adj.facility.type}</p>
+          </div>
+
+          {adj.overlying && (
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="data-label">Overlying Facility</p>
+              <p className="mt-2 font-data text-sm text-aviation-text">{adj.overlying.name} ({adj.overlying.id})</p>
+              <p className="mt-1 text-xs text-aviation-muted capitalize">{adj.overlying.type}</p>
+            </div>
+          )}
+
+          {adj.adjacentCenters.length > 0 && (
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="data-label">Adjacent Centers</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {adj.adjacentCenters.map((c) => (
+                  <span key={c.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text">
+                    {c.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {adj.adjacentApproach.length > 0 && (
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="data-label">Adjacent Approach Controls</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {adj.adjacentApproach.map((a) => (
+                  <span key={a.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text">
+                    {a.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {adj.adjacentTowers.length > 0 && (
+            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
+              <p className="data-label">Nearby Towers</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {adj.adjacentTowers.map((t) => (
+                  <span key={t.id} className="rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-sm text-aviation-text">
+                    {t.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       );
     }

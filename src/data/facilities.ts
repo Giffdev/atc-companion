@@ -43,6 +43,7 @@ const TOWER_FACILITIES: ControllerFacility[] = AIRPORT_REFERENCES.map((airport) 
   name: `${compactAirportName(airport)} Tower`,
   type: "tower",
   primaryAirport: airport.icao,
+  location: `${airport.city}, ${airport.state}`,
   position: {
     latitude: airport.latitude,
     longitude: airport.longitude
@@ -54,39 +55,42 @@ const APPROACH_CONTROLLER_FACILITIES: ControllerFacility[] = APPROACH_FACILITIES
     .map((airport) => findAirportReference(airport))
     .filter((airport): airport is AirportReference => Boolean(airport));
 
+  const primaryRef = findAirportReference(facility.airports[0]);
+
   return {
     id: facility.icao,
     name: facility.name,
     type: "approach",
     primaryAirport: facility.airports[0],
+    location: primaryRef ? `${primaryRef.city}, ${primaryRef.state}` : undefined,
     position: averagePosition(airportReferences),
     artcc: undefined
   };
 });
 
 const ARTCC_FACILITY_DEFINITIONS: ControllerFacility[] = [
-  { id: "ZAB", name: "Albuquerque Center", type: "center", position: { latitude: 35.0402, longitude: -106.609 }, artcc: "ZAB" },
-  { id: "ZAU", name: "Chicago Center", type: "center", position: { latitude: 41.995, longitude: -88.101 }, artcc: "ZAU" },
-  { id: "ZAN", name: "Anchorage Center", type: "center", position: { latitude: 61.1744, longitude: -149.9964 }, artcc: "ZAN" },
-  { id: "ZBW", name: "Boston Center", type: "center", position: { latitude: 42.3643, longitude: -71.0052 }, artcc: "ZBW" },
-  { id: "ZDC", name: "Washington Center", type: "center", position: { latitude: 38.8521, longitude: -77.0377 }, artcc: "ZDC" },
-  { id: "ZDV", name: "Denver Center", type: "center", position: { latitude: 39.8617, longitude: -104.6731 }, artcc: "ZDV" },
-  { id: "ZFW", name: "Fort Worth Center", type: "center", position: { latitude: 32.8998, longitude: -97.0403 }, artcc: "ZFW" },
-  { id: "ZHU", name: "Houston Center", type: "center", position: { latitude: 29.6454, longitude: -95.2789 }, artcc: "ZHU" },
-  { id: "ZID", name: "Indianapolis Center", type: "center", position: { latitude: 39.7173, longitude: -86.2944 }, artcc: "ZID" },
-  { id: "ZJX", name: "Jacksonville Center", type: "center", position: { latitude: 30.4941, longitude: -81.6879 }, artcc: "ZJX" },
-  { id: "ZKC", name: "Kansas City Center", type: "center", position: { latitude: 39.2976, longitude: -94.7139 }, artcc: "ZKC" },
-  { id: "ZLA", name: "Los Angeles Center", type: "center", position: { latitude: 34.0551, longitude: -117.6012 }, artcc: "ZLA" },
-  { id: "ZLC", name: "Salt Lake City Center", type: "center", position: { latitude: 40.7884, longitude: -111.9778 }, artcc: "ZLC" },
-  { id: "ZMA", name: "Miami Center", type: "center", position: { latitude: 25.7933, longitude: -80.2906 }, artcc: "ZMA" },
-  { id: "ZME", name: "Memphis Center", type: "center", position: { latitude: 35.0425, longitude: -89.9767 }, artcc: "ZME" },
-  { id: "ZMP", name: "Minneapolis Center", type: "center", position: { latitude: 44.8819, longitude: -93.2218 }, artcc: "ZMP" },
-  { id: "ZNY", name: "New York Center", type: "center", position: { latitude: 40.7891, longitude: -73.1002 }, artcc: "ZNY" },
-  { id: "ZOA", name: "Oakland Center", type: "center", position: { latitude: 37.7006, longitude: -122.2196 }, artcc: "ZOA" },
-  { id: "ZOB", name: "Cleveland Center", type: "center", position: { latitude: 41.4117, longitude: -81.8498 }, artcc: "ZOB" },
-  { id: "ZSE", name: "Seattle Center", type: "center", position: { latitude: 47.449, longitude: -122.3093 }, artcc: "ZSE" },
-  { id: "ZTL", name: "Atlanta Center", type: "center", position: { latitude: 33.6407, longitude: -84.4277 }, artcc: "ZTL" },
-  { id: "ZHN", name: "Honolulu Control Facility", type: "center", position: { latitude: 21.3245, longitude: -157.9251 }, artcc: "ZHN" }
+  { id: "ZAB", name: "Albuquerque Center", type: "center", location: "Albuquerque, NM", position: { latitude: 35.0402, longitude: -106.609 }, artcc: "ZAB" },
+  { id: "ZAU", name: "Chicago Center", type: "center", location: "Aurora, IL", position: { latitude: 41.995, longitude: -88.101 }, artcc: "ZAU" },
+  { id: "ZAN", name: "Anchorage Center", type: "center", location: "Anchorage, AK", position: { latitude: 61.1744, longitude: -149.9964 }, artcc: "ZAN" },
+  { id: "ZBW", name: "Boston Center", type: "center", location: "Nashua, NH", position: { latitude: 42.3643, longitude: -71.0052 }, artcc: "ZBW" },
+  { id: "ZDC", name: "Washington Center", type: "center", location: "Leesburg, VA", position: { latitude: 38.8521, longitude: -77.0377 }, artcc: "ZDC" },
+  { id: "ZDV", name: "Denver Center", type: "center", location: "Longmont, CO", position: { latitude: 39.8617, longitude: -104.6731 }, artcc: "ZDV" },
+  { id: "ZFW", name: "Fort Worth Center", type: "center", location: "Fort Worth, TX", position: { latitude: 32.8998, longitude: -97.0403 }, artcc: "ZFW" },
+  { id: "ZHU", name: "Houston Center", type: "center", location: "Houston, TX", position: { latitude: 29.6454, longitude: -95.2789 }, artcc: "ZHU" },
+  { id: "ZID", name: "Indianapolis Center", type: "center", location: "Indianapolis, IN", position: { latitude: 39.7173, longitude: -86.2944 }, artcc: "ZID" },
+  { id: "ZJX", name: "Jacksonville Center", type: "center", location: "Jacksonville, FL", position: { latitude: 30.4941, longitude: -81.6879 }, artcc: "ZJX" },
+  { id: "ZKC", name: "Kansas City Center", type: "center", location: "Olathe, KS", position: { latitude: 39.2976, longitude: -94.7139 }, artcc: "ZKC" },
+  { id: "ZLA", name: "Los Angeles Center", type: "center", location: "Palmdale, CA", position: { latitude: 34.0551, longitude: -117.6012 }, artcc: "ZLA" },
+  { id: "ZLC", name: "Salt Lake City Center", type: "center", location: "Salt Lake City, UT", position: { latitude: 40.7884, longitude: -111.9778 }, artcc: "ZLC" },
+  { id: "ZMA", name: "Miami Center", type: "center", location: "Miami, FL", position: { latitude: 25.7933, longitude: -80.2906 }, artcc: "ZMA" },
+  { id: "ZME", name: "Memphis Center", type: "center", location: "Memphis, TN", position: { latitude: 35.0425, longitude: -89.9767 }, artcc: "ZME" },
+  { id: "ZMP", name: "Minneapolis Center", type: "center", location: "Farmington, MN", position: { latitude: 44.8819, longitude: -93.2218 }, artcc: "ZMP" },
+  { id: "ZNY", name: "New York Center", type: "center", location: "Ronkonkoma, NY", position: { latitude: 40.7891, longitude: -73.1002 }, artcc: "ZNY" },
+  { id: "ZOA", name: "Oakland Center", type: "center", location: "Fremont, CA", position: { latitude: 37.7006, longitude: -122.2196 }, artcc: "ZOA" },
+  { id: "ZOB", name: "Cleveland Center", type: "center", location: "Oberlin, OH", position: { latitude: 41.4117, longitude: -81.8498 }, artcc: "ZOB" },
+  { id: "ZSE", name: "Seattle Center", type: "center", location: "Auburn, WA", position: { latitude: 47.449, longitude: -122.3093 }, artcc: "ZSE" },
+  { id: "ZTL", name: "Atlanta Center", type: "center", location: "Hampton, GA", position: { latitude: 33.6407, longitude: -84.4277 }, artcc: "ZTL" },
+  { id: "ZHN", name: "Honolulu Control Facility", type: "center", location: "Honolulu, HI", position: { latitude: 21.3245, longitude: -157.9251 }, artcc: "ZHN" }
 ];
 
 const ARTCC_FACILITIES: ControllerFacility[] = ARTCC_FACILITY_DEFINITIONS.map((facility) => ({

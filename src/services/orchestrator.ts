@@ -239,6 +239,25 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
       return searchFars(intent.query, intent.part);
     case "airport_info":
       return executeAirportInfo(intent, options);
+    case "facility_info": {
+      const facilityId = intent.facility ?? options.facilityId;
+      if (!facilityId) {
+        return createApiErrorResponse(
+          { code: "FACILITY_REQUIRED", message: "Please specify a facility or select one from the facility picker.", retryable: false, status: 400 },
+          { source: ORCHESTRATOR_SOURCE, fetchedAt: toIsoNow() }
+        );
+      }
+      try {
+        const { getAdjacentFacilities } = await import("@/data/facility-adjacency");
+        const result = getAdjacentFacilities(facilityId);
+        return createApiResponse(result, ORCHESTRATOR_SOURCE, { fetchedAt: toIsoNow() });
+      } catch {
+        return createApiErrorResponse(
+          { code: "ADJACENCY_LOOKUP_FAILED", message: `Unable to find adjacent facilities for ${facilityId}.`, retryable: false, status: 404 },
+          { source: ORCHESTRATOR_SOURCE, fetchedAt: toIsoNow() }
+        );
+      }
+    }
   }
 };
 

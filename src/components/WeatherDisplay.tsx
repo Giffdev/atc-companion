@@ -69,6 +69,11 @@ export function WeatherDisplay({ weather }: WeatherDisplayProps) {
 
   return (
     <div className="space-y-5">
+      {weather.nearestStationNote ? (
+        <div className="rounded-xl border border-aviation-amber/30 bg-aviation-amber/10 px-4 py-2.5 text-sm text-aviation-amber">
+          ⚠ {weather.nearestStationNote}
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[auto,1fr]">
         <div className="flex flex-col items-center justify-center rounded-2xl border border-aviation-border bg-black/15 p-4">
           <WindArrow heading={metar.wind?.directionDegrees} />

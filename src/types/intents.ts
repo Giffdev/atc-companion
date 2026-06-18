@@ -16,6 +16,7 @@ export type IntentType =
   | "navigation"
   | "regulatory"
   | "airport_info"
+  | "facility_info"
   | "unknown";
 
 export type WeatherSubtype = "metar" | "taf" | "pirep" | "all";
@@ -96,6 +97,14 @@ export interface AirportInfoIntent extends IntentMetadata {
   detail?: AirportInfoDetail;
 }
 
+export type FacilityInfoQuery = "adjacent" | "overlying" | "underlying" | "general";
+
+export interface FacilityInfoIntent extends IntentMetadata {
+  type: "facility_info";
+  facility?: string;
+  query_type: FacilityInfoQuery;
+}
+
 export interface UnknownIntent extends IntentMetadata {
   type: "unknown";
   candidates?: Exclude<IntentType, "unknown">[];
@@ -110,4 +119,5 @@ export type ParsedIntent =
   | NavigationIntent
   | RegulatoryIntent
   | AirportInfoIntent
+  | FacilityInfoIntent
   | UnknownIntent;
