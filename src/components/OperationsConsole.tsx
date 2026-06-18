@@ -15,9 +15,10 @@ import { TrafficMap } from "@/components/TrafficMap";
 import { WeatherDisplay } from "@/components/WeatherDisplay";
 import { findAirportReference } from "@/data/airports";
 import { getFacilityById, getFacilityAirports } from "@/data/facilities";
-import { createDemoDashboardData, type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
+import { type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
 import { API_ENDPOINTS, TRAFFIC_REFRESH_INTERVAL_MS, WEATHER_REFRESH_INTERVAL_MS } from "@/lib/constants";
 import { formatTimestamp } from "@/lib/utils";
+import { getDataSource } from "@/data/sources";
 import type { ControllerFacility } from "@/types/facility";
 import type { ApiResponse } from "@/types/api";
 import type { ApproachPlate, FarReference, Frequency, Metar, Pirep, Taf, TrafficTarget, WeatherBundle } from "@/types/aviation";
@@ -37,6 +38,7 @@ type LiveQueryResult = {
 
 import type { AirportInfoQueryPayload } from "@/services/orchestrator";
 import type { AirportHours } from "@/services/airport-hours";
+import type { Notam } from "@/types/aviation";
 
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
 const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "navigation", "frequency", "plates", "regulatory"];
@@ -45,6 +47,29 @@ const AUTO_REFRESH_LABELS = {
   traffic: `Live • Auto-refreshing every ${TRAFFIC_REFRESH_INTERVAL_MS / 1000}s`,
   weather: `Live • Auto-refreshing every ${WEATHER_REFRESH_INTERVAL_MS / 1000}s`
 } as const;
+
+// Empty baseline — no hardcoded demo airport data
+const PLACEHOLDER_SOURCE = getDataSource("aviationWeather");
+const EMPTY_DASHBOARD = {
+  weather: {
+    stationIcao: "",
+    metar: null as null,
+    taf: null as null,
+    pireps: [] as Pirep[],
+    source: PLACEHOLDER_SOURCE,
+    fetchedAt: "",
+    isStale: false
+  } as WeatherBundle,
+  notams: [] as Notam[],
+  traffic: [] as TrafficTarget[],
+  navigation: { from: { icao: "", name: "", position: { latitude: 0, longitude: 0 } }, to: { icao: "", name: "", position: { latitude: 0, longitude: 0 } }, magneticHeading: 0, trueHeading: 0, distanceNm: 0, distanceSm: 0 } as NavigationResult,
+  frequencies: [] as Frequency[],
+  plates: [] as ApproachPlate[],
+  regulatory: [] as FarReference[],
+  sourceStatuses: [] as SourceStatusItem[]
+};
+
+type DashboardData = typeof EMPTY_DASHBOARD;
 
 const mapIntentToDashboardType = (intent: ParsedIntent | null): DashboardResultType | null => {
   if (!intent) {
@@ -101,9 +126,9 @@ const applyResponseStatus = (items: SourceStatusItem[], id: SourceStatusItem["id
   );
 
 const mergeLiveDashboardData = (
-  dashboardData: ReturnType<typeof createDemoDashboardData>,
+  dashboardData: DashboardData,
   liveResult: LiveQueryResult | null
-): ReturnType<typeof createDemoDashboardData> => {
+): DashboardData => {
   if (!liveResult || !liveResult.response.ok) {
     return dashboardData;
   }
@@ -141,7 +166,7 @@ const mergeLiveDashboardData = (
     case "notam":
       return {
         ...dashboardData,
-        notams: liveResult.response.data as ReturnType<typeof createDemoDashboardData>["notams"]
+        notams: liveResult.response.data as DashboardData["notams"]
       };
     case "traffic":
       return {
@@ -321,9 +346,9 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
     case "notam":
       return (
         <div className="space-y-2">
-          <p className="text-sm text-aviation-text">Returned {(liveResult.response.data as ReturnType<typeof createDemoDashboardData>["notams"]).length} live NOTAMs.</p>
+          <p className="text-sm text-aviation-text">Returned {(liveResult.response.data as DashboardData["notams"]).length} live NOTAMs.</p>
           <p className="font-data text-xs text-aviation-muted">
-            {(liveResult.response.data as ReturnType<typeof createDemoDashboardData>["notams"])
+            {(liveResult.response.data as DashboardData["notams"])
               .slice(0, 3)
               .map((notam) => notam.notamId)
               .join(" • ") || "No NOTAMs returned"}
@@ -383,38 +408,86 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
           {hours && (
             <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
               <p className="data-label">Hours of Operation — {airportInfo.airport}</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {hours.towerHours && (
-                  <div>
-                    <p className="text-xs text-aviation-muted">Tower</p>
-                    <p className="font-data text-sm text-aviation-text">{hours.towerHours}</p>
+              <div className="mt-3 space-y-3">
+                {/* Tower status and schedule */}
+                <div className="flex items-start gap-3">
+                  <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                    hours.isTowered
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                  }`}>
+                    {hours.isTowered ? "✦ Towered" : "Non-Towered"}
+                  </span>
+                  {hours.timezone && (
+                    <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[10px] text-aviation-muted">
+                      {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST active" : ""}
+                    </span>
+                  )}
+                </div>
+
+                {hours.towerSchedule ? (
+                  <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
+                    {hours.towerSchedule.is24Hour ? (
+                      <p className="mt-1.5 font-data text-sm text-emerald-200">24-hour operation (continuous)</p>
+                    ) : (
+                      <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[10px] text-aviation-muted">Local</p>
+                          <p className="font-data text-sm text-aviation-text">
+                            {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-aviation-muted">Zulu</p>
+                          <p className="font-data text-sm text-cyan-200">
+                            {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {hours.towerSchedule.rawText && !hours.towerSchedule.is24Hour && (
+                      <p className="mt-1.5 font-data text-[10px] text-aviation-muted">Raw: {hours.towerSchedule.rawText}</p>
+                    )}
                   </div>
-                )}
-                {hours.attendanceSchedule && (
-                  <div>
-                    <p className="text-xs text-aviation-muted">Attendance</p>
-                    <p className="font-data text-sm text-aviation-text">{hours.attendanceSchedule}</p>
+                ) : hours.towerHours ? (
+                  <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
+                    <p className="mt-1.5 font-data text-sm text-aviation-text">{hours.towerHours}</p>
                   </div>
-                )}
-                {hours.lightingSchedule && (
-                  <div>
-                    <p className="text-xs text-aviation-muted">Lighting</p>
-                    <p className="font-data text-sm text-aviation-text">{hours.lightingSchedule}</p>
-                  </div>
-                )}
-                {hours.airportUse && (
-                  <div>
-                    <p className="text-xs text-aviation-muted">Use</p>
-                    <p className="font-data text-sm text-aviation-text">{hours.airportUse}</p>
-                  </div>
-                )}
-                {!hours.towerHours && !hours.attendanceSchedule && (
-                  <p className="text-sm text-aviation-muted sm:col-span-2">
-                    Specific hours not available. Check the Chart Supplement for {airportInfo.airport}.
+                ) : null}
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {hours.attendanceSchedule && (
+                    <div>
+                      <p className="text-xs text-aviation-muted">Attendance</p>
+                      <p className="font-data text-sm text-aviation-text">{hours.attendanceSchedule}</p>
+                    </div>
+                  )}
+                  {hours.lightingSchedule && (
+                    <div>
+                      <p className="text-xs text-aviation-muted">Lighting</p>
+                      <p className="font-data text-sm text-aviation-text">{hours.lightingSchedule}</p>
+                    </div>
+                  )}
+                  {hours.airportUse && (
+                    <div>
+                      <p className="text-xs text-aviation-muted">Use</p>
+                      <p className="font-data text-sm text-aviation-text">{hours.airportUse}</p>
+                    </div>
+                  )}
+                </div>
+
+                {!hours.towerHours && !hours.isTowered && !hours.attendanceSchedule && (
+                  <p className="text-sm text-aviation-muted">
+                    Non-towered airport. Check the Chart Supplement for {airportInfo.airport} attendance and services.
                   </p>
                 )}
               </div>
-              <p className="mt-2 text-[10px] text-aviation-muted">Source: {hours.source}</p>
+              <p className="mt-2 text-[10px] text-aviation-muted">
+                Source: {hours.source}
+                {hours.timezone?.isDst ? " · Times reflect current DST offset" : ""}
+              </p>
             </div>
           )}
 
@@ -497,13 +570,13 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
 };
 
 export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
-  const demoData = useMemo(() => createDemoDashboardData(initialNow), [initialNow]);
   const [activeIntent, setActiveIntent] = useState<ParsedIntent | null>(null);
   const [submittedQuery, setSubmittedQuery] = useState("Awaiting query");
   const [activeCard, setActiveCard] = useState<DashboardResultType>("weather");
-  const [visiblePanels, setVisiblePanels] = useState<Set<DashboardResultType>>(new Set(["weather"]));
+  const [visiblePanels, setVisiblePanels] = useState<Set<DashboardResultType>>(new Set());
   const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
   const [facilityResults, setFacilityResults] = useState<Map<DashboardResultType, LiveQueryResult>>(new Map());
+  const [loadingPanels, setLoadingPanels] = useState<Set<DashboardResultType>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
@@ -531,8 +604,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   );
 
   const dashboardData = useMemo(() => {
-    // Start from demo base, then layer facility results, then active query result
-    let merged = { ...demoData };
+    // Start from empty base — no hardcoded demo data
+    let merged = { ...EMPTY_DASHBOARD };
 
     // Apply all facility results first (these are the baseline for the selected facility)
     for (const [, result] of facilityResults) {
@@ -542,8 +615,6 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     // Layer the active live query result on top (user's explicit query takes precedence)
     if (liveResult && liveResult.response.ok) {
       const liveType = mapIntentToDashboardType(liveResult.intent);
-      // Only override if it's an explicit user query, not a facility auto-fetch
-      // Check: if the facilityResults already has this type, liveResult IS the facility result
       const isFacilityResult = facilityResults.has(liveType as DashboardResultType) &&
         facilityResults.get(liveType as DashboardResultType) === liveResult;
       if (!isFacilityResult) {
@@ -552,8 +623,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     }
 
     return merged;
-  }, [demoData, liveResult, facilityResults]);
-  const sourceStatuses = useMemo(() => mergeSourceStatuses(demoData.sourceStatuses, liveResult), [demoData.sourceStatuses, liveResult]);
+  }, [liveResult, facilityResults]);
+  const sourceStatuses = useMemo(() => mergeSourceStatuses(EMPTY_DASHBOARD.sourceStatuses, liveResult), [liveResult]);
   const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
   const selectedPlateRunway = liveResult?.intent.type === "plates" ? liveResult.intent.runway : undefined;
 
@@ -580,7 +651,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     dashboardData.plates[0]?.airportIcao ??
     (activeIntent?.type === "plates" || activeIntent?.type === "airport_info" ? activeIntent.airport : undefined) ??
     "Field";
-  const demoNavigationSourceStatus = demoData.sourceStatuses.find((source) => source.id === "navigation") ?? demoData.sourceStatuses[0];
+  const fallbackSource = PLACEHOLDER_SOURCE;
+  const fallbackFetchedAt = initialNow;
 
   const trafficAirportIcao = selectedFacility?.primaryAirport ?? undefined;
   const trafficAirportRef = trafficAirportIcao ? findAirportReference(trafficAirportIcao) : null;
@@ -636,7 +708,16 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       setActiveIntent(payload.intent);
 
       const returnedCard = mapIntentToDashboardType(payload.intent);
-      if (returnedCard) {
+
+      // For airport_info queries, show multiple relevant panels
+      if (payload.intent.type === "airport_info") {
+        const airportInfoPanels: DashboardResultType[] = ["weather", "frequency", "plates"];
+        if (payload.intent.detail === "all" || !payload.intent.detail) {
+          airportInfoPanels.push("notam", "traffic");
+        }
+        setActiveCard("weather");
+        setVisiblePanels(new Set(airportInfoPanels));
+      } else if (returnedCard) {
         setActiveCard(returnedCard);
         setVisiblePanels(new Set([returnedCard]));
       }
@@ -674,12 +755,14 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       setLiveResult(null);
       setActiveIntent(null);
       setSubmittedQuery("");
+      setLoadingPanels(new Set(dashboardPanels));
 
       // Fetch weather
       try {
         const payload = await fetchLiveQuery(`weather at ${airport}`);
         if (cancelled) return;
         setFacilityResults((prev) => new Map(prev).set("weather", payload));
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("weather"); return next; });
         setLiveResult(payload);
         setActiveIntent(payload.intent);
         setActiveCard("weather");
@@ -691,7 +774,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         const payload = await fetchLiveQuery(`notams for ${airport}`);
         if (cancelled) return;
         setFacilityResults((prev) => new Map(prev).set("notam", payload));
-      } catch { /* silent */ }
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("notam"); return next; });
+      } catch {
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("notam"); return next; });
+      }
 
       // Fetch traffic (tower/approach only)
       if (selectedFacility.type !== "center") {
@@ -699,7 +785,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           const payload = await fetchLiveQuery(`traffic at ${airport}`);
           if (cancelled) return;
           setFacilityResults((prev) => new Map(prev).set("traffic", payload));
-        } catch { /* silent */ }
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
+        } catch {
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
+        }
       }
     };
 
@@ -866,21 +955,26 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="notam" className="xl:col-span-5">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={dashboardData.notams[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.notams[0].fetchedAt}
+                      fetchedAt={dashboardData.notams[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
                       isActive={activeCard === "notam"}
                       isStale={dashboardData.notams.some((notam) => notam.isStale)}
                       kind="notam"
                       rawData={dashboardData.notams}
                       referenceTime={initialNow}
-                      source={dashboardData.notams[0]?.source ?? liveResult?.response.source ?? demoData.notams[0].source}
+                      source={dashboardData.notams[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       stalenessWarning="One or more NOTAM records are beyond the preferred review window."
                       subtitle="Priority-sorted field notices with TFR emphasis, effective times, and expandable full text."
                       title={`${dashboardData.notams[0]?.affectedFacility ?? "Field"} operational NOTAM stack`}
                     >
-                      {dashboardData.notams.length ? (
+                      {loadingPanels.has("notam") ? (
+                        <div className="flex items-center gap-2 text-sm text-aviation-muted">
+                          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+                          Loading NOTAMs…
+                        </div>
+                      ) : dashboardData.notams.length ? (
                         <NotamList notams={dashboardData.notams} />
                       ) : (
-                        <div className="text-sm text-aviation-muted">No NOTAMs returned for the active live query.</div>
+                        <div className="text-sm text-aviation-muted">No NOTAMs returned.</div>
                       )}
                     </ResultCard>
                   </div>
@@ -890,13 +984,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="traffic" className="xl:col-span-7">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={dashboardData.traffic[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.traffic[0].fetchedAt}
+                      fetchedAt={dashboardData.traffic[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
                       isActive={activeCard === "traffic"}
                       isStale={dashboardData.traffic.some((target) => target.isStale)}
                       kind="traffic"
                       rawData={dashboardData.traffic}
                       referenceTime={initialNow}
-                      source={dashboardData.traffic[0]?.source ?? liveResult?.response.source ?? demoData.traffic[0].source}
+                      source={dashboardData.traffic[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       stalenessWarning="Traffic targets are older than the preferred surveillance window."
                       subtitle="Live or fallback traffic picture with callsign labels and altitude-based color coding."
                       title="Surface and terminal traffic picture"
@@ -908,14 +1002,19 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                             <span>{autoRefreshConfig.label}</span>
                           </div>
                         ) : null}
-                        {dashboardData.traffic.length ? (
+                        {loadingPanels.has("traffic") ? (
+                          <div className="flex items-center gap-2 text-sm text-aviation-muted">
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+                            Loading traffic…
+                          </div>
+                        ) : dashboardData.traffic.length ? (
                           <TrafficMap
                             traffic={dashboardData.traffic}
                             airportIcao={trafficAirportIcao}
                             airportPosition={trafficAirportPosition}
                           />
                         ) : (
-                          <div className="text-sm text-aviation-muted">No live traffic targets returned for the active query.</div>
+                          <div className="text-sm text-aviation-muted">No live traffic targets returned.</div>
                         )}
                       </div>
                     </ResultCard>
@@ -926,12 +1025,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="navigation" className="xl:col-span-5">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : demoNavigationSourceStatus.fetchedAt}
+                      fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : fallbackFetchedAt}
                       isActive={activeCard === "navigation"}
                       kind="navigation"
                       rawData={dashboardData.navigation}
                       referenceTime={initialNow}
-                      source={liveResult?.intent.type === "navigation" ? liveResult.response.source : demoNavigationSourceStatus.source}
+                      source={liveResult?.intent.type === "navigation" ? liveResult.response.source : fallbackSource}
                       subtitle="Great-circle bearing and distance calculated from airport reference coordinates, with controller-friendly magnetic vector output."
                       title={`${dashboardData.navigation.from.icao} to ${dashboardData.navigation.to.icao} direct vector`}
                     >
@@ -944,12 +1043,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="frequency" className="xl:col-span-5">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={dashboardData.frequencies[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.frequencies[0].fetchedAt}
+                      fetchedAt={dashboardData.frequencies[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
                       isActive={activeCard === "frequency"}
                       kind="frequency"
                       rawData={dashboardData.frequencies}
                       referenceTime={initialNow}
-                      source={dashboardData.frequencies[0]?.source ?? liveResult?.response.source ?? demoData.frequencies[0].source}
+                      source={dashboardData.frequencies[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="High-contrast FAA field frequencies in a terminal-style list for quick eyes-on validation."
                       title={`${activeIntent?.type === "frequency" ? activeIntent.facility : dashboardData.weather.stationIcao} core frequencies`}
                     >
@@ -979,13 +1078,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="plates" className="xl:col-span-7">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={dashboardData.plates[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.plates[0].fetchedAt}
+                      fetchedAt={dashboardData.plates[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
                       isActive={activeCard === "plates"}
                       isStale={dashboardData.plates.some((plate) => plate.isStale)}
                       kind="plates"
                       rawData={dashboardData.plates}
                       referenceTime={initialNow}
-                      source={dashboardData.plates[0]?.source ?? liveResult?.response.source ?? demoData.plates[0].source}
+                      source={dashboardData.plates[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="Inline FAA procedure chart viewer with runway-aware plate selection and one-click alternates."
                       title={`${platePanelAirport} terminal procedures`}
                     >
@@ -1007,13 +1106,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   <div key="regulatory" className="xl:col-span-5">
                     <ResultCard
                       className="h-full"
-                      fetchedAt={dashboardData.regulatory[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? demoData.regulatory[0].fetchedAt}
+                      fetchedAt={dashboardData.regulatory[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
                       isActive={activeCard === "regulatory"}
                       isStale={dashboardData.regulatory.some((reference) => reference.isStale)}
                       kind="regulatory"
                       rawData={dashboardData.regulatory}
                       referenceTime={initialNow}
-                      source={dashboardData.regulatory[0]?.source ?? liveResult?.response.source ?? demoData.regulatory[0].source}
+                      source={dashboardData.regulatory[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="Source-attributed FAR references surfaced for rapid procedural and legal cross-checking."
                       title="Regulatory references"
                     >
