@@ -43,22 +43,32 @@ const fetchNfdcFrequencies = async (faaCode: string): Promise<Frequency[]> => {
   const commSection = html.substring(commStart, commEnd > 0 ? commEnd : commStart + 5000);
 
   const frequencies: Frequency[] = [];
-  const rowPattern = /<td[^>]*>\s*([^<]*?)\s*:?\s*<\/td>\s*<td[^>]*>\s*(\d{2,3}\.\d{1,3})\s*MHz/gi;
+  const seen = new Set<string>();
+
+  // Match <td>LABEL:</td> ... <td>FREQ MHz</td> patterns across multi-line HTML
+  const rowPattern = /<td[^>]*>\s*([\s\S]*?)\s*<\/td>\s*<td[^>]*>\s*([\s\S]*?)\s*<\/td>/gi;
   let match: RegExpExecArray | null;
-  let lastLabel = "";
 
   while ((match = rowPattern.exec(commSection)) !== null) {
-    const rawLabel = match[1].replace(/&nbsp;/g, "").trim();
-    const freqMHz = parseFloat(match[2]);
-    if (freqMHz < 108 || freqMHz > 400) continue;
+    const rawLabel = match[1].replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+    const rawValue = match[2].replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 
-    const label = rawLabel || lastLabel;
-    if (rawLabel) lastLabel = rawLabel;
+    // Extract frequency from value cell
+    const freqMatch = rawValue.match(/(\d{2,3}\.\d{1,3})\s*MHz/i);
+    if (!freqMatch) continue;
+
+    const freqMHz = parseFloat(freqMatch[1]);
+    if (freqMHz < 108 || freqMHz > 225) continue; // VHF aviation band only
+
+    const label = rawLabel.replace(/:$/, "").trim();
+    if (!label) continue;
 
     const type = classifyNfdcFreqType(label);
-    if (freqMHz > 225) continue; // skip military UHF
+    const key = `${type}-${freqMHz}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
 
-    frequencies.push({ type, valueMHz: freqMHz, name: label || type, source, fetchedAt, isStale: false });
+    frequencies.push({ type, valueMHz: freqMHz, name: label, source, fetchedAt, isStale: false });
   }
 
   return frequencies;

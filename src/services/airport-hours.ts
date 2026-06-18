@@ -278,11 +278,11 @@ const parseAirportHoursFromHtml = (
   const airportUseMatch = html.match(/Airport Use[^<]*?(?::|–)\s*([^<\n]+)/i)
     ?? html.match(/(Public|Private|Military|Joint)\s+Use/i);
 
-  // Detect if airport has a tower mentioned at all
-  const hasTower = /\bATCT\b|\bTower\b|\bTWR\b/i.test(html);
-
   const rawTowerHours = towerHoursMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null;
   const towerSchedule = rawTowerHours ? parseTowerSchedule(rawTowerHours, tz) : null;
+
+  // Detect if airport actually has a tower (not just the label existing in the form)
+  const hasTower = rawTowerHours !== null && !/\bnone\b/i.test(rawTowerHours);
 
   return {
     airportIcao: icaoCode,
