@@ -556,6 +556,44 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     }
   };
 
+  // Auto-fetch relevant data for the selected facility whenever it changes
+  // Tower → weather at that airport
+  // Approach → weather at primary airport (sector-wide view coming)
+  // Center → weather at primary airport
+  useEffect(() => {
+    if (!selectedFacility?.primaryAirport) {
+      return;
+    }
+
+    const airport = selectedFacility.primaryAirport;
+    let cancelled = false;
+
+    const fetchFacilityData = async () => {
+      // All facility types get weather as baseline
+      const query = selectedFacility.type === "tower"
+        ? `weather at ${airport}`
+        : selectedFacility.type === "approach"
+          ? `weather at ${airport}`
+          : `weather at ${airport}`;
+
+      try {
+        const payload = await fetchLiveQuery(query);
+        if (!cancelled) {
+          setLiveResult(payload);
+          setActiveIntent(payload.intent);
+          setActiveCard("weather");
+          setSubmittedQuery(query);
+        }
+      } catch {
+        // Silently fail — user can manually query
+      }
+    };
+
+    fetchFacilityData();
+
+    return () => { cancelled = true; };
+  }, [selectedFacility?.primaryAirport, selectedFacility?.type, fetchLiveQuery]);
+
   useEffect(() => {
     if (!autoRefreshConfig || !submittedQuery || submittedQuery === "Awaiting query") {
       return undefined;
@@ -609,7 +647,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">
         <header className="aviation-panel relative overflow-hidden px-5 py-4 md:px-7">
           <div className="absolute inset-y-0 right-[-8rem] hidden w-80 rounded-full bg-cyan-500/10 blur-3xl xl:block" />
-          <div className="flex items-center gap-4">
+           <div className="flex items-center gap-4">
               <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25">
                 <div className="absolute inset-1.5 rounded-full border border-emerald-400/20" />
                 <div className="radar-sweep absolute left-1/2 top-1/2 h-[1px] w-5 origin-left bg-gradient-to-r from-cyan-300 to-transparent" />
@@ -617,7 +655,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
               </div>
 
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-aviation-text md:text-2xl">ATC Companion</h1>
+                <h1 className="text-xl font-semibold tracking-tight text-aviation-text md:text-2xl">ATC Assist</h1>
+                <p className="text-xs text-aviation-muted md:text-sm">Voice &amp; text-powered reference tool for controllers — official FAA data on demand.</p>
               </div>
           </div>
         </header>

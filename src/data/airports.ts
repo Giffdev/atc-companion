@@ -987,6 +987,17 @@ const createAirportSearchKeys = (airport: AirportReference): Array<{ key: string
     if (stripped !== normalizeAirportLookupKey(name)) {
       appendKey(keys, stripped, true);
     }
+
+    // Generate significant sub-phrases (2+ words, at least 2 content words) from the name
+    const words = normalizeAirportLookupKey(name).split(" ").filter(Boolean);
+    for (let i = 0; i < words.length; i++) {
+      for (let j = i + 2; j <= Math.min(i + 3, words.length); j++) {
+        const subPhrase = words.slice(i, j).join(" ");
+        if (subPhrase.length >= 8 && !AIRPORT_STOPWORD_KEYS.has(subPhrase)) {
+          appendKey(keys, subPhrase, true);
+        }
+      }
+    }
   }
 
   appendKey(keys, airport.city, true);
@@ -998,9 +1009,30 @@ const createAirportSearchKeys = (airport: AirportReference): Array<{ key: string
   return keys;
 };
 
+// Common words that shouldn't be used as standalone airport keys
+const AIRPORT_STOPWORD_KEYS = new Set([
+  "INTERNATIONAL", "REGIONAL", "MUNICIPAL", "AIRPORT", "FIELD",
+  "COUNTY", "NATIONAL", "MEMORIAL", "GENERAL", "AVIATION",
+  "APPROACH", "CENTER", "TOWER", "CONTROL", "EXECUTIVE",
+  "INTERNATIONAL AIRPORT", "REGIONAL AIRPORT", "MUNICIPAL AIRPORT"
+]);
+
 const findAirportKeyPosition = (input: string, key: string): number => {
-  const match = new RegExp(`(?:^| )${escapeRegExp(key)}`).exec(input);
-  return match ? match.index : -1;
+  // Match key at word boundary within the input
+  const match = new RegExp(`(?:^| )${escapeRegExp(key)}(?= |$)`).exec(input);
+  if (match) {
+    return match.index;
+  }
+
+  // Relaxed: allow key without end boundary for longer keys (≥8 chars)
+  if (key.length >= 8) {
+    const relaxed = new RegExp(`(?:^| )${escapeRegExp(key)}`).exec(input);
+    if (relaxed) {
+      return relaxed.index;
+    }
+  }
+
+  return -1;
 };
 
 for (const airport of AIRPORT_REFERENCES) {

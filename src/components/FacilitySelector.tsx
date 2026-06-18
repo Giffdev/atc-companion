@@ -77,7 +77,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="data-label">Controller Facility</p>
-          <p className="mt-1 text-sm text-aviation-muted">Set the working position used for “my airport” and direct-vector requests.</p>
+          <p className="mt-1 text-sm text-aviation-muted">Set your working position to personalize queries like &ldquo;weather at my facility.&rdquo;</p>
         </div>
 
         <div className="flex items-center gap-2">

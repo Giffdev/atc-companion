@@ -422,8 +422,11 @@ export const detectAirportInfoDetail = (input: string): AirportInfoDetail | unde
   if (/\b(?:runway|airport diagram|field layout)\b/.test(normalized)) {
     return "runways";
   }
-  if (/\bfrequenc(?:y|ies)|tower|ground|atis|ctaf/.test(normalized)) {
+  if (/\bfrequenc(?:y|ies)|tower|ground|atis|ctaf/.test(normalized) && !/\b(?:hours|open|close|operat)/i.test(normalized)) {
     return "frequencies";
+  }
+  if (/\b(?:hours|open|close|closing|operat|schedule|24.?hour|staffed|manned|unmanned|part.?time)\b/.test(normalized)) {
+    return "hours";
   }
   if (/\bairport info|airport information|details|all\b/.test(normalized)) {
     return "all";

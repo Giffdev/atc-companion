@@ -55,6 +55,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
   const [voiceMessage, setVoiceMessage] = useState("Voice standby");
   const [parseError, setParseError] = useState<string | null>(null);
   const controllerRef = useRef<VoiceRecognitionController | null>(null);
+  const pendingVoiceSubmitRef = useRef(false);
 
   const updateQuery = useCallback((nextQuery: string) => {
     setQuery(nextQuery);
@@ -73,13 +74,24 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
       onResult: (result) => {
         updateQuery(result.normalizedTranscript);
         setVoiceMessage(result.isHighConfidence ? "Voice capture accepted" : "Low confidence voice readback");
+        pendingVoiceSubmitRef.current = true;
       },
       onError: () => {
         setIsListening(false);
         setVoiceMessage("Voice capture unavailable");
+        pendingVoiceSubmitRef.current = false;
       },
       onEnd: () => {
         setIsListening(false);
+        // Auto-submit after voice recognition ends if we got a result
+        if (pendingVoiceSubmitRef.current) {
+          pendingVoiceSubmitRef.current = false;
+          // Small delay to let the query state update propagate
+          setTimeout(() => {
+            const submitBtn = document.getElementById("atc-query-submit");
+            submitBtn?.click();
+          }, 150);
+        }
       }
     });
 
@@ -294,6 +306,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           <button
             className="h-16 rounded-2xl bg-cyan-400 px-6 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isSubmitting}
+            id="atc-query-submit"
             onClick={handleSubmit}
             type="button"
           >

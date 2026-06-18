@@ -83,7 +83,7 @@ const NAVIGATION_PATTERN =
 const REGULATORY_PATTERN =
   /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
 const AIRPORT_INFO_PATTERN =
-  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout)\b/i;
+  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed))\b/i;
 const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on))\b/i;
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
 const APPROACH_PROCEDURE_CONTEXT_PATTERN =

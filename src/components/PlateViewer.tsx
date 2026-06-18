@@ -185,38 +185,9 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
         </div>
       </div>
 
-      <div className="aviation-panel overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
-        <div className="relative min-h-[600px]">
-          {isLoading ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm">
-              <div className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 font-data text-xs tracking-[0.2em] text-cyan-100">
-                LOADING PLATE PDF…
-              </div>
-            </div>
-          ) : null}
-
-          <iframe
-            key={selectedPlateProxiedUrl}
-            className="h-[min(75vh,900px)] min-h-[600px] w-full bg-slate-950"
-            onError={() => setIsLoading(false)}
-            onLoad={() => setIsLoading(false)}
-            src={selectedPlateProxiedUrl}
-            title={`${selectedPlate.procedureName} PDF`}
-          />
-        </div>
-      </div>
-
-      <p className="text-xs text-aviation-muted">
-        Your browser doesn&apos;t support inline PDF viewing.{" "}
-        <a href={selectedPlateUrl} rel="noreferrer" target="_blank">
-          Open the chart in a new tab
-        </a>
-        .
-      </p>
-
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="data-label">Alternative plates</p>
+          <p className="data-label">Available plates</p>
           <p className="font-data text-xs text-aviation-muted">
             {plates.length} option{plates.length === 1 ? "" : "s"}
           </p>
@@ -259,6 +230,35 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
           })}
         </div>
       </div>
+
+      <div className="aviation-panel overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
+        <div className="relative min-h-[600px]">
+          {isLoading ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm">
+              <div className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 font-data text-xs tracking-[0.2em] text-cyan-100">
+                LOADING PLATE PDF…
+              </div>
+            </div>
+          ) : null}
+
+          <iframe
+            key={selectedPlateProxiedUrl}
+            className="h-[min(75vh,900px)] min-h-[600px] w-full bg-slate-950"
+            onError={() => setIsLoading(false)}
+            onLoad={() => setIsLoading(false)}
+            src={selectedPlateProxiedUrl}
+            title={`${selectedPlate.procedureName} PDF`}
+          />
+        </div>
+      </div>
+
+      <p className="text-xs text-aviation-muted">
+        Your browser doesn&apos;t support inline PDF viewing.{" "}
+        <a href={selectedPlateUrl} rel="noreferrer" target="_blank">
+          Open the chart in a new tab
+        </a>
+        .
+      </p>
     </div>
   );
 }
