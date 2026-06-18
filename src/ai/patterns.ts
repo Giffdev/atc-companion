@@ -84,6 +84,7 @@ const REGULATORY_PATTERN =
   /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
 const AIRPORT_INFO_PATTERN =
   /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed))\b/i;
+const HOURS_CONTEXT_PATTERN = /\b(?:hours|open|close|closing|operat|schedule|staffed|manned|unmanned|part.?time|24.?hour)\b/i;
 const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on))\b/i;
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
 const APPROACH_PROCEDURE_CONTEXT_PATTERN =
@@ -147,7 +148,7 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
   if (NOTAM_PATTERN.test(input)) {
     candidates.push("notam");
   }
-  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input)) {
+  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input)) {
     candidates.push("frequency");
   }
   if (PLATES_PATTERN.test(input)) {
@@ -162,6 +163,7 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
   if (REGULATORY_PATTERN.test(input)) {
     candidates.push("regulatory");
   }
+  const isHoursQuery = HOURS_CONTEXT_PATTERN.test(input);
   if (
     (AIRPORT_INFO_PATTERN.test(input) ||
       (GENERIC_AIRPORT_INFO_PATTERN.test(input) && entities.airports.length > 0) ||
@@ -169,8 +171,9 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
         airportInfoDetail !== "frequencies" &&
         entities.airports.length > 0 &&
         !FREQUENCY_PATTERN.test(input) &&
-        !PLATES_PATTERN.test(input))) &&
-    !FREQUENCY_PATTERN.test(input) &&
+        !PLATES_PATTERN.test(input)) ||
+      (isHoursQuery && entities.airports.length > 0)) &&
+    (!FREQUENCY_PATTERN.test(input) || isHoursQuery) &&
     !PLATES_PATTERN.test(input) &&
     !WEATHER_PATTERN.test(input) &&
     !TRAFFIC_PATTERN.test(input)
@@ -206,7 +209,7 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
     };
   }
 
-  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input)) {
+  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input)) {
     return {
       type: "frequency",
       confidence: entities.airports.length > 0 ? 0.94 : 0.69,

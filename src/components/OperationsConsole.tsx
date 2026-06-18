@@ -341,18 +341,14 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
         </p>
       );
     }
-    case "frequency":
+    case "frequency": {
+      const freqs = liveResult.response.data as Frequency[];
       return (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {(liveResult.response.data as Frequency[]).map((frequency) => (
-            <div key={`${frequency.type}-${frequency.valueMHz}`} className="rounded-2xl border border-aviation-border bg-black/15 px-3 py-3">
-              <p className="data-label">{frequency.type}</p>
-              <p className="mt-2 font-data text-sm text-aviation-text">{frequency.valueMHz.toFixed(2)}</p>
-              <p className="mt-1 text-xs text-aviation-muted">{frequency.name}</p>
-            </div>
-          ))}
-        </div>
+        <p className="text-sm text-aviation-text">
+          Found {freqs.length} frequenc{freqs.length !== 1 ? "ies" : "y"} — see the frequency panel below.
+        </p>
       );
+    }
     case "plates": {
       const plates = liveResult.response.data as ApproachPlate[];
       return (
