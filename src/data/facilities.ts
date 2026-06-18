@@ -152,6 +152,27 @@ const scoreFacility = (query: string, facility: ControllerFacility, searchKeys: 
 export const getFacilityById = (facilityId: string): ControllerFacility | null =>
   FACILITY_INDEX.get(facilityId.trim().toUpperCase()) ?? null;
 
+/**
+ * Get the list of airports associated with a facility.
+ * For approach facilities, returns all airports in their airspace.
+ * For towers, returns just the primary airport.
+ */
+export const getFacilityAirports = (facilityId: string): string[] => {
+  const id = facilityId.trim().toUpperCase();
+
+  // Check approach facilities first (they have multiple airports)
+  const approach = APPROACH_FACILITIES.find(
+    (f) => f.icao.toUpperCase() === id || f.name.toUpperCase() === id
+  );
+  if (approach) return approach.airports;
+
+  // For tower facilities, just the primary airport
+  const facility = FACILITY_INDEX.get(id);
+  if (facility?.primaryAirport) return [facility.primaryAirport];
+
+  return [];
+};
+
 export const searchFacilities = (query: string): ControllerFacility[] => {
   const normalizedQuery = normalize(query);
 

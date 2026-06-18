@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FacilitySelector } from "@/components/FacilitySelector";
+import { AtisStrip } from "@/components/AtisStrip";
 import { NavigationDisplay } from "@/components/NavigationDisplay";
 import { NotamList } from "@/components/NotamList";
 import { PlateViewer } from "@/components/PlateViewer";
@@ -12,7 +13,7 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBar } from "@/components/StatusBar";
 import { TrafficMap } from "@/components/TrafficMap";
 import { WeatherDisplay } from "@/components/WeatherDisplay";
-import { getFacilityById } from "@/data/facilities";
+import { getFacilityById, getFacilityAirports } from "@/data/facilities";
 import { createDemoDashboardData, type DashboardResultType, type SourceStatusItem } from "@/data/demo-results";
 import { API_ENDPOINTS, TRAFFIC_REFRESH_INTERVAL_MS, WEATHER_REFRESH_INTERVAL_MS } from "@/lib/constants";
 import { formatTimestamp } from "@/lib/utils";
@@ -762,6 +763,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                             <span>{autoRefreshConfig.label}</span>
                           </div>
                         ) : null}
+                        {selectedFacility && (
+                          <AtisStrip airports={getFacilityAirports(selectedFacility.id)} />
+                        )}
                         <WeatherDisplay weather={dashboardData.weather} />
                       </div>
                     </ResultCard>
