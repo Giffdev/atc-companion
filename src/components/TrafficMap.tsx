@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import type { TrafficTarget } from "@/types/aviation";
 
 type TrafficMapProps = {
@@ -20,7 +24,10 @@ const getAltitudeTone = (altitudeFeet: number | null): string => {
   return "#f59e0b";
 };
 
-const normalizeTraffic = (traffic: TrafficTarget[]) => {
+const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3] as const;
+const DEFAULT_ZOOM_INDEX = 2; // 1x
+
+const normalizeTraffic = (traffic: TrafficTarget[], zoom: number) => {
   const positions = traffic
     .map((target) => target.position)
     .filter((position): position is NonNullable<TrafficTarget["position"]> => position !== null);
@@ -31,18 +38,18 @@ const normalizeTraffic = (traffic: TrafficTarget[]) => {
 
   const latitudes = positions.map((position) => position.latitude);
   const longitudes = positions.map((position) => position.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLon = Math.min(...longitudes);
-  const maxLon = Math.max(...longitudes);
+  const centerLat = (Math.min(...latitudes) + Math.max(...latitudes)) / 2;
+  const centerLon = (Math.min(...longitudes) + Math.max(...longitudes)) / 2;
+  const spanLat = Math.max(Math.max(...latitudes) - Math.min(...latitudes), 0.01) / zoom;
+  const spanLon = Math.max(Math.max(...longitudes) - Math.min(...longitudes), 0.01) / zoom;
 
   return traffic.map((target) => {
     if (!target.position) {
       return { target, x: 160, y: 120 };
     }
 
-    const x = ((target.position.longitude - minLon) / Math.max(maxLon - minLon, 0.0001)) * 240 + 30;
-    const y = 210 - ((target.position.latitude - minLat) / Math.max(maxLat - minLat, 0.0001)) * 160;
+    const x = ((target.position.longitude - (centerLon - spanLon / 2)) / spanLon) * 260 + 30;
+    const y = 210 - ((target.position.latitude - (centerLat - spanLat / 2)) / spanLat) * 180;
 
     return { target, x, y };
   });
@@ -55,19 +62,43 @@ const AircraftGlyph = ({ trackDegrees }: { trackDegrees: number | null }) => (
 );
 
 export function TrafficMap({ traffic }: TrafficMapProps) {
-  const normalizedTraffic = normalizeTraffic(traffic);
+  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
+  const zoom = ZOOM_LEVELS[zoomIndex];
+  const normalizedTraffic = normalizeTraffic(traffic, zoom);
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-aviation-border bg-black/20 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="font-data text-xs text-aviation-muted">{zoom}x zoom</span>
+          <div className="flex items-center gap-1">
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
+              disabled={zoomIndex === 0}
+              onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
+              title="Zoom out"
+              type="button"
+            >
+              −
+            </button>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
+              disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+              onClick={() => setZoomIndex((i) => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
+              title="Zoom in"
+              type="button"
+            >
+              +
+            </button>
+          </div>
+        </div>
         <svg className="h-[260px] w-full" role="img" viewBox="0 0 320 240">
-          <title>ADS-B traffic placeholder map</title>
+          <title>ADS-B traffic map</title>
           <rect fill="#050914" height="240" rx="18" width="320" />
           <circle cx="160" cy="120" fill="none" r="88" stroke="rgba(34,197,94,0.18)" />
           <circle cx="160" cy="120" fill="none" r="58" stroke="rgba(34,197,94,0.14)" />
           <circle cx="160" cy="120" fill="none" r="28" stroke="rgba(34,197,94,0.12)" />
           <path d="M160 18v204M24 120h272" stroke="rgba(34,197,94,0.12)" />
-          <path d="M160 120 234 54" stroke="rgba(6,182,212,0.22)" strokeWidth="3" />
           {normalizedTraffic.map(({ target, x, y }) => (
             <g key={target.icao24} style={{ color: getAltitudeTone(target.altitudeFeet) }} transform={`translate(${x} ${y})`}>
               <AircraftGlyph trackDegrees={target.trackDegrees} />
