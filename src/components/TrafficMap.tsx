@@ -267,7 +267,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
 
       {traffic.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {traffic.map((target) => (
+          {[...traffic].sort((a, b) => (a.altitudeFeet ?? -1) - (b.altitudeFeet ?? -1)).map((target) => (
             <div key={`${target.icao24}-legend`} className="rounded-2xl border border-aviation-border bg-black/15 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="font-data text-sm text-aviation-text">{target.callsign ?? target.icao24.toUpperCase()}</p>

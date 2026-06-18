@@ -245,11 +245,30 @@ const parseAirportHoursFromHtml = (
   tz: string,
   tzInfo: ReturnType<typeof formatTimezone>
 ): AirportHours => {
-  const towerHoursMatch = html.match(/ATCT\s*(?:Hours|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i)
-    ?? html.match(/Tower\s*(?:Hours|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i)
-    ?? html.match(/((?:\d{4})-(?:\d{4})\s*(?:LOCAL|UTC|Z))/i)
-    ?? html.match(/ATCT[^<]*?((?:\d{4})\s*[-–]\s*(?:\d{4})[^<]*)/i)
-    ?? html.match(/(24\s*(?:HR|HOUR|HRS))/i);
+  // Priority 1: Structured table format — "Tower Hours</td>" followed by the value in next <td>
+  const structuredTowerMatch =
+    html.match(/Tower\s*Hours<\/t[dh]>\s*(?:<\/tr>\s*<tr>\s*)?<td[^>]*>\s*(.*?)\s*<\/td>/is)
+    ?? html.match(/Tower\s*Hours<\/t[dh]>\s*\n?\s*([\w\s]+?)(?:\n|<)/is);
+
+  // Priority 2: Inline "ATCT Hours: ..." or "Tower HRS: ..."
+  const inlineTowerMatch =
+    html.match(/ATCT\s*(?:Hours|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i)
+    ?? html.match(/Tower\s*(?:Hours|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i);
+
+  // Priority 3: Look for "24 Hours" or "Continuous" near "Tower Hours" label
+  // but NOT in remarks/comments
+  const near24HrMatch = html.match(/Tower\s*Hours[\s\S]{0,80}?(24\s*Hours?|Continuous)/i);
+
+  // Priority 4: Time range NOT inside remarks/comments
+  // Avoid matching ANG/Base Ops/military times that appear in <li> remarks
+  const cleanHtml = html.replace(/<ul>[\s\S]*?<\/ul>/gi, "").replace(/<li>[\s\S]*?<\/li>/gi, "");
+  const timeRangeMatch = cleanHtml.match(/((?:\d{4})-(?:\d{4})\s*(?:LOCAL|UTC|Z))/i)
+    ?? cleanHtml.match(/ATCT[^<]*?((?:\d{4})\s*[-–]\s*(?:\d{4})[^<]*)/i);
+
+  // Priority 5: Standalone "24 HR" pattern (outside remarks)
+  const standalone24Match = cleanHtml.match(/(24\s*(?:HR|HOUR|HRS))/i);
+
+  const towerHoursMatch = structuredTowerMatch ?? inlineTowerMatch ?? near24HrMatch ?? timeRangeMatch ?? standalone24Match;
 
   const attendanceMatch = html.match(/Attendance[^<]*?(?::|–)\s*([^<\n]+)/i)
     ?? html.match(/ATTENDED[^<]*?([^<\n]+)/i);

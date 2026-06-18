@@ -81,14 +81,13 @@ describe("parseIntent", () => {
     });
   });
 
-  it("forces clarification when a single utterance mixes multiple operational intents", async () => {
+  it("collapses compound requests into airport_info when multiple data types are mentioned", async () => {
     const intent = await parseIntent("Give me the METAR and NOTAMs for KDEN");
 
     expect(intent).toMatchObject({
-      type: "unknown",
-      clarificationReason: "ambiguous",
-      requiresClarification: true
+      type: "airport_info",
+      requiresClarification: false
     });
-    expect(intent.candidates).toEqual(expect.arrayContaining(["weather", "notam"]));
+    expect(intent.airport).toBeTruthy();
   });
 });

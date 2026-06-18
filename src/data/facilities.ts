@@ -1,5 +1,6 @@
 import { AIRPORT_REFERENCES, findAirportReference, type AirportReference } from "@/data/airports";
 import { APPROACH_FACILITIES } from "@/data/approach-facilities";
+import { CENTER_AIRPORTS } from "@/data/center-airports";
 import type { ControllerFacility, FacilityType } from "@/types/facility";
 
 const normalize = (value: string): string => value.trim().toLowerCase();
@@ -63,7 +64,7 @@ const APPROACH_CONTROLLER_FACILITIES: ControllerFacility[] = APPROACH_FACILITIES
   };
 });
 
-const ARTCC_FACILITIES: ControllerFacility[] = [
+const ARTCC_FACILITY_DEFINITIONS: ControllerFacility[] = [
   { id: "ZAB", name: "Albuquerque Center", type: "center", position: { latitude: 35.0402, longitude: -106.609 }, artcc: "ZAB" },
   { id: "ZAU", name: "Chicago Center", type: "center", position: { latitude: 41.995, longitude: -88.101 }, artcc: "ZAU" },
   { id: "ZAN", name: "Anchorage Center", type: "center", position: { latitude: 61.1744, longitude: -149.9964 }, artcc: "ZAN" },
@@ -87,6 +88,11 @@ const ARTCC_FACILITIES: ControllerFacility[] = [
   { id: "ZTL", name: "Atlanta Center", type: "center", position: { latitude: 33.6407, longitude: -84.4277 }, artcc: "ZTL" },
   { id: "ZHN", name: "Honolulu Control Facility", type: "center", position: { latitude: 21.3245, longitude: -157.9251 }, artcc: "ZHN" }
 ];
+
+const ARTCC_FACILITIES: ControllerFacility[] = ARTCC_FACILITY_DEFINITIONS.map((facility) => ({
+  ...facility,
+  primaryAirport: CENTER_AIRPORTS[facility.id]?.[0]
+}));
 
 export const CONTROLLER_FACILITIES: ControllerFacility[] = [
   ...TOWER_FACILITIES,
@@ -166,8 +172,12 @@ export const getFacilityAirports = (facilityId: string): string[] => {
   );
   if (approach) return approach.airports;
 
-  // For tower facilities, just the primary airport
   const facility = FACILITY_INDEX.get(id);
+  if (facility?.type === "center") {
+    return CENTER_AIRPORTS[facility.id] ?? [];
+  }
+
+  // For tower facilities, just the primary airport
   if (facility?.primaryAirport) return [facility.primaryAirport];
 
   return [];

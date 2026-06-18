@@ -1,0 +1,242 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+import { findAirportReference } from "@/data/airports";
+import type { ApiResponse } from "@/types/api";
+import type { FlightCategory, WeatherBundle, WindCondition } from "@/types/aviation";
+
+interface FacilityOverviewProps {
+  facilityName: string;
+  facilityType: "approach" | "center";
+  airports: string[];
+  onSelectAirport: (icao: string) => void;
+}
+
+interface AtisEntry {
+  letter: string;
+  type: string;
+  fullText: string;
+  fetchedAt: string;
+}
+
+interface AtisResponse {
+  airports?: Record<string, AtisEntry | null>;
+}
+
+const FLIGHT_CATEGORY_TONE: Record<FlightCategory, string> = {
+  VFR: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
+  MVFR: "border-sky-500/20 bg-sky-500/10 text-sky-200",
+  IFR: "border-red-500/20 bg-red-500/10 text-red-200",
+  LIFR: "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-200",
+  UNKNOWN: "border-slate-500/20 bg-slate-500/10 text-slate-200"
+};
+
+const formatWind = (wind: WindCondition | null | undefined): string => {
+  if (!wind) return "Unavailable";
+
+  const direction = wind.variableDirection || wind.directionDegrees === null
+    ? "VRB"
+    : wind.directionDegrees.toString().padStart(3, "0");
+  const gust = wind.gustKnots ? `G${wind.gustKnots}` : "";
+
+  return `${direction}° / ${wind.speedKnots}KT${gust}`;
+};
+
+const formatVisibility = (weather: WeatherBundle | null): string => {
+  const visibility = weather?.metar?.visibility;
+
+  if (!visibility) return "Unknown";
+  if (visibility.prevailingStatuteMiles !== null) return `${visibility.prevailingStatuteMiles} SM`;
+
+  return visibility.rawValue ?? "Unknown";
+};
+
+const getAirportName = (icao: string): string => findAirportReference(icao)?.name ?? "Unknown Airport";
+
+const WeatherSkeletonCard = ({ icao }: { icao: string }) => (
+  <div className="rounded-2xl border border-aviation-border bg-black/15 p-4">
+    <div className="animate-pulse space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="h-7 w-20 rounded bg-slate-700/50" />
+          <div className="h-4 w-32 rounded bg-slate-800/60" />
+        </div>
+        <div className="h-7 w-12 rounded-full bg-slate-700/50" />
+      </div>
+      <div className="h-7 w-16 rounded-full bg-slate-700/50" />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <div className="h-3 w-10 rounded bg-slate-800/60" />
+          <div className="h-4 w-full rounded bg-slate-700/50" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-3 w-10 rounded bg-slate-800/60" />
+          <div className="h-4 w-20 rounded bg-slate-700/50" />
+        </div>
+      </div>
+      <div className="h-10 w-full rounded-xl bg-cyan-500/10" />
+    </div>
+    <span className="sr-only">Loading overview for {icao}</span>
+  </div>
+);
+
+type AirportCardProps = {
+  icao: string;
+  weather: WeatherBundle | null;
+  atis: AtisEntry | null;
+  onSelectAirport: (icao: string) => void;
+};
+
+const AirportOverviewCard = ({ icao, weather, atis, onSelectAirport }: AirportCardProps) => {
+  const flightCategory = weather?.metar?.flightCategory ?? "UNKNOWN";
+
+  return (
+    <article className="flex h-full flex-col rounded-2xl border border-aviation-border bg-black/15 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-data text-2xl font-semibold tracking-[0.16em] text-aviation-text">{icao}</h3>
+          <p className="mt-1 text-sm text-aviation-muted">{getAirportName(icao)}</p>
+        </div>
+        {atis ? (
+          <div className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-center">
+            <p className="data-label text-[9px] text-amber-300">ATIS</p>
+            <p className="font-data text-sm font-semibold text-amber-200">{atis.letter}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className={`mt-4 inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${FLIGHT_CATEGORY_TONE[flightCategory]}`}>
+        {flightCategory}
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <p className="data-label">Wind</p>
+          <p className="mt-2 font-data text-sm text-aviation-text">{formatWind(weather?.metar?.wind)}</p>
+        </div>
+        <div>
+          <p className="data-label">Vis</p>
+          <p className="mt-2 font-data text-sm text-aviation-text">{formatVisibility(weather)}</p>
+        </div>
+      </div>
+
+      {!weather?.metar ? (
+        <p className="mt-4 text-sm text-aviation-muted">Weather data currently unavailable.</p>
+      ) : null}
+
+      <button
+        className="mt-auto rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-left text-sm font-medium text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/15"
+        onClick={() => onSelectAirport(icao)}
+        type="button"
+      >
+        View Details →
+      </button>
+    </article>
+  );
+};
+
+export default function FacilityOverview({
+  facilityName,
+  facilityType,
+  airports,
+  onSelectAirport
+}: FacilityOverviewProps) {
+  const normalizedAirports = useMemo(() => airports.map((airport) => airport.trim().toUpperCase()).filter(Boolean), [airports]);
+  const requestKey = normalizedAirports.join(",");
+  const [weatherByAirport, setWeatherByAirport] = useState<Record<string, WeatherBundle | null>>({});
+  const [atisByAirport, setAtisByAirport] = useState<Record<string, AtisEntry | null>>({});
+  const [loadedKey, setLoadedKey] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      void (async () => {
+        if (normalizedAirports.length === 0) {
+          if (!cancelled) {
+            setWeatherByAirport({});
+            setAtisByAirport({});
+            setLoadedKey(requestKey);
+          }
+          return;
+        }
+
+        const [weatherResults, nextAtisByAirport] = await Promise.all([
+          Promise.allSettled(
+            normalizedAirports.map(async (icao) => {
+              const response = await fetch(`/api/weather?station=${encodeURIComponent(icao)}`);
+
+              if (!response.ok) return null;
+
+              const payload = (await response.json()) as ApiResponse<WeatherBundle>;
+              return payload.ok ? payload.data : null;
+            })
+          ),
+          (async (): Promise<Record<string, AtisEntry | null>> => {
+            try {
+              const atisResponse = await fetch(`/api/atis?airports=${normalizedAirports.join(",")}`);
+              if (!atisResponse.ok) return {};
+
+              const atisPayload = (await atisResponse.json()) as AtisResponse;
+              return atisPayload.airports ?? {};
+            } catch {
+              return {};
+            }
+          })()
+        ]);
+
+        const nextWeatherByAirport: Record<string, WeatherBundle | null> = {};
+        weatherResults.forEach((result, index) => {
+          nextWeatherByAirport[normalizedAirports[index]] = result.status === "fulfilled" ? result.value : null;
+        });
+
+        if (!cancelled) {
+          setWeatherByAirport(nextWeatherByAirport);
+          setAtisByAirport(nextAtisByAirport);
+          setLoadedKey(requestKey);
+        }
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedAirports, requestKey]);
+
+  const isLoading = requestKey !== loadedKey;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="data-label">{facilityType === "approach" ? "Approach facility" : "Center facility"}</p>
+          <h2 className="text-2xl font-semibold text-aviation-text">{facilityName} — Airports</h2>
+          <p className="mt-2 text-sm text-aviation-muted">
+            Quick weather and ATIS across {normalizedAirports.length} airports. Drill into any field for full operational details.
+          </p>
+        </div>
+      </div>
+
+      {normalizedAirports.length === 0 ? (
+        <div className="rounded-2xl border border-aviation-border bg-black/15 p-6 text-sm text-aviation-muted">
+          No airports are mapped to this facility yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+          {isLoading
+            ? normalizedAirports.map((icao) => <WeatherSkeletonCard key={icao} icao={icao} />)
+            : normalizedAirports.map((icao) => (
+                <AirportOverviewCard
+                  key={icao}
+                  atis={atisByAirport[icao] ?? null}
+                  icao={icao}
+                  onSelectAirport={onSelectAirport}
+                  weather={weatherByAirport[icao] ?? null}
+                />
+              ))}
+        </div>
+      )}
+    </section>
+  );
+}

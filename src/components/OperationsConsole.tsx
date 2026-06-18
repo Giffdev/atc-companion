@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FacilitySelector } from "@/components/FacilitySelector";
+import FacilityOverview from "@/components/FacilityOverview";
 import { AtisStrip } from "@/components/AtisStrip";
 import { NavigationDisplay } from "@/components/NavigationDisplay";
 import { NotamList } from "@/components/NotamList";
@@ -598,6 +599,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [loadingPanels, setLoadingPanels] = useState<Set<DashboardResultType>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [facilityAirportInfo, setFacilityAirportInfo] = useState<AirportInfoQueryPayload | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
 
   // Hydrate facility from localStorage after mount to avoid SSR mismatch
@@ -755,25 +757,43 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
   // Auto-fetch relevant data for the selected facility whenever it changes
   useEffect(() => {
-    if (!selectedFacility?.primaryAirport) {
-      setFacilityResults(new Map());
+    // Always clear stale data from previous facility
+    setFacilityResults(new Map());
+    setLiveResult(null);
+    setActiveIntent(null);
+    setSubmittedQuery("");
+    setFacilityAirportInfo(null);
+    setLoadingPanels(new Set());
+    setVisiblePanels(new Set());
+
+    if (!selectedFacility) {
       return;
     }
 
+    // For approach/center facilities, don't auto-fetch single-airport data —
+    // the FacilityOverview component handles the multi-airport view
+    const isMultiAirport = selectedFacility.type === "approach" || selectedFacility.type === "center";
+    if (isMultiAirport) {
+      return;
+    }
+
+    // Tower facilities: single-airport dashboard
     const airport = selectedFacility.primaryAirport;
+    if (!airport) {
+      return;
+    }
+
     let cancelled = false;
 
     const fetchFacilityDashboard = async () => {
-      const dashboardPanels: DashboardResultType[] =
-        selectedFacility.type === "center"
-          ? ["weather", "notam"]
-          : ["weather", "notam", "traffic"];
+      const dashboardPanels: DashboardResultType[] = ["weather", "notam", "traffic", "frequency", "plates"];
 
       setVisiblePanels(new Set(dashboardPanels));
       setFacilityResults(new Map());
       setLiveResult(null);
       setActiveIntent(null);
       setSubmittedQuery("");
+      setFacilityAirportInfo(null);
       setLoadingPanels(new Set(dashboardPanels));
 
       // Fetch weather
@@ -798,23 +818,49 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         setLoadingPanels((prev) => { const next = new Set(prev); next.delete("notam"); return next; });
       }
 
-      // Fetch traffic (tower/approach only)
-      if (selectedFacility.type !== "center") {
-        try {
-          const payload = await fetchLiveQuery(`traffic at ${airport}`);
-          if (cancelled) return;
-          setFacilityResults((prev) => new Map(prev).set("traffic", payload));
-          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
-        } catch {
-          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
-        }
+      // Fetch traffic
+      try {
+        const payload = await fetchLiveQuery(`traffic at ${airport}`);
+        if (cancelled) return;
+        setFacilityResults((prev) => new Map(prev).set("traffic", payload));
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
+      } catch {
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
       }
+
+      // Fetch frequencies and plates
+      try {
+        const payload = await fetchLiveQuery(`frequencies at ${airport}`);
+        if (cancelled) return;
+        setFacilityResults((prev) => new Map(prev).set("frequency", payload));
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("frequency"); return next; });
+      } catch {
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("frequency"); return next; });
+      }
+
+      try {
+        const payload = await fetchLiveQuery(`approach plates at ${airport}`);
+        if (cancelled) return;
+        setFacilityResults((prev) => new Map(prev).set("plates", payload));
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("plates"); return next; });
+      } catch {
+        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("plates"); return next; });
+      }
+
+      // Fetch airport info (hours, runways)
+      try {
+        const payload = await fetchLiveQuery(`airport info for ${airport}`);
+        if (cancelled) return;
+        if (payload.intent.type === "airport_info" && payload.response.ok) {
+          setFacilityAirportInfo(payload.response.data as AirportInfoQueryPayload);
+        }
+      } catch { /* silent */ }
     };
 
     fetchFacilityDashboard();
 
     return () => { cancelled = true; };
-  }, [selectedFacility?.primaryAirport, selectedFacility?.type, fetchLiveQuery]);
+  }, [selectedFacility?.id, selectedFacility?.type, fetchLiveQuery]);
 
   useEffect(() => {
     if (!autoRefreshConfig || !submittedQuery || submittedQuery === "Awaiting query") {
@@ -934,6 +980,18 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           ) : null}
         </section>
 
+        {/* Multi-airport overview for approach/center facilities */}
+        {selectedFacility && (selectedFacility.type === "approach" || selectedFacility.type === "center") && !visiblePanels.size && (
+          <FacilityOverview
+            facilityName={selectedFacility.name}
+            facilityType={selectedFacility.type as "approach" | "center"}
+            airports={getFacilityAirports(selectedFacility.id)}
+            onSelectAirport={(icao) => {
+              handleSubmit(`airport info for ${icao}`, null);
+            }}
+          />
+        )}
+
         {visiblePanels.size > 0 && (liveResult || facilityResults.size > 0) ? (
         <section className="grid gap-6 xl:grid-cols-12">
           {orderedCards.filter((cardType) => visiblePanels.has(cardType)).map((cardType) => {
@@ -993,7 +1051,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       ) : dashboardData.notams.length ? (
                         <NotamList notams={dashboardData.notams} />
                       ) : (
-                        <div className="text-sm text-aviation-muted">No NOTAMs returned.</div>
+                        <div className="space-y-2 text-sm text-aviation-muted">
+                          <p>NOTAMs require an FAA API key.</p>
+                          <p className="text-xs">Register free at <a href="https://api.faa.gov" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">api.faa.gov</a>, then add <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-[11px]">FAA_NOTAM_API_KEY=your-key</code> to <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-[11px]">.env.local</code></p>
+                        </div>
                       )}
                     </ResultCard>
                   </div>
@@ -1071,7 +1132,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       subtitle="High-contrast FAA field frequencies in a terminal-style list for quick eyes-on validation."
                       title={`${activeIntent?.type === "frequency" ? activeIntent.facility : dashboardData.weather.stationIcao} core frequencies`}
                     >
-                      {dashboardData.frequencies.length ? (
+                      {loadingPanels.has("frequency") ? (
+                        <div className="flex items-center gap-2 text-sm text-aviation-muted">
+                          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+                          Loading frequencies…
+                        </div>
+                      ) : dashboardData.frequencies.length ? (
                         <div className="space-y-3">
                           {dashboardData.frequencies.map((frequency) => (
                             <div
@@ -1156,6 +1222,116 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           })}
         </section>
         ) : null}
+
+        {/* Airport stats card — rendered when facilityAirportInfo is available from dashboard fetch */}
+        {facilityAirportInfo?.hours?.ok && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-12">
+            <div className="xl:col-span-12">
+              <ResultCard
+                className="h-full"
+                fetchedAt={facilityAirportInfo.hours.data.source ? new Date().toISOString() : fallbackFetchedAt}
+                isActive={false}
+                kind="navigation"
+                rawData={facilityAirportInfo}
+                referenceTime={initialNow}
+                source={getDataSource("faaNasr")}
+                subtitle="Tower hours, runway information, and airport classification from FAA Chart Supplement data."
+                title={`${facilityAirportInfo.airport} airport statistics`}
+              >
+                <div className="space-y-4">
+                  {/* Hours */}
+                  {(() => {
+                    const hours = facilityAirportInfo.hours!.data;
+                    return (
+                      <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                        <div className="flex items-start gap-3 mb-3">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                            hours.isTowered
+                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                              : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                          }`}>
+                            {hours.isTowered ? "✦ Towered" : "Non-Towered"}
+                          </span>
+                          {hours.timezone && (
+                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[10px] text-aviation-muted">
+                              {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST" : ""}
+                            </span>
+                          )}
+                          {hours.airportUse && (
+                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-[10px] text-aviation-muted">
+                              {hours.airportUse}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
+                        {hours.towerSchedule ? (
+                          hours.towerSchedule.is24Hour ? (
+                            <p className="mt-1.5 font-data text-sm text-emerald-200">24-hour operation (continuous)</p>
+                          ) : (
+                            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                              <div>
+                                <p className="text-[10px] text-aviation-muted">Local</p>
+                                <p className="font-data text-sm text-aviation-text">
+                                  {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-aviation-muted">Zulu</p>
+                                <p className="font-data text-sm text-cyan-200">
+                                  {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        ) : hours.towerHours ? (
+                          <p className="mt-1.5 font-data text-sm text-aviation-text">{hours.towerHours}</p>
+                        ) : (
+                          <p className="mt-1.5 text-sm text-aviation-muted">No tower data available</p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Runways */}
+                  {facilityAirportInfo.runwayDetails?.ok && facilityAirportInfo.runwayDetails.data.runways.length > 0 && (
+                    <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted mb-2">Runways</p>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {facilityAirportInfo.runwayDetails.data.runways.map((rwy) => (
+                          <div key={rwy.designator} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                            <p className="font-data text-sm text-aviation-text">{rwy.designator}</p>
+                            <p className="font-data text-[11px] text-aviation-muted">
+                              {rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}×${rwy.widthFeet ?? "?"}ft` : ""}
+                              {rwy.surface ? ` · ${rwy.surface}` : ""}
+                            </p>
+                            {rwy.lighting && <p className="font-data text-[10px] text-aviation-muted">{rwy.lighting}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Diagram link */}
+                  {facilityAirportInfo.diagram?.ok && facilityAirportInfo.diagram.data && (
+                    <a
+                      className="flex items-center justify-between rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3 transition hover:border-cyan-300/40 hover:bg-cyan-500/10"
+                      href={facilityAirportInfo.diagram.data.chartUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Airport Diagram</p>
+                        <p className="mt-1 text-sm text-aviation-text">{facilityAirportInfo.diagram.data.procedureName}</p>
+                      </div>
+                      <span className="text-cyan-400">↗</span>
+                    </a>
+                  )}
+                </div>
+              </ResultCard>
+            </div>
+          </section>
+        )}
       </div>
 
       <StatusBar liveStatus={autoRefreshConfig?.label ?? null} referenceTime={initialNow} sources={sourceStatuses} warnings={warnings} />

@@ -106,16 +106,17 @@ const parseNotam = (raw: RawNotam, sourceUrl: string, fetchedAt: string, airport
 };
 
 export const getNotams = async (params: { airport?: string; type_filter?: string }): Promise<ApiResponse<Notam[]>> => {
-  const apiKey = process.env.FAA_NOTAM_API_KEY;
+  const apiKey = process.env.FAA_NOTAM_API_KEY ?? process.env.FAA_NMS_API_KEY;
   const airport = params.airport ? toFaaCode(params.airport) : undefined;
+  const icao = params.airport ? toIcaoCode(params.airport) : undefined;
   const typeFilter = params.type_filter?.toUpperCase();
 
   if (!apiKey) {
     return createApiErrorResponse(
       {
         code: "MISSING_API_KEY",
-        message: "FAA NOTAM access is not configured.",
-        details: "Set FAA_NOTAM_API_KEY before requesting live NOTAM data.",
+        message: "FAA NOTAM API key not configured. Register free at api.faa.gov, then set FAA_NOTAM_API_KEY in .env.local.",
+        details: "The FAA NOTAM Management System requires a free API key. Visit https://api.faa.gov to register.",
         retryable: false,
         status: 503
       },
@@ -136,12 +137,12 @@ export const getNotams = async (params: { airport?: string; type_filter?: string
         Accept: "application/json"
       },
       query: {
-        icaoId: airport,
+        icaoId: icao ?? airport,
         type: typeFilter
       },
       ttlMs: getCacheTtlMs("notam"),
       cacheNamespace: "notam-search",
-      cacheKey: createCacheKey("notam-search", { airport, typeFilter })
+      cacheKey: createCacheKey("notam-search", { airport: icao ?? airport, typeFilter })
     });
 
     const items = resolveNotamItems(result.data);

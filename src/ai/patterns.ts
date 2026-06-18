@@ -85,7 +85,7 @@ const REGULATORY_PATTERN =
 const AIRPORT_INFO_PATTERN =
   /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed))\b/i;
 const HOURS_CONTEXT_PATTERN = /\b(?:hours|open|close|closing|operat|schedule|staffed|manned|unmanned|part.?time|24.?hour)\b/i;
-const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on))\b/i;
+const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on)|show me (?:everything|all|all data)|everything (?:for|on|about|at)|all (?:data|info) (?:for|on|about|at)|give me (?:everything|all))\b/i;
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
 const APPROACH_PROCEDURE_CONTEXT_PATTERN =
   /\b(?:approach\s+(?:plate|plates|chart|charts|procedure|procedures)|instrument approach(?:es)?|(?:plate|plates|chart|charts|procedure|procedures).*\bapproach(?:es)?|\bapproaches?\s+(?:at|for|into))\b/i;
@@ -181,6 +181,15 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
     candidates.push("airport_info");
   }
 
+  // Compound query detection: if 2+ data-type intents are detected,
+  // collapse into airport_info so all panels show
+  const dataTypeCandidates = candidates.filter(
+    (c) => c !== "navigation" && c !== "regulatory" && c !== "airport_info"
+  );
+  if (dataTypeCandidates.length >= 2 && entities.airports.length > 0) {
+    return ["airport_info"];
+  }
+
   return candidates;
 };
 
@@ -188,6 +197,29 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
   const entities = extractEntities(input, options);
   const airportInfoDetail = detectAirportInfoDetail(input);
   const isWeatherMinimumsQuery = WEATHER_MINIMUMS_PATTERN.test(input);
+
+  // Compound query detection: if 2+ data types are mentioned with an airport,
+  // treat as a broad airport_info request instead of picking just one
+  if (entities.airports.length > 0) {
+    const hasPlates = PLATES_PATTERN.test(input);
+    const hasApproachProcedureContext = APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input);
+    const matchCount = [
+      FREQUENCY_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input) && !hasPlates && !hasApproachProcedureContext,
+      hasPlates,
+      WEATHER_PATTERN.test(input) && !isWeatherMinimumsQuery,
+      NOTAM_PATTERN.test(input),
+      TRAFFIC_PATTERN.test(input)
+    ].filter(Boolean).length;
+
+    if (matchCount >= 2 || airportInfoDetail === "all") {
+      return {
+        type: "airport_info",
+        confidence: 0.91,
+        airport: entities.airports[0],
+        detail: "all"
+      };
+    }
+  }
 
   if (WEATHER_PATTERN.test(input) && !isWeatherMinimumsQuery) {
     return {

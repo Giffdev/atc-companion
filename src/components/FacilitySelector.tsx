@@ -94,7 +94,7 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
             <button
               aria-expanded={isOpen}
               className="flex min-w-[280px] items-center justify-between gap-3 rounded-2xl border border-aviation-border bg-[#0b1526] px-4 py-3 text-left transition hover:border-cyan-400/35"
-              onClick={() => setIsOpen((current) => !current)}
+              onClick={() => setIsOpen((current) => { if (!current) setQuery(""); return !current; })}
               type="button"
             >
               <div className="min-w-0">
