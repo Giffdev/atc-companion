@@ -454,6 +454,25 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                   <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
                     <p className="mt-1.5 font-data text-sm text-aviation-text">{hours.towerHours}</p>
+                    {hours.timezone && (() => {
+                      // Try to extract Zulu times from the raw string and show local conversion
+                      const zuluMatch = hours.towerHours!.match(/(\d{4})Z?\s*[-–]\s*(\d{4})Z?/);
+                      if (!zuluMatch) return null;
+                      const offsetStr = hours.timezone!.utcOffset; // e.g. "UTC-7"
+                      const offsetH = parseFloat(offsetStr.replace("UTC", ""));
+                      if (isNaN(offsetH)) return null;
+                      const toLocal = (hhmm: string) => {
+                        const h = parseInt(hhmm.slice(0, 2), 10) + offsetH;
+                        const m = hhmm.slice(2);
+                        const norm = ((h % 24) + 24) % 24;
+                        return `${Math.floor(norm).toString().padStart(2, "0")}${m}`;
+                      };
+                      return (
+                        <p className="mt-1 font-data text-xs text-cyan-300/80">
+                          ≈ {toLocal(zuluMatch[1])}–{toLocal(zuluMatch[2])} {hours.timezone!.abbreviation} (local)
+                        </p>
+                      );
+                    })()}
                   </div>
                 ) : null}
 

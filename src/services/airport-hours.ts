@@ -201,11 +201,12 @@ const parseTowerSchedule = (rawText: string, tz: string): TowerSchedule | null =
     };
   }
 
-  // Match patterns like "0600-2200", "0600–2200 LOCAL", "0600L-0600Z"
-  const timeRangeMatch = text.match(/(\d{4})\s*[-–]\s*(\d{4})/);
+  // Match patterns like "0600-2200", "0600–2200 LOCAL", "0600L-2200L",
+  // "1400Z-0600Z", "0600 - 2200", "0600-2200 LCL", etc.
+  const timeRangeMatch = text.match(/(\d{4})\s*[LZ]?\s*[-–]\s*(\d{4})\s*[LZ]?/);
   if (timeRangeMatch) {
     const [, open, close] = timeRangeMatch;
-    const isZulu = /UTC|Z(?:\s|$)/i.test(text);
+    const isZulu = /UTC|(?<!\d)Z(?:\s|$|[-–])/i.test(text);
     const utcOffset = getUtcOffsetHours(tz);
 
     if (isZulu) {
