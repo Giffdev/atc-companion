@@ -15,6 +15,15 @@ type PlateViewerProps = {
 
 const normalizeValue = (value?: string | null): string => value?.trim().toUpperCase() ?? "";
 
+/** Normalize runway for comparison — pad to 2 digits, uppercase side letter */
+const normalizeRunway = (value?: string | null): string => {
+  const raw = value?.trim().toUpperCase() ?? "";
+  if (!raw) return "";
+  const match = raw.match(/^(\d{1,2})([LRC]?)$/);
+  if (!match) return raw;
+  return `${match[1].padStart(2, "0")}${match[2]}`;
+};
+
 const getPlateKey = (plate: ApproachPlate): string => `${plate.airportIcao}-${plate.procedureName}-${plate.chartUrl}`;
 
 const getPlateUrl = (plate: ApproachPlate): string => plate.pdfUrl ?? plate.chartUrl;
@@ -40,9 +49,9 @@ export const getPlateMatchScore = (
   selectedRunway?: string
 ): number => {
   const normalizedProcedureType = normalizeValue(selectedProcedureType);
-  const normalizedRunway = normalizeValue(selectedRunway);
+  const normalizedRunway = normalizeRunway(selectedRunway);
   const procedureMatches = normalizedProcedureType.length > 0 && normalizeValue(plate.procedureType) === normalizedProcedureType;
-  const runwayMatches = normalizedRunway.length > 0 && normalizeValue(plate.runway) === normalizedRunway;
+  const runwayMatches = normalizedRunway.length > 0 && normalizeRunway(plate.runway) === normalizedRunway;
 
   if (procedureMatches && runwayMatches) {
     return 3;

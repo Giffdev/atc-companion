@@ -437,14 +437,15 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [liveResult, setLiveResult] = useState<LiveQueryResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
 
+  // Hydrate facility from localStorage after mount to avoid SSR mismatch
+  useEffect(() => {
     const storedFacilityId = window.localStorage.getItem(FACILITY_STORAGE_KEY);
-    return storedFacilityId && getFacilityById(storedFacilityId) ? storedFacilityId : null;
-  });
+    if (storedFacilityId && getFacilityById(storedFacilityId)) {
+      setSelectedFacilityId(storedFacilityId);
+    }
+  }, []);
 
   useEffect(() => {
     if (!selectedFacilityId) {
@@ -672,8 +673,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           </div>
         </section>
 
+        {activeCard && liveResult ? (
         <section className="grid gap-6 xl:grid-cols-12">
-          {orderedCards.map((cardType) => {
+          {orderedCards.filter((cardType) => cardType === activeCard).map((cardType) => {
             switch (cardType) {
               case "weather":
                 return (
@@ -875,6 +877,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
             }
           })}
         </section>
+        ) : null}
       </div>
 
       <StatusBar liveStatus={autoRefreshConfig?.label ?? null} referenceTime={initialNow} sources={sourceStatuses} warnings={warnings} />

@@ -83,6 +83,7 @@ const FLIGHT_LEVEL_PATTERN = /\bFL\s?(\d{2,3})\b/gi;
 const FLIGHT_LEVEL_WORD_PATTERN = /\bflight level\s+(\d{2,3})\b/gi;
 const RUNWAY_PREFIX_PATTERN = /\b(?:runway|rwy)\s*(\d{1,2})\s*(left|right|center|centre|[LRC])?\b/gi;
 const RUNWAY_BARE_PATTERN = /\b(\d{1,2})([LRC])\b/gi;
+const RUNWAY_AFTER_PROCEDURE_PATTERN = /\b(?:rnav|ils|vor|gps|lda|loc|ndb)\s+(\d{1,2})\s*([LRC])?\b/gi;
 const FAR_PATTERN = /\b(?:(?:14\s*CFR|CFR|FAR)\s+)?(?:part\s+)?(\d+)(?:\.(\d+))?\b/gi;
 const N_NUMBER_PATTERN = /\bN\d{1,5}[A-Z]{0,2}\b/gi;
 const AIRLINE_CALLSIGN_PATTERN = /\b[A-Z]{2,3}\s?\d{1,4}[A-Z]?\b/g;
@@ -194,10 +195,15 @@ export const normalizeRunwayPhrases = (input: string): string =>
     return `runway ${runway}${RUNWAY_SIDE_MAP[side.toLowerCase()]}`;
   });
 
+/** Split procedure abbreviations glued to runway numbers: "rnav20" → "rnav 20", "ils14R" → "ils 14R" */
+const splitProcedureRunway = (input: string): string =>
+  input.replace(/\b(rnav|ils|vor|gps|lda|loc|ndb)(\d{1,2}[LRC]?)\b/gi, "$1 $2");
+
 export const normalizeAviationText = (input: string): string => {
   const phoneticNormalized = convertPhoneticAlphabetToText(input);
   const numberNormalized = convertSpokenNumbersToDigits(phoneticNormalized);
-  return normalizeRunwayPhrases(numberNormalized).replace(/\s+/g, " ").trim();
+  const procedureSplit = splitProcedureRunway(numberNormalized);
+  return normalizeRunwayPhrases(procedureSplit).replace(/\s+/g, " ").trim();
 };
 
 const collectMatches = (pattern: RegExp, input: string): string[] => {
@@ -292,8 +298,20 @@ export const extractRunways = (input: string): string[] => {
       return `${runwayNumber}${side}`;
     })
     .filter((value): value is string => Boolean(value));
+  const procedureContextMatches = Array.from(normalized.matchAll(RUNWAY_AFTER_PROCEDURE_PATTERN))
+    .map((match) => {
+      const runwayNumber = match[1]?.padStart(2, "0");
+      const side = match[2]?.toUpperCase() ?? "";
 
-  return dedupe([...prefixedMatches, ...bareMatches]);
+      if (!runwayNumber) {
+        return null;
+      }
+
+      return `${runwayNumber}${side}`;
+    })
+    .filter((value): value is string => Boolean(value));
+
+  return dedupe([...prefixedMatches, ...procedureContextMatches, ...bareMatches]);
 };
 
 export const extractFarReferences = (input: string): FarReferenceEntity[] => {
@@ -363,7 +381,7 @@ export const detectProcedureType = (input: string): ProcedureType | undefined =>
   if (/\bILS\b/.test(normalized)) {
     return "ILS";
   }
-  if (/\bRNAV\b/.test(normalized)) {
+  if (/\bRNAV\b/.test(normalized) || /RNAV\d/i.test(normalized) || /\bGPS\b/.test(normalized)) {
     return "RNAV";
   }
   if (/\bVOR\b/.test(normalized)) {
