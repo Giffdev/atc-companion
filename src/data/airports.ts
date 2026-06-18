@@ -1111,6 +1111,65 @@ for (const airport of AIRPORT_REFERENCES) {
 export const findAirportReference = (code: string): AirportReference | null =>
   AIRPORT_INDEX.get(code.trim().toUpperCase()) ?? AIRPORT_INDEX.get(normalizeAirportLookupKey(code)) ?? null;
 
+const NFDC_AIRPORT_URL = "https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp";
+
+const parseDms = (dms: string): number | null => {
+  const m = dms.match(/([\d.]+)-([\d.]+)-([\d.]+)\s*([NSEW])/i);
+  if (!m) return null;
+  const deg = parseFloat(m[1]) + parseFloat(m[2]) / 60 + parseFloat(m[3]) / 3600;
+  return /[SW]/i.test(m[4]) ? -deg : deg;
+};
+
+/**
+ * Dynamically fetch airport info from FAA NFDC when not in static database.
+ * Caches into AIRPORT_INDEX for future lookups within the same server lifetime.
+ */
+export const fetchAirportFromNfdc = async (code: string): Promise<AirportReference | null> => {
+  const normalized = code.trim().toUpperCase();
+  const existing = findAirportReference(normalized);
+  if (existing) return existing;
+
+  const faaCode = normalized.replace(/^K/, "");
+  try {
+    const res = await fetch(`${NFDC_AIRPORT_URL}?airportId=${encodeURIComponent(faaCode)}`, {
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    // Parse airport name from header
+    const nameMatch = html.match(/font-weight:\s*bold[^>]*>\s*([^<]+)/i);
+    const name = nameMatch?.[1]?.replace(/&nbsp;/g, " ").trim() ?? `Airport ${faaCode}`;
+
+    // Parse city/state from header line (after name)
+    const cityMatch = html.match(new RegExp(escapeRegExp(name) + "\\s*<\\/span>\\s*<br[^>]*>\\s*([^,<]+)\\s*,\\s*([A-Z]{2})", "i"));
+    const city = cityMatch?.[1]?.trim() ?? "";
+    const state = cityMatch?.[2]?.trim() ?? "";
+
+    // Parse lat/lon
+    const coordMatch = html.match(/Latitude\/Longitude<\/td>\s*<td[^>]*>\s*([\s\S]*?)<\/td>/i);
+    if (!coordMatch) return null;
+    const coordText = coordMatch[1].replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+    const parts = coordText.split("/").map(s => s.trim());
+    if (parts.length < 2) return null;
+    const latitude = parseDms(parts[0]);
+    const longitude = parseDms(parts[1]);
+    if (latitude === null || longitude === null) return null;
+
+    const icao = /^\d/.test(faaCode) ? faaCode : `K${faaCode}`;
+    const airport: AirportReference = { icao, faa: faaCode, name, city, state, latitude, longitude };
+
+    // Cache for future lookups
+    AIRPORT_INDEX.set(icao, airport);
+    AIRPORT_INDEX.set(faaCode, airport);
+    if (name) AIRPORT_INDEX.set(normalizeAirportLookupKey(name), airport);
+
+    return airport;
+  } catch {
+    return null;
+  }
+};
+
 export const findAirportReferencesInText = (input: string): AirportReference[] => {
   const normalizedInput = normalizeAirportLookupKey(input);
   const matches = AIRPORT_REFERENCES.map((airport) => {

@@ -253,7 +253,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-aviation-muted">
+          <div className="hidden sm:flex flex-wrap items-center gap-2 text-xs text-aviation-muted">
             <span className="rounded-full border border-aviation-border px-3 py-1 font-data">ENTER • submit</span>
             <span className="rounded-full border border-aviation-border px-3 py-1 font-data">CTRL+SPACE • voice</span>
           </div>

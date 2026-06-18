@@ -1,6 +1,6 @@
 import { getFacilityById } from "@/data/facilities";
 import { getDataSource } from "@/data/sources";
-import { findAirportReference } from "@/data/airports";
+import { findAirportReference, fetchAirportFromNfdc } from "@/data/airports";
 import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
 import { getAirportHours, type AirportHours } from "@/services/airport-hours";
 import { getFrequencies } from "@/services/frequencies";
@@ -91,7 +91,7 @@ const executeAirportInfo = async (
   ]);
 
   // Build runway designator list: prefer live FAA data, fall back to static
-  const airportReference = findAirportReference(intent.airport);
+  const airportReference = findAirportReference(intent.airport) ?? await fetchAirportFromNfdc(intent.airport);
   const runways = runwayDetails.ok && runwayDetails.data.runways.length > 0
     ? runwayDetails.data.runways.map((r) => r.designator)
     : airportReference?.runways ?? [];

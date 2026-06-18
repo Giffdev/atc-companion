@@ -231,7 +231,24 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
         </div>
       </div>
 
-      <div className="aviation-panel overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
+      {/* Mobile: open in new tab instead of iframe */}
+      <div className="block sm:hidden">
+        <a
+          className="flex items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 font-data text-sm text-cyan-100 hover:bg-cyan-500/20 transition-colors"
+          href={selectedPlateUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
+            <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
+          </svg>
+          Open {selectedPlate.procedureName} chart
+        </a>
+      </div>
+
+      {/* Desktop: inline PDF iframe */}
+      <div className="hidden sm:block aviation-panel overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
         <div className="relative min-h-[600px]">
           {isLoading ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm">
@@ -252,7 +269,7 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
         </div>
       </div>
 
-      <p className="text-xs text-aviation-muted">
+      <p className="hidden sm:block text-xs text-aviation-muted">
         Your browser doesn&apos;t support inline PDF viewing.{" "}
         <a href={selectedPlateUrl} rel="noreferrer" target="_blank">
           Open the chart in a new tab

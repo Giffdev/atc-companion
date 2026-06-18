@@ -1,4 +1,4 @@
-import { findAirportReference, toFaaCode } from "@/data/airports";
+import { findAirportReference, fetchAirportFromNfdc, toFaaCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
@@ -125,7 +125,7 @@ export interface AirportHours {
 export const getAirportHours = async (airportCodeInput: string): Promise<ApiResponse<AirportHours>> => {
   const faaCode = toFaaCode(airportCodeInput);
   const icaoCode = airportCodeInput.toUpperCase();
-  const airportRef = findAirportReference(airportCodeInput);
+  const airportRef = findAirportReference(airportCodeInput) ?? await fetchAirportFromNfdc(airportCodeInput);
   const cacheKey = createCacheKey("airport-hours", { airport: icaoCode });
 
   if (!airportRef) {

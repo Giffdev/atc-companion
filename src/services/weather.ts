@@ -1,4 +1,4 @@
-import { findNearestWeatherStations, toIcaoCode } from "@/data/airports";
+import { findNearestWeatherStations, toIcaoCode, findAirportReference, fetchAirportFromNfdc } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
@@ -527,6 +527,10 @@ export const getWeather = async (station: string, options: WeatherRequestOptions
   let effectiveMetar = metarResponse;
   let nearestStationNote: string | undefined;
   if (!metarResponse.ok) {
+    // Ensure we have coordinates — try dynamic NFDC lookup if not in static DB
+    if (!findAirportReference(station)) {
+      await fetchAirportFromNfdc(station);
+    }
     const nearbyStations = findNearestWeatherStations(station, 3);
     for (const candidate of nearbyStations) {
       if (candidate.distanceNm === 0) continue;
