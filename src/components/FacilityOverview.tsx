@@ -85,10 +85,11 @@ type AirportCardProps = {
   icao: string;
   weather: WeatherBundle | null;
   atis: AtisEntry | null;
+  atisChecked: boolean;
   onSelectAirport: (icao: string) => void;
 };
 
-const AirportOverviewCard = ({ icao, weather, atis, onSelectAirport }: AirportCardProps) => {
+const AirportOverviewCard = ({ icao, weather, atis, atisChecked, onSelectAirport }: AirportCardProps) => {
   const flightCategory = weather?.metar?.flightCategory ?? "UNKNOWN";
 
   return (
@@ -102,6 +103,10 @@ const AirportOverviewCard = ({ icao, weather, atis, onSelectAirport }: AirportCa
           <div className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-center">
             <p className="data-label text-[9px] text-amber-300">ATIS</p>
             <p className="font-data text-sm font-semibold text-amber-200">{atis.letter}</p>
+          </div>
+        ) : atisChecked ? (
+          <div className="rounded-full border border-slate-600/30 bg-slate-700/20 px-2.5 py-1 text-center" title="D-ATIS not available — voice ATIS only">
+            <p className="font-data text-[9px] text-slate-500">No D-ATIS</p>
           </div>
         ) : null}
       </div>
@@ -230,6 +235,7 @@ export default function FacilityOverview({
                 <AirportOverviewCard
                   key={icao}
                   atis={atisByAirport[icao] ?? null}
+                  atisChecked={icao in atisByAirport}
                   icao={icao}
                   onSelectAirport={onSelectAirport}
                   weather={weatherByAirport[icao] ?? null}

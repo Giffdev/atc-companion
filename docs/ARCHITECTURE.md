@@ -1,0 +1,468 @@
+# Architecture
+
+## System intent
+
+ATC Assist is a reference console, not a control-decision engine. The architecture reflects that constraint:
+
+- upstream data is fetched from authoritative or clearly labeled sources
+- responses are wrapped with provenance and freshness metadata
+- the UI favors scanability and explicit source visibility
+- ambiguous user input is clarified instead of guessed
+
+## High-level flow
+
+```text
+User query / voice input
+  -> QueryInput
+  -> /api/intent (preview) or /api/query (submit)
+  -> parseIntent()
+       1. entity extraction + regex/pattern match
+       2. optional LLM fallback
+  -> executeQuery()
+  -> service calls in src/services/*
+  -> ApiResponse<T> envelope(s)
+  -> OperationsConsole state merge
+  -> ResultCard / panel components
+```
+
+## Intent parsing pipeline
+
+Primary files:
+
+- `src/ai/intent-parser.ts`
+- `src/ai/patterns.ts`
+- `src/ai/entity-extractor.ts`
+- `src/ai/llm-classifier.ts`
+- `src/ai/voice-input.ts`
+
+### Phase 0: input normalization
+
+`normalizeAviationText()` in `entity-extractor.ts` cleans the input before classification:
+
+- NATO phonetics to letters (`kilo juliet foxtrot kilo` -> `KJFK`)
+- spoken numbers to digits (`one eighteen point seven` -> `118.7`)
+- runway phrase normalization (`runway 28 left` -> `runway 28L`)
+- procedure/runway token splitting (`rnav20` -> `rnav 20`)
+
+This same normalization is used by the voice path, so text and speech are parsed consistently.
+
+### Phase 1: entity extraction
+
+`extractEntities()` identifies structured aviation entities such as:
+
+- airports
+- runways
+- frequencies
+- route airports
+- altitudes / flight levels
+- speeds
+- squawk codes
+- callsigns
+- aircraft types
+- FAR references
+- NOTAM type hints
+- procedure type hints
+- airport-info detail hints
+
+### Phase 2: regex/pattern classification
+
+`patterns.ts` contains the fast-path matcher for:
+
+- weather
+- notam
+- frequency
+- plates
+- traffic
+- navigation
+- regulatory
+- airport_info
+
+This path is deterministic, fast, and preferred when confidence is high.
+
+### Compound query detection
+
+The parser explicitly checks for compound airport requests. If a single airport query appears to request multiple data types (for example weather + plates + frequencies), the parser collapses the request into `airport_info` with `detail: "all"`.
+
+That is important because the UI wants coordinated panels, not a single winner-take-all intent.
+
+### Clarification behavior
+
+If the parser detects:
+
+- missing required entities
+- multiple conflicting intent candidates
+- empty input
+- low-confidence interpretation
+
+it returns an `unknown` intent with:
+
+- `requiresClarification: true`
+- `clarificationReason`
+- `clarificationPrompt`
+
+### Phase 3: LLM fallback
+
+If the pattern path is ambiguous or under threshold, `classifyIntentWithLlm()` is called.
+
+Properties of the LLM path:
+
+- disabled unless `OPENAI_API_KEY` is configured
+- temperature `0`
+- strict JSON-only prompt
+- classifier is forbidden from answering the query itself
+- still feeds back into the same typed `ParsedIntent` model
+
+## Query orchestration
+
+Primary file:
+
+- `src/services/orchestrator.ts`
+
+`executeQuery()` dispatches a `ParsedIntent` to the correct service. The orchestrator is responsible for:
+
+- route-to-service mapping
+- `airport_info` fan-out across multiple services
+- clarification-required error responses
+- selected-facility context for navigation
+- merging supporting sources into one response envelope
+
+### Special case: airport_info
+
+`airport_info` is the broadest intent and can call several services in parallel:
+
+- `getWeather()`
+- `getFrequencies()`
+- `getPlates()`
+- `getAirportDiagram()`
+- `getAirportHours()`
+- `getAirportRunways()`
+
+It returns a composite payload (`AirportInfoQueryPayload`) instead of a single domain type.
+
+## Service layer design
+
+Primary files:
+
+- `src/lib/fetcher.ts`
+- `src/lib/cache.ts`
+- `src/lib/utils.ts`
+- `src/services/_shared.ts`
+- service implementations in `src/services/*.ts`
+
+### fetchWithRetry
+
+`fetchWithRetry()` standardizes upstream calls with:
+
+- query construction
+- timeout handling
+- retry/backoff behavior
+- `Retry-After` support
+- network vs upstream error classification
+- optional transform step
+- optional TTL caching integration
+
+When upstream access fails, the fetcher throws `FetcherError`, which preserves:
+
+- `code`
+- `status`
+- `retryable`
+- `source`
+- `fetchedAt`
+- short `details`
+
+### Caching
+
+`src/lib/cache.ts` implements an in-memory TTL cache with:
+
+- stable cache keys
+- namespace-based TTL policies
+- prefix invalidation
+- small LRU-style eviction behavior
+- cache metadata returned with every response
+
+Key TTL behavior is driven by `src/data/staleness.ts`.
+
+Examples:
+
+- traffic: ~30 seconds
+- METAR: 1 hour
+- TAF: 6 hours
+- NOTAM: 12 hours
+- FAA chart/frequency/reference data: 28 days or more
+
+### ApiResponse envelope
+
+Every service returns `ApiResponse<T>`.
+
+Success responses include:
+
+- typed `data`
+- `source`
+- `attribution.primary`
+- optional `attribution.supporting`
+- `fetchedAt`
+- `isStale`
+- `stalenessWarning`
+- `cache`
+
+Error responses preserve the same outer shape, which keeps the UI simple and traceable.
+
+### Source attribution
+
+`src/data/sources.ts` is the central source registry. Services call `getDataSource()` so both API routes and UI components can present the same source identity.
+
+## Implemented services
+
+### `weather.ts`
+
+Fetches and normalizes:
+
+- METAR
+- TAF
+- PIREP
+- combined weather bundle
+
+Upstream: NOAA Aviation Weather Center.
+
+### `traffic.ts`
+
+Fetches traffic state vectors around:
+
+- an airport-derived bounding box, or
+- explicit bounds
+
+Upstream: OpenSky Network.
+
+### `plates.ts`
+
+Reads FAA DTPP `current.xml`, extracts airport records, and exposes:
+
+- approach plates
+- SIDs
+- STARs
+- airport diagrams
+- plate manifest lookup
+- cache prewarming support
+
+Also supports FAA PDF proxying through `/api/plate-proxy` for inline viewing.
+
+### `frequencies.ts`
+
+Returns:
+
+- airport-local frequency data from a NASR-backed seed dataset
+- approach/TRACON frequency sectors for mapped facilities
+
+### `notams.ts`
+
+Calls the FAA NOTAM API, normalizes records, and infers:
+
+- D NOTAM
+- FDC NOTAM
+- TFR
+
+### `regulatory.ts`
+
+Combines three search paths:
+
+- live FAR results from eCFR
+- local JO 7110.65 reference search
+- local AIM reference search
+
+### `navigation.ts`
+
+Pure local computation using airport reference coordinates:
+
+- great-circle distance
+- true heading
+- magnetic heading estimate
+- optional enroute time
+
+### `airport-hours.ts`
+
+Fetches FAA airport display HTML and attempts to parse:
+
+- tower hours
+- local vs Zulu schedule
+- timezone/DST
+- airport-use metadata
+- lighting / attendance hints
+
+Falls back to inference for major airports when the FAA page is unavailable.
+
+### `runway-info.ts`
+
+Parses runway characteristics from FAA airport display HTML and falls back to bundled airport reference data.
+
+### `datis.ts`
+
+Fetches D-ATIS entries for single or multiple airports. In practice, the UI bulk path uses `/api/atis`, while the service exposes a typed helper for direct usage.
+
+## API route pattern
+
+Primary files:
+
+- `src/app/api/route-utils.ts`
+- individual route handlers under `src/app/api/*`
+
+Typical route responsibilities:
+
+1. validate request params/body
+2. optionally clear relevant cache namespaces on `refresh=true`
+3. call a service
+4. return JSON via `jsonWithStandardHeaders()`
+
+`jsonWithStandardHeaders()` also adds helpful metadata headers such as:
+
+- `X-Source-Url`
+- `X-Fetched-At`
+- `X-Cache`
+- `Age`
+
+## Facility model
+
+Primary files:
+
+- `src/types/facility.ts`
+- `src/data/facilities.ts`
+- `src/data/approach-facilities.ts`
+- `src/data/center-airports.ts`
+
+### Facility types
+
+The main UX currently centers on three operational facility types:
+
+- **tower** — single-airport local tower context
+- **approach** — TRACON / RAPCON style multi-airport context
+- **center** — ARTCC context with mapped airport sets
+
+The type union also includes `ground`, `clearance`, and `flight_service`, but the current selector/UI filters to tower/approach/center.
+
+### ControllerFacility model
+
+```ts
+interface ControllerFacility {
+  id: string;
+  name: string;
+  type: FacilityType;
+  primaryAirport?: string;
+  position: { latitude: number; longitude: number };
+  artcc?: string;
+}
+```
+
+### Behavior by facility type
+
+- **tower:** dashboard auto-loads weather, NOTAMs, traffic, frequencies, plates, and airport stats for the primary airport
+- **approach / center:** dashboard shows a multi-airport overview first; selecting an airport drills into airport info
+
+## Data models
+
+Primary files:
+
+- `src/types/api.ts`
+- `src/types/aviation.ts`
+- `src/types/intents.ts`
+- `src/types/facility.ts`
+
+Notable model groups:
+
+- weather: `Metar`, `Taf`, `Pirep`, `WeatherBundle`
+- traffic: `TrafficTarget`
+- charts/procedures: `ApproachPlate`, `Sid`, `Star`
+- airport ops: `Frequency`, `AirportInfo`, runway/hour payloads
+- regulation: `FarReference`, `AtcProcedureReference`
+- parsing: `ParsedIntent` and per-intent subtypes
+
+Most aviation types extend the same conceptual shape:
+
+- source tracked
+- fetch timestamped
+- freshness aware
+
+## Component hierarchy
+
+### Top-level page
+
+- `src/app/page.tsx`
+  - renders `OperationsConsole`
+
+### Main dashboard shell
+
+- `OperationsConsole`
+  - `FacilitySelector`
+  - `QueryInput`
+  - query summary / envelope panel
+  - optional `FacilityOverview`
+  - one or more `ResultCard`s
+  - `StatusBar`
+
+### Result-card content components
+
+- `WeatherDisplay`
+- `AtisStrip`
+- `TrafficMap`
+- `NavigationDisplay`
+- `PlateViewer`
+- `NotamList`
+- inline frequency list
+- inline regulatory list
+
+### Reusable UI helpers
+
+- `SourceBadge`
+- `ResultCard`
+
+## UI state flow
+
+`OperationsConsole.tsx` is the main client orchestrator.
+
+It manages:
+
+- selected facility persistence (`localStorage`)
+- intent preview state
+- live submitted result state
+- multi-panel visibility
+- facility baseline data vs explicit query overrides
+- loading indicators
+- weather/traffic auto-refresh intervals
+- warning aggregation
+- airport-stats card rendering
+
+A useful mental model:
+
+- **facility baseline** populates default panels for a selected tower
+- **submitted query result** can override one or more panels
+- **airport_info** can light up several panels at once
+
+## Key files and responsibilities
+
+| File | Responsibility |
+| --- | --- |
+| `src/components/OperationsConsole.tsx` | Main client state machine and dashboard composition |
+| `src/components/FacilityOverview.tsx` | Multi-airport approach/center overview cards |
+| `src/components/QueryInput.tsx` | Text input, voice input, intent preview, suggestion chips |
+| `src/ai/intent-parser.ts` | High-level parse pipeline and clarification logic |
+| `src/ai/patterns.ts` | Regex candidate detection and compound-query routing |
+| `src/ai/entity-extractor.ts` | Structured aviation entity extraction and normalization |
+| `src/ai/llm-classifier.ts` | Optional LLM fallback classifier |
+| `src/services/orchestrator.ts` | Dispatch parsed intents to services |
+| `src/lib/fetcher.ts` | Shared retry/timeout/fetch abstraction |
+| `src/lib/cache.ts` | In-memory TTL cache with metadata |
+| `src/lib/utils.ts` | ApiResponse builders, timestamp formatting, helper utilities |
+| `src/data/sources.ts` | Canonical source registry |
+| `src/data/staleness.ts` | Freshness windows by data category |
+| `src/app/api/query/route.ts` | Full parse-and-execute endpoint |
+| `src/app/api/intent/route.ts` | Intent-preview endpoint |
+| `src/app/api/plate-proxy/route.ts` | FAA PDF proxy for iframe-safe plate viewing |
+
+## Testing and verification notes
+
+From `package.json`, the repo supports:
+
+- `npm run test` — Vitest
+- `npm run test:e2e` — Playwright
+- `npm run lint` — ESLint
+- `npm run build` — Next.js production build
+
+At the time of this documentation update, Vitest passes and ESLint reports pre-existing issues in UI components unrelated to these docs.

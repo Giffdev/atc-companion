@@ -42,7 +42,7 @@ import type { AirportHours } from "@/services/airport-hours";
 import type { Notam } from "@/types/aviation";
 
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
-const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "traffic", "navigation", "frequency", "plates", "regulatory"];
+const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "frequency", "plates", "navigation", "traffic", "regulatory"];
 
 const AUTO_REFRESH_LABELS = {
   traffic: `Live • Auto-refreshing every ${TRAFFIC_REFRESH_INTERVAL_MS / 1000}s`,
