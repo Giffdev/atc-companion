@@ -100,7 +100,7 @@ const FACILITY_INFO_PATTERN =
   /\b(?:(?:which|what)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)\s+(?:border|neighbor|adjacent|surround|next to|around|near)|\b(?:border|neighbor|adjacent|surrounding|adjoining)\s+(?:facilit(?:y|ies)|centers?|tracons?|approach(?:es)?)|\bwho\s+(?:borders?|neighbors?|is (?:adjacent|next)))\b/i;
 
 const FACILITY_AIRPORTS_PATTERN =
-  /\b(?:(?:list|show|what(?:'s| is| are)?|which)\s+(?:airports?|fields?)\s+(?:under|in|within|at|for|covered by|served by|part of)|airports?\s+(?:under|in|within|at|for)\s+(?:\w+\s+)?(?:approach|center|tracon|artcc))\b/i;
+  /\b(?:(?:list|show|what(?:'s| is| are)?|which|give me|relevant|data for)\s+(?:(?:the\s+)?(?:relevant\s+)?(?:data|info|information|weather|atis)\s+(?:for|on)\s+)?(?:airports?|fields?)\s+(?:under|in|within|at|for|covered by|served by|part of)|(?:airports?|data)\s+(?:under|in|within|at|for)\s+(?:\w+\s+)?(?:approach|center|tracon|artcc)|(?:show|give|list|display)\s+(?:me\s+)?(?:the\s+)?(?:relevant\s+)?(?:data|info|airports?|weather)\s+(?:for\s+)?(?:airports?\s+)?(?:under|in|within|at|for)\s+(?:\w+\s+)?(?:approach|center|tracon|artcc))\b/i;
 
 const detectWeatherSubtype = (input: string): WeatherSubtype => {
   const normalized = input.toLowerCase();
@@ -218,6 +218,18 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
   const airportInfoDetail = detectAirportInfoDetail(input);
   const isWeatherMinimumsQuery = WEATHER_MINIMUMS_PATTERN.test(input);
 
+  // Facility airport listing queries (list airports under X approach)
+  // Test BEFORE adjacency since "under" can appear in both contexts
+  if (FACILITY_AIRPORTS_PATTERN.test(input)) {
+    const facility = entities.airports[0];
+    return {
+      type: "facility_info",
+      confidence: 0.92,
+      facility,
+      query_type: "airports"
+    };
+  }
+
   // Facility info queries (bordering, adjacent, neighboring facilities)
   if (FACILITY_INFO_PATTERN.test(input)) {
     const facility = entities.airports[0];
@@ -230,17 +242,6 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
       confidence: 0.92,
       facility,
       query_type: queryType
-    };
-  }
-
-  // Facility airport listing queries (list airports under X approach)
-  if (FACILITY_AIRPORTS_PATTERN.test(input)) {
-    const facility = entities.airports[0];
-    return {
-      type: "facility_info",
-      confidence: 0.92,
-      facility,
-      query_type: "airports"
     };
   }
 

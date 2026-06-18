@@ -576,7 +576,11 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
               </div>
             )}
           </div>
-          <DiagramPanel diagram={diagram} airportCode={airportInfo.airport} />
+          <DiagramPanel
+            diagram={diagram}
+            airportCode={airportInfo.airport}
+            autoExpand={liveResult.intent.type === "airport_info" && liveResult.intent.detail === "runways" ? "diagram" : undefined}
+          />
         </div>
       );
     }

@@ -7,6 +7,7 @@ import { toFaaCode } from "@/data/airports";
 interface DiagramPanelProps {
   diagram: ApproachPlate | null;
   airportCode: string;
+  autoExpand?: "diagram" | "supplement";
 }
 
 const getProxiedUrl = (url: string): string => {
@@ -21,8 +22,8 @@ const getProxiedUrl = (url: string): string => {
 
 type PanelView = "none" | "diagram" | "supplement";
 
-export function DiagramPanel({ diagram, airportCode }: DiagramPanelProps) {
-  const [activeView, setActiveView] = useState<PanelView>("none");
+export function DiagramPanel({ diagram, airportCode, autoExpand }: DiagramPanelProps) {
+  const [activeView, setActiveView] = useState<PanelView>(autoExpand && diagram ? autoExpand : "none");
   const [isLoading, setIsLoading] = useState(true);
 
   const faaCode = toFaaCode(airportCode);

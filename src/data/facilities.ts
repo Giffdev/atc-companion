@@ -172,7 +172,9 @@ export const getFacilityAirports = (facilityId: string): string[] => {
 
   // Check approach facilities first (they have multiple airports)
   const approach = APPROACH_FACILITIES.find(
-    (f) => f.icao.toUpperCase() === id || f.name.toUpperCase() === id
+    (f) => f.icao.toUpperCase() === id
+      || f.name.toUpperCase() === id
+      || f.airports.some(a => a.toUpperCase() === id)
   );
   if (approach) return approach.airports;
 

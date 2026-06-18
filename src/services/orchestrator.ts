@@ -250,10 +250,14 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
       try {
         if (intent.query_type === "airports") {
           const { getFacilityById, getFacilityAirports } = await import("@/data/facilities");
+          const { findApproachFacilityByAirport } = await import("@/data/approach-facilities");
           const facility = getFacilityById(facilityId);
+          const approachFacility = !facility ? findApproachFacilityByAirport(facilityId) : null;
           const airports = getFacilityAirports(facilityId);
+          const resolvedName = facility?.name ?? approachFacility?.name ?? facilityId;
+          const resolvedType = facility?.type ?? (approachFacility ? "approach" : "approach");
           return createApiResponse(
-            { facility: facility ? { id: facility.id, name: facility.name, type: facility.type } : { id: facilityId, name: facilityId, type: "approach" }, airports, query_type: "airports" as const },
+            { facility: { id: facility?.id ?? facilityId, name: resolvedName, type: resolvedType }, airports, query_type: "airports" as const },
             ORCHESTRATOR_SOURCE,
             { fetchedAt: toIsoNow() }
           );
