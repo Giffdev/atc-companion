@@ -764,12 +764,12 @@ const renderQuerySummary = (
                     onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
                     type="button"
                   >
-                    <p className="data-label">Procedures</p>
+                    <p className="data-label">Charts &amp; Plates</p>
                     <p className="mt-2 font-data text-sm text-aviation-text">{procedureTotal > 0 ? `${procedureTotal} available` : "None found"} <span className="text-xs text-cyan-400">→ view all</span></p>
                   </button>
                 ) : (
                   <div className="rounded-xl border border-aviation-border bg-black/10 px-4 py-3">
-                    <p className="data-label">Procedures</p>
+                    <p className="data-label">Charts &amp; Plates</p>
                     <p className="mt-2 font-data text-sm text-aviation-text">{procedureTotal > 0 ? `${procedureTotal} available` : "None found"}</p>
                   </div>
                 )}

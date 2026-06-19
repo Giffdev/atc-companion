@@ -611,16 +611,27 @@ export const toIntentEntities = (entities: ExtractedEntities): IntentEntity[] =>
 export const extractEntities = (input: string, options: { defaultFromAirport?: string } = {}): ExtractedEntities => {
   const airports = extractAirportCodes(input).filter((code) => !isAllSingleLetters(code));
   const navigation = extractNavigationAirports(input, options.defaultFromAirport);
+  const procedureName = detectProcedureName(input);
 
   // If user says "my location", "my airport", "here", "my field" etc., inject the facility airport
   const facilityAirportMentioned =
     options.defaultFromAirport &&
     /\b(?:my\s+(?:airport|location|field|facility|tower|position)|(?:at|around|near)\s+(?:here|me))\b/i.test(input);
 
-  const resolvedAirports =
+  let resolvedAirports =
     facilityAirportMentioned && !airports.includes(options.defaultFromAirport!)
       ? [options.defaultFromAirport!, ...airports]
       : airports;
+
+  // If a procedure name was detected and it looks like an airport code,
+  // remove it from the airport list so it isn't used as the target airport
+  if (procedureName && resolvedAirports.length > 1) {
+    const procUpper = procedureName.split(/\s+/)[0].toUpperCase();
+    const filtered = resolvedAirports.filter((a) => a.toUpperCase() !== procUpper);
+    if (filtered.length > 0) {
+      resolvedAirports = filtered;
+    }
+  }
 
   return {
     airports: resolvedAirports,
@@ -639,7 +650,7 @@ export const extractEntities = (input: string, options: { defaultFromAirport?: s
     notamTypeFilter: detectNotamTypeFilter(input),
     frequencyType: detectFrequencyType(input),
     procedureType: detectProcedureType(input),
-    procedureName: detectProcedureName(input),
+    procedureName,
     airportInfoDetail: detectAirportInfoDetail(input)
   };
 };
