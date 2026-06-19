@@ -152,6 +152,60 @@ const KNOWN_TOWERED_AIRPORTS = new Set([
   "KEAU", "KATW", "KGRB", "KLSE", "KCWA", "KMSN"
 ]);
 
+// Static tower hours for part-time towered airports (from Chart Supplement).
+// Format: [openLocalHHMM, closeLocalHHMM] in local time. Updated per AIRAC cycle as needed.
+const STATIC_TOWER_HOURS: Record<string, [string, string]> = {
+  // Pacific Northwest
+  "KPAE": ["0600", "2200"], "KBFI": ["0600", "2200"], "KRNT": ["0700", "2100"],
+  "KOLM": ["0700", "2000"], "KTIW": ["0700", "2000"],
+  "KTTD": ["0700", "2100"], "KHIO": ["0600", "2100"], "KVUO": ["0700", "2000"],
+  "KGEG": ["0600", "2200"], "KBOI": ["0600", "2200"],
+  "KMFR": ["0600", "2100"], "KRDM": ["0700", "2000"], "KEUG": ["0600", "2200"],
+  // California
+  "KFAT": ["0600", "2200"], "KSBP": ["0700", "2100"], "KSTS": ["0700", "2000"],
+  "KCCR": ["0700", "2100"], "KHWD": ["0700", "2100"], "KSQL": ["0700", "2100"],
+  "KPAO": ["0700", "2100"], "KCRQ": ["0700", "2100"], "KSEE": ["0700", "2000"],
+  "KMYF": ["0700", "2100"], "KFUL": ["0700", "2100"], "KLGB": ["0600", "2200"],
+  "KVNY": ["0600", "2200"], "KSMO": ["0700", "2100"], "KCMA": ["0700", "2000"],
+  "KOXR": ["0700", "2000"], "KSBA": ["0600", "2200"],
+  // Southwest
+  "KPSP": ["0600", "2200"], "KDVT": ["0600", "2100"], "KFFZ": ["0600", "2100"],
+  "KIWA": ["0600", "2200"], "KCHD": ["0600", "2000"], "KGEU": ["0700", "2000"],
+  "KTUS": ["0600", "2200"], "KFLG": ["0600", "2000"], "KPRC": ["0700", "2000"],
+  "KIFP": ["0800", "1800"], "KELP": ["0600", "2200"],
+  // Texas
+  "KFTW": ["0600", "2200"], "KAFW": ["0600", "2100"], "KADS": ["0700", "2100"],
+  "KGKY": ["0700", "2100"], "KRBD": ["0600", "2200"], "KDTO": ["0700", "2100"],
+  "KACT": ["0600", "2100"], "KCLL": ["0600", "2200"], "KCRP": ["0600", "2200"],
+  "KAMA": ["0600", "2200"], "KLBB": ["0600", "2100"],
+  "KGRK": ["0600", "2200"], "KABI": ["0600", "2000"], "KSPS": ["0700", "2000"],
+  // Central
+  "KTUL": ["0600", "2200"], "KOKC": ["0600", "2200"], "KPWA": ["0700", "2100"],
+  "KLIT": ["0600", "2200"], "KFSM": ["0700", "2000"], "KSHV": ["0600", "2200"],
+  "KICT": ["0600", "2200"], "KOMA": ["0600", "2200"], "KLNK": ["0600", "2200"],
+  "KDSM": ["0600", "2200"], "KCID": ["0700", "2100"], "KMLI": ["0600", "2200"],
+  "KPIA": ["0600", "2100"], "KSPI": ["0700", "2100"], "KSGF": ["0600", "2100"],
+  "KFSD": ["0600", "2200"], "KRAP": ["0600", "2100"], "KFAR": ["0600", "2200"],
+  "KBIS": ["0700", "2100"], "KGFK": ["0700", "2100"],
+  // Great Lakes / Midwest
+  "KDAY": ["0600", "2200"], "KCMH": ["0600", "2300"], "KTOL": ["0600", "2200"],
+  "KFWA": ["0600", "2200"], "KSBN": ["0600", "2200"], "KGRR": ["0600", "2300"],
+  "KLAN": ["0600", "2200"], "KFNT": ["0600", "2100"], "KMSN": ["0600", "2200"],
+  "KATW": ["0600", "2100"], "KGRB": ["0600", "2100"], "KDLH": ["0700", "2100"],
+  "KRST": ["0700", "2100"],
+  // Southeast
+  "KJAX": ["0600", "2300"], "KDAB": ["0700", "2100"], "KMLB": ["0700", "2100"],
+  "KFMY": ["0700", "2100"], "KRSW": ["0600", "2300"], "KSRQ": ["0600", "2200"],
+  "KPIE": ["0600", "2200"], "KCHS": ["0600", "2300"], "KCAE": ["0600", "2200"],
+  "KGSP": ["0600", "2200"], "KSAV": ["0600", "2200"], "KAGS": ["0700", "2100"],
+  "KHSV": ["0600", "2200"], "KBHM": ["0600", "2200"], "KMGM": ["0600", "2100"],
+  "KCHA": ["0600", "2200"], "KTYS": ["0600", "2300"],
+  "KSDF": ["0600", "2300"], "KLEX": ["0600", "2200"],
+  // Northeast
+  "KBTR": ["0600", "2200"], "KLFT": ["0700", "2100"],
+  "KPNS": ["0600", "2200"], "KMOB": ["0600", "2200"],
+};
+
 const INVALID_TOWER_HOURS_TOKEN_PATTERN = /\b(?:APCH(?:\/DEP)?|APP(?:ROACH)?|DEP(?:ARTURE)?|GND|GROUND|DEL|DELIVERY|ATIS|CTAF|UNICOM|FSS)\b/i;
 const TOWER_HOURS_VALUE_PATTERN = /^(?:24\s*(?:HR|HOUR|HRS|HOURS)|CONTINUOUS(?:\s+OPERATION)?|\d{4}\s*(?:LOCAL|LCL|L|UTC|Z)?\s*[-–]\s*\d{4}\s*(?:LOCAL|LCL|L|UTC|Z)?(?:\s*(?:LOCAL|LCL|UTC|Z))?)$/i;
 
@@ -411,6 +465,34 @@ const inferAirportHours = (
   }
 
   if (KNOWN_TOWERED_AIRPORTS.has(icaoCode)) {
+    const staticHours = STATIC_TOWER_HOURS[icaoCode];
+    if (staticHours) {
+      const [openLocal, closeLocal] = staticHours;
+      const offsetH = parseFloat(tzInfo.utcOffset.replace("UTC", ""));
+      const toZulu = (hhmm: string) => {
+        const h = parseInt(hhmm.slice(0, 2), 10) - offsetH;
+        const m = hhmm.slice(2);
+        const norm = ((h % 24) + 24) % 24;
+        return `${Math.floor(norm).toString().padStart(2, "0")}${m}Z`;
+      };
+      return {
+        airportIcao: icaoCode,
+        airportName,
+        towerHours: `${openLocal}–${closeLocal} local`,
+        towerSchedule: {
+          openLocal, closeLocal,
+          openZulu: toZulu(openLocal), closeZulu: toZulu(closeLocal),
+          is24Hour: false, rawText: `${openLocal}-${closeLocal} LCL`
+        },
+        timezone: { iana: tz, ...tzInfo },
+        isTowered: true,
+        airportUse: "Public",
+        attendanceSchedule: null,
+        lightingSchedule: null,
+        rawChartSupplement: null,
+        source: "Inferred from Chart Supplement static data (NFDC temporarily unavailable)"
+      };
+    }
     return {
       airportIcao: icaoCode,
       airportName,
