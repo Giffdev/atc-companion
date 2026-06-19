@@ -478,13 +478,6 @@ function PlateViewerBody({ bestMatch, plates, referenceTime, selectedProcedureTy
         </div>
       </div>
 
-      <p className="hidden text-xs text-aviation-muted sm:block">
-        Your browser doesn&apos;t support inline PDF viewing.{" "}
-        <a className="underline underline-offset-2" href={selectedPlateUrl} rel="noreferrer" target="_blank">
-          Open the chart in a new tab
-        </a>
-        .
-      </p>
     </div>
   );
 }

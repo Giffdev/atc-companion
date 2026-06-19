@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-
+import { useEffect, useRef, useState } from "react";
 import type { TrafficTarget } from "@/types/aviation";
 
 type TrafficMapProps = {
@@ -13,273 +12,164 @@ type TrafficMapProps = {
 
 const getAltitudeTone = (altitudeFeet: number | null): string => {
   if (!altitudeFeet) return "#94a3b8";
-  if (altitudeFeet < 3000) return "#22c55e";   // Green — pattern altitude
-  if (altitudeFeet < 6000) return "#06b6d4";   // Cyan — low approach
-  if (altitudeFeet < 10000) return "#3b82f6";  // Blue — mid
-  return "#f59e0b";                            // Amber — high
+  if (altitudeFeet < 3000) return "#22c55e";
+  if (altitudeFeet < 6000) return "#06b6d4";
+  if (altitudeFeet < 10000) return "#3b82f6";
+  return "#f59e0b";
 };
 
-const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3] as const;
-const DEFAULT_ZOOM_INDEX = 2;
-
-const SVG_WIDTH = 320;
-const SVG_HEIGHT = 240;
-const MAP_CENTER_X = SVG_WIDTH / 2;
-const MAP_CENTER_Y = SVG_HEIGHT / 2;
-const OUTER_RING_RADIUS = 90;
-const PLOT_RADIUS = OUTER_RING_RADIUS * 0.85;
-const DEFAULT_VISIBLE_RANGE_NM = 8;
-
-type NormalizedTarget = { target: TrafficTarget; x: number; y: number };
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-const normalizeTraffic = (
-  traffic: TrafficTarget[],
-  zoom: number,
-  anchorPosition?: { latitude: number; longitude: number },
-  defaultRangeNm = DEFAULT_VISIBLE_RANGE_NM
-): { targets: NormalizedTarget[]; airportPx: { x: number; y: number } | null; nmPerPx: number } => {
-  const positions = traffic
-    .map((target) => target.position)
-    .filter((position): position is NonNullable<typeof position> => position !== null);
-
-  if (!anchorPosition && positions.length === 0) {
-    return { targets: [], airportPx: null, nmPerPx: 0 };
-  }
-
-  const referencePosition = anchorPosition ?? {
-    latitude: positions.reduce((sum, position) => sum + position.latitude, 0) / positions.length,
-    longitude: positions.reduce((sum, position) => sum + position.longitude, 0) / positions.length
-  };
-
-  const cosLatitude = Math.cos((referencePosition.latitude * Math.PI) / 180);
-  const targetVectors = traffic.map((target) => {
-    if (!target.position) {
-      return { target, distanceNm: 0, xNm: 0, yNm: 0 };
-    }
-
-    const yNm = (target.position.latitude - referencePosition.latitude) * 60;
-    const xNm = (target.position.longitude - referencePosition.longitude) * 60 * cosLatitude;
-
-    return {
-      target,
-      distanceNm: Math.hypot(xNm, yNm),
-      xNm,
-      yNm
-    };
-  });
-
-  const farthestTargetNm = targetVectors.reduce((maxDistance, { distanceNm }) => Math.max(maxDistance, distanceNm), 0);
-  const baseVisibleRangeNm = Math.max(defaultRangeNm, farthestTargetNm / 0.85);
-  const visibleRangeNm = Math.max(1, baseVisibleRangeNm / zoom);
-  const nmPerPx = visibleRangeNm / OUTER_RING_RADIUS;
-  const pxPerNm = PLOT_RADIUS / visibleRangeNm;
-
-  const targets = targetVectors
-    .filter(({ target, distanceNm }) => !target.position || distanceNm <= visibleRangeNm)
-    .map(({ target, xNm, yNm }) => ({
-      target,
-      x: MAP_CENTER_X + xNm * pxPerNm,
-      y: MAP_CENTER_Y - yNm * pxPerNm
-    }));
-
-  return {
-    targets,
-    airportPx: { x: MAP_CENTER_X, y: MAP_CENTER_Y },
-    nmPerPx
-  };
-};
-
-const AircraftGlyph = ({ trackDegrees }: { trackDegrees: number | null }) => (
-  <g style={{ transform: `rotate(${trackDegrees ?? 0}deg)`, transformOrigin: "center" }}>
-    <path d="M0,-11 L4.5,10 L0,6.5 L-4.5,10 Z" fill="currentColor" stroke="rgba(15,23,42,0.9)" strokeWidth="1.2" />
-  </g>
-);
+const AIRCRAFT_SVG = (trackDeg: number, color: string) =>
+  `<svg width="24" height="24" viewBox="-12 -12 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g transform="rotate(${trackDeg ?? 0})">
+      <path d="M0,-9 L3.5,8 L0,5.5 L-3.5,8 Z" fill="${color}" stroke="#0f172a" stroke-width="1"/>
+    </g>
+  </svg>`;
 
 export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRangeNm = 10 }: TrafficMapProps) {
-  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
-  const [hoveredTarget, setHoveredTarget] = useState<string | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState<TrafficTarget | null>(null);
 
-  const zoom = ZOOM_LEVELS[zoomIndex];
-  const { targets: normalizedTraffic, nmPerPx } = normalizeTraffic(traffic, zoom, airportPosition, defaultRangeNm);
-  const hoveredTraffic = normalizedTraffic.find(({ target }) => target.icao24 === hoveredTarget) ?? null;
+  const center: [number, number] = airportPosition
+    ? [airportPosition.latitude, airportPosition.longitude]
+    : traffic.length > 0 && traffic[0].position
+      ? [traffic[0].position.latitude, traffic[0].position.longitude]
+      : [39.8283, -98.5795];
 
-  const ringNm = nmPerPx > 0 ? (OUTER_RING_RADIUS * nmPerPx).toFixed(0) : "";
+  useEffect(() => {
+    if (!mapRef.current) return;
 
-  const resetView = () => {
-    setZoomIndex(DEFAULT_ZOOM_INDEX);
-    setHoveredTarget(null);
-  };
+    let cancelled = false;
+
+    const initMap = async () => {
+      const L = (await import("leaflet")).default;
+      await import("leaflet/dist/leaflet.css");
+
+      if (cancelled || !mapRef.current) return;
+
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+      }
+
+      const map = L.map(mapRef.current, {
+        center,
+        zoom: defaultRangeNm <= 10 ? 11 : defaultRangeNm <= 20 ? 10 : 9,
+        zoomControl: false,
+        attributionControl: false
+      });
+
+      L.control.zoom({ position: "topright" }).addTo(map);
+
+      // Dark CartoDB tile layer
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 19
+      }).addTo(map);
+
+      // Airport marker
+      if (airportPosition) {
+        const airportIcon = L.divIcon({
+          html: `<div style="width:12px;height:12px;border:2px solid #22c55e;border-radius:50%;background:rgba(34,197,94,0.2);"></div>`,
+          className: "",
+          iconSize: [12, 12],
+          iconAnchor: [6, 6]
+        });
+        L.marker([airportPosition.latitude, airportPosition.longitude], { icon: airportIcon })
+          .addTo(map)
+          .bindTooltip(airportIcao ?? "Airport", { permanent: true, direction: "right", className: "leaflet-tooltip-airport" });
+      }
+
+      // Traffic markers
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+
+      traffic.forEach((target) => {
+        if (!target.position) return;
+        const color = getAltitudeTone(target.altitudeFeet);
+        const icon = L.divIcon({
+          html: AIRCRAFT_SVG(target.trackDegrees ?? 0, color),
+          className: "",
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        const marker = L.marker([target.position.latitude, target.position.longitude], { icon })
+          .addTo(map)
+          .on("click", () => setSelectedTarget(target));
+
+        const label = target.callsign ?? target.icao24.toUpperCase();
+        marker.bindTooltip(
+          `<strong>${label}</strong><br/>${target.altitudeFeet?.toLocaleString() ?? "UNK"} ft · ${target.groundspeedKnots ?? "--"} kt`,
+          { direction: "top", className: "leaflet-tooltip-traffic" }
+        );
+        markersRef.current.push(marker);
+      });
+
+      leafletMapRef.current = map;
+    };
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traffic, airportPosition?.latitude, airportPosition?.longitude]);
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-aviation-border bg-black/20 p-3">
-        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
+      <div className="overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-3">
             <span className="font-data text-xs text-aviation-muted">
-              {zoom}x{ringNm ? ` · ~${ringNm} NM outer ring` : ""}
+              {traffic.length} target{traffic.length !== 1 ? "s" : ""} · ~{defaultRangeNm} NM
             </span>
             {airportIcao && (
-              <span className="font-data text-xs text-cyan-300">
-                ⊕ {airportIcao}
-              </span>
+              <span className="font-data text-xs text-cyan-300">⊕ {airportIcao}</span>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-muted transition hover:border-cyan-400/40 hover:text-cyan-200"
-              onClick={resetView}
-              title="Reset view"
-              type="button"
-            >
-              ⟳
-            </button>
-            <button
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
-              disabled={zoomIndex === 0}
-              onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-              title="Zoom out"
-              type="button"
-            >
-              −
-            </button>
-            <button
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-aviation-border bg-black/30 font-data text-sm text-aviation-text transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-30"
-              disabled={zoomIndex === ZOOM_LEVELS.length - 1}
-              onClick={() => setZoomIndex((i) => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
-              title="Zoom in"
-              type="button"
-            >
-              +
-            </button>
           </div>
         </div>
 
-        <svg
-          className="h-[260px] w-full touch-none"
-          onPointerDown={() => setHoveredTarget(null)}
-          role="img"
-          viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        >
-          <title>ADS-B traffic map{airportIcao ? ` centered on ${airportIcao}` : ""}</title>
-          <rect fill="#050914" height={SVG_HEIGHT} rx="18" width={SVG_WIDTH} />
-
-          {/* Range rings with NM labels */}
-          {(() => {
-            const outerNm = nmPerPx > 0 ? Math.round(OUTER_RING_RADIUS * nmPerPx) : 0;
-            const midNm = nmPerPx > 0 ? Math.round(60 * nmPerPx) : 0;
-            const innerNm = nmPerPx > 0 ? Math.round(30 * nmPerPx) : 0;
-            return (
-              <>
-                <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} fill="none" r="90" stroke="rgba(34,197,94,0.18)" strokeDasharray="4 3" />
-                <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} fill="none" r="60" stroke="rgba(34,197,94,0.14)" strokeDasharray="4 3" />
-                <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} fill="none" r="30" stroke="rgba(34,197,94,0.10)" strokeDasharray="4 3" />
-                <path d={`M${MAP_CENTER_X} ${MAP_CENTER_Y - OUTER_RING_RADIUS}v${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
-                <path d={`M${MAP_CENTER_X - OUTER_RING_RADIUS} ${MAP_CENTER_Y}h${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
-                {outerNm > 0 && <text fill="rgba(34,197,94,0.45)" fontSize="9" fontFamily="monospace" x={MAP_CENTER_X + 92} y={MAP_CENTER_Y + 3}>{outerNm}</text>}
-                {midNm > 0 && <text fill="rgba(34,197,94,0.4)" fontSize="9" fontFamily="monospace" x={MAP_CENTER_X + 62} y={MAP_CENTER_Y + 3}>{midNm}</text>}
-                {innerNm > 0 && <text fill="rgba(34,197,94,0.35)" fontSize="9" fontFamily="monospace" x={MAP_CENTER_X + 32} y={MAP_CENTER_Y + 3}>{innerNm}</text>}
-              </>
-            );
-          })()}
-
-          {/* Compass labels */}
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={MAP_CENTER_X} y={MAP_CENTER_Y - OUTER_RING_RADIUS - 6}>N</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={MAP_CENTER_X} y={MAP_CENTER_Y + OUTER_RING_RADIUS + 14}>S</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={MAP_CENTER_X - OUTER_RING_RADIUS - 6} y={MAP_CENTER_Y + 3}>W</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" x={MAP_CENTER_X + OUTER_RING_RADIUS + 6} y={MAP_CENTER_Y + 3}>E</text>
-
-          {/* Airport reference marker at center */}
-          {(airportPosition || airportIcao) && (
-            <g>
-              <line x1={MAP_CENTER_X - 8} y1={MAP_CENTER_Y} x2={MAP_CENTER_X + 8} y2={MAP_CENTER_Y} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
-              <line x1={MAP_CENTER_X} y1={MAP_CENTER_Y - 8} x2={MAP_CENTER_X} y2={MAP_CENTER_Y + 8} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
-              <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} r="4" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeOpacity="0.5" />
-              {airportIcao && (
-                <text fill="#22c55e" fillOpacity="0.7" fontSize="12" fontFamily="monospace" x={MAP_CENTER_X + 10} y={MAP_CENTER_Y - 6}>
-                  {airportIcao}
-                </text>
-              )}
-            </g>
-          )}
-
-          {/* Traffic targets */}
-          {normalizedTraffic.map(({ target, x, y }) => {
-            const isHovered = hoveredTarget === target.icao24;
-            return (
-              <g
-                key={target.icao24}
-                style={{ color: getAltitudeTone(target.altitudeFeet) }}
-                transform={`translate(${x} ${y})`}
-                onPointerEnter={() => setHoveredTarget(target.icao24)}
-                onPointerLeave={() => setHoveredTarget(null)}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  setHoveredTarget(target.icao24);
-                }}
-                className="cursor-pointer"
-              >
-                <circle r="14" fill="transparent" />
-                <AircraftGlyph trackDegrees={target.trackDegrees} />
-                {isHovered && <circle r="16" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" />}
-              </g>
-            );
-          })}
-
-          {hoveredTraffic && (() => {
-            const label = hoveredTraffic.target.callsign ?? hoveredTraffic.target.icao24.toUpperCase();
-            const detail = `${hoveredTraffic.target.altitudeFeet?.toLocaleString() ?? "UNK"} ft · ${hoveredTraffic.target.groundspeedKnots ?? "--"} kt`;
-            const tooltipWidth = Math.max(116, Math.max(label.length * 7.2 + 20, detail.length * 6.4 + 20));
-            const tooltipHeight = 40;
-            const tooltipX = clamp(
-              hoveredTraffic.x + 14 > SVG_WIDTH - tooltipWidth - 8 ? hoveredTraffic.x - tooltipWidth - 14 : hoveredTraffic.x + 14,
-              8,
-              SVG_WIDTH - tooltipWidth - 8
-            );
-            const tooltipY = clamp(hoveredTraffic.y - tooltipHeight - 12, 8, SVG_HEIGHT - tooltipHeight - 8);
-
-            return (
-              <g pointerEvents="none">
-                <rect
-                  x={tooltipX}
-                  y={tooltipY}
-                  width={tooltipWidth}
-                  height={tooltipHeight}
-                  rx="6"
-                  fill="#0f172a"
-                  fillOpacity="0.95"
-                  stroke="rgba(34,197,94,0.35)"
-                  strokeWidth="0.75"
-                />
-                <text className="font-data" fill="#e2e8f0" fontSize="11" x={tooltipX + 10} y={tooltipY + 15}>
-                  {label}
-                </text>
-                <text className="font-data" fill="#94a3b8" fontSize="10" x={tooltipX + 10} y={tooltipY + 29}>
-                  {detail}
-                </text>
-              </g>
-            );
-          })()}
-
-          {/* Empty state */}
-          {normalizedTraffic.length === 0 && (
-            <text fill="#64748b" fontSize="12" textAnchor="middle" x={SVG_WIDTH / 2} y={SVG_HEIGHT / 2}>
-              No traffic targets
-            </text>
-          )}
-        </svg>
+        <div ref={mapRef} className="h-[320px] w-full sm:h-[400px]" />
 
         {/* Legend */}
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-aviation-muted">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs text-aviation-muted">
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#22c55e" }} />{"<3k"}</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#06b6d4" }} />3-6k</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#3b82f6" }} />6-10k</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#f59e0b" }} />{">10k ft"}</span>
-          <span className="w-full sm:ml-auto sm:w-auto">Hover or tap a target for details</span>
+          <span className="hidden sm:inline sm:ml-auto">Click a target for details</span>
         </div>
       </div>
 
+      {/* Selected target detail */}
+      {selectedTarget && (
+        <div className="rounded-2xl border border-cyan-400/30 bg-black/30 p-3">
+          <div className="flex items-center justify-between">
+            <p className="font-data text-sm font-semibold text-aviation-text">
+              {selectedTarget.callsign ?? selectedTarget.icao24.toUpperCase()}
+            </p>
+            <button
+              className="text-xs text-aviation-muted hover:text-aviation-text"
+              onClick={() => setSelectedTarget(null)}
+              type="button"
+            >✕</button>
+          </div>
+          <p className="mt-1 font-data text-xs text-aviation-muted">
+            {selectedTarget.altitudeFeet?.toLocaleString() ?? "Unknown"} ft ·{" "}
+            {selectedTarget.groundspeedKnots ?? "--"} kt ·{" "}
+            HDG {selectedTarget.trackDegrees ?? "--"}° ·{" "}
+            {selectedTarget.verticalRateFpm ? `${selectedTarget.verticalRateFpm > 0 ? "+" : ""}${selectedTarget.verticalRateFpm} fpm` : "level"}
+            {selectedTarget.onGround ? " · GND" : ""}
+          </p>
+        </div>
+      )}
+
+      {/* Traffic list */}
       {traffic.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[...traffic].sort((a, b) => (a.altitudeFeet ?? -1) - (b.altitudeFeet ?? -1)).map((target) => (
@@ -299,3 +189,4 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
     </div>
   );
 }
+
