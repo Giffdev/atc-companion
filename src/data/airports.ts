@@ -1225,6 +1225,26 @@ const hasCityContextMatch = (normalizedInput: string, airport: AirportReference)
   const city = normalizeAirportLookupKey(airport.city);
   if (!city) return false;
 
+  // Detect if the user specified a state context
+  let inputStateAbbrev: string | null = null;
+  const stateAbbrMatch = normalizedInput.match(/\bIN\s+([A-Z]{2})\b/);
+  if (stateAbbrMatch) {
+    inputStateAbbrev = stateAbbrMatch[1];
+  } else {
+    for (const [stateName, abbrev] of Object.entries(STATE_NAME_TO_ABBREV)) {
+      if (normalizedInput.includes(stateName)) {
+        inputStateAbbrev = abbrev;
+        break;
+      }
+    }
+  }
+
+  // If a state was specified and this airport is NOT in that state, reject it
+  if (inputStateAbbrev && airport.state !== inputStateAbbrev) return false;
+
+  // If a state was specified and this airport IS in that state, it's a match
+  if (inputStateAbbrev && airport.state === inputStateAbbrev) return true;
+
   // Direct city name match
   if (normalizedInput.includes(city)) return true;
 
@@ -1237,15 +1257,6 @@ const hasCityContextMatch = (normalizedInput: string, airport: AirportReference)
         if (city.includes(expansion) || expansion.includes(city)) return true;
       }
     }
-  }
-
-  // Check state abbreviation context (e.g., "in MO", "in NY")
-  const stateMatch = normalizedInput.match(/\bIN\s+([A-Z]{2})\b/);
-  if (stateMatch && airport.state === stateMatch[1]) return true;
-
-  // Check full state name anywhere in input (e.g., "portland maine", "springfield illinois")
-  for (const [stateName, stateAbbrev] of Object.entries(STATE_NAME_TO_ABBREV)) {
-    if (normalizedInput.includes(stateName) && airport.state === stateAbbrev) return true;
   }
 
   return false;
