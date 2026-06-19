@@ -109,7 +109,7 @@ const executeAirportInfo = async (
   intent: Extract<ParsedIntent, { type: "airport_info" }>,
   options: ExecuteQueryOptions = {}
 ): Promise<ApiResponse<AirportInfoQueryPayload>> => {
-  const fetchHours = intent.detail === "hours" || intent.detail === "all" || !intent.detail;
+  const fetchHours = true; // Always include tower hours in facility overview
   const [weather, frequencies, plates, diagram, hours, runwayDetails, sids, stars, odps] = await Promise.all([
     getWeather(intent.airport, { bypassCache: options.bypassCache }),
     getFrequencies(intent.airport),
