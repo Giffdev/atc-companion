@@ -94,7 +94,7 @@ const normalizeTraffic = (
 
 const AircraftGlyph = ({ trackDegrees }: { trackDegrees: number | null }) => (
   <g style={{ transform: `rotate(${trackDegrees ?? 0}deg)`, transformOrigin: "center" }}>
-    <path d="M0 -10 3 -2 10 0 3 2 0 10 -3 2 -10 0 -3 -2Z" fill="currentColor" />
+    <path d="M0,-8 L3,8 L0,5 L-3,8 Z" fill="currentColor" />
   </g>
 );
 
@@ -104,6 +104,8 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
+
+  const [hoveredTarget, setHoveredTarget] = useState<string | null>(null);
 
   const zoom = ZOOM_LEVELS[zoomIndex];
   const { targets: normalizedTraffic, airportPx, nmPerPx } = normalizeTraffic(traffic, zoom, panOffset, airportPosition);
@@ -206,20 +208,34 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
           <title>ADS-B traffic map{airportIcao ? ` centered on ${airportIcao}` : ""}</title>
           <rect fill="#050914" height={SVG_HEIGHT} rx="18" width={SVG_WIDTH} />
 
-          {/* Range rings */}
-          <circle cx={SVG_WIDTH / 2} cy={SVG_HEIGHT / 2} fill="none" r="90" stroke="rgba(34,197,94,0.15)" strokeDasharray="4 3" />
-          <circle cx={SVG_WIDTH / 2} cy={SVG_HEIGHT / 2} fill="none" r="60" stroke="rgba(34,197,94,0.12)" strokeDasharray="4 3" />
-          <circle cx={SVG_WIDTH / 2} cy={SVG_HEIGHT / 2} fill="none" r="30" stroke="rgba(34,197,94,0.10)" strokeDasharray="4 3" />
-
-          {/* Crosshair */}
-          <path d={`M${SVG_WIDTH / 2} ${PADDING}v${SVG_HEIGHT - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
-          <path d={`M${PADDING} ${SVG_HEIGHT / 2}h${SVG_WIDTH - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
+          {/* Range rings — centered on airport or SVG center */}
+          {(() => {
+            const cx = airportPx?.x ?? SVG_WIDTH / 2;
+            const cy = airportPx?.y ?? SVG_HEIGHT / 2;
+            return (
+              <>
+                <circle cx={cx} cy={cy} fill="none" r="90" stroke="rgba(34,197,94,0.15)" strokeDasharray="4 3" />
+                <circle cx={cx} cy={cy} fill="none" r="60" stroke="rgba(34,197,94,0.12)" strokeDasharray="4 3" />
+                <circle cx={cx} cy={cy} fill="none" r="30" stroke="rgba(34,197,94,0.10)" strokeDasharray="4 3" />
+                <path d={`M${cx} ${PADDING}v${SVG_HEIGHT - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
+                <path d={`M${PADDING} ${cy}h${SVG_WIDTH - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
+              </>
+            );
+          })()}
 
           {/* Compass labels */}
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={SVG_WIDTH / 2} y={PADDING - 4}>N</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={SVG_WIDTH / 2} y={SVG_HEIGHT - PADDING + 12}>S</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={PADDING - 5} y={SVG_HEIGHT / 2 + 3}>W</text>
-          <text fill="rgba(34,197,94,0.35)" fontSize="12" x={SVG_WIDTH - PADDING + 5} y={SVG_HEIGHT / 2 + 3}>E</text>
+          {(() => {
+            const cx = airportPx?.x ?? SVG_WIDTH / 2;
+            const cy = airportPx?.y ?? SVG_HEIGHT / 2;
+            return (
+              <>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.max(10, cy - 95)}>N</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.min(SVG_HEIGHT - 4, cy + 103)}>S</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={Math.max(10, cx - 95)} y={cy + 3}>W</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" x={Math.min(SVG_WIDTH - 10, cx + 95)} y={cy + 3}>E</text>
+              </>
+            );
+          })()}
 
           {/* Airport reference marker */}
           {airportPx && (
@@ -235,17 +251,33 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
           )}
 
           {/* Traffic targets */}
-          {normalizedTraffic.map(({ target, x, y }) => (
-            <g key={target.icao24} style={{ color: getAltitudeTone(target.altitudeFeet) }} transform={`translate(${x} ${y})`}>
-              <AircraftGlyph trackDegrees={target.trackDegrees} />
-              <text className="font-data" fill="#e2e8f0" fontSize="12" x="14" y="-2">
-                {target.callsign ?? target.icao24.toUpperCase()}
-              </text>
-              <text className="font-data" fill="#94a3b8" fontSize="12" x="14" y="12">
-                {target.altitudeFeet?.toLocaleString() ?? "UNK"} ft
-              </text>
-            </g>
-          ))}
+          {normalizedTraffic.map(({ target, x, y }) => {
+            const isHovered = hoveredTarget === target.icao24;
+            return (
+              <g
+                key={target.icao24}
+                style={{ color: getAltitudeTone(target.altitudeFeet) }}
+                transform={`translate(${x} ${y})`}
+                onPointerEnter={() => setHoveredTarget(target.icao24)}
+                onPointerLeave={() => setHoveredTarget(null)}
+                className="cursor-pointer"
+              >
+                <circle r="12" fill="transparent" />
+                <AircraftGlyph trackDegrees={target.trackDegrees} />
+                {isHovered && (
+                  <g>
+                    <rect x="12" y="-18" width={Math.max(80, (target.callsign ?? target.icao24).length * 8 + 16)} height="34" rx="4" fill="#0f172a" fillOpacity="0.92" stroke="rgba(34,197,94,0.3)" strokeWidth="0.5" />
+                    <text className="font-data" fill="#e2e8f0" fontSize="11" x="16" y="-4">
+                      {target.callsign ?? target.icao24.toUpperCase()}
+                    </text>
+                    <text className="font-data" fill="#94a3b8" fontSize="10" x="16" y="10">
+                      {target.altitudeFeet?.toLocaleString() ?? "UNK"}ft · {target.groundspeedKnots ?? "--"}kt
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
 
           {/* Empty state */}
           {normalizedTraffic.length === 0 && (

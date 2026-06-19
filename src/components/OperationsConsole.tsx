@@ -653,23 +653,41 @@ const renderQuerySummary = (
               </div>
             )}
 
-            {/* Frequencies action link */}
-            {onFollowUp ? (
-              <button
-                className="flex items-center justify-between rounded-lg border border-aviation-border bg-black/10 px-3 py-2 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
-                type="button"
-              >
-                <span className="font-data text-sm text-aviation-text">
-                  Frequencies{freqCount > 0 ? ` (${freqCount})` : ""}
-                </span>
-                <span className="text-xs text-cyan-400">→ view</span>
-              </button>
-            ) : (
-              <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                <span className="font-data text-sm text-aviation-text">Frequencies: {freqCount}</span>
-              </div>
-            )}
+            {/* Procedures + Frequencies quick links */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {onFollowUp ? (
+                <button
+                  className="flex items-center justify-between rounded-lg border border-aviation-border bg-black/10 px-3 py-2 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                  onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
+                  type="button"
+                >
+                  <span className="font-data text-sm text-aviation-text">
+                    Procedures{procedureTotal > 0 ? ` (${procedureTotal})` : ""}
+                  </span>
+                  <span className="text-xs text-cyan-400">→ view</span>
+                </button>
+              ) : (
+                <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                  <span className="font-data text-sm text-aviation-text">Procedures: {procedureTotal}</span>
+                </div>
+              )}
+              {onFollowUp ? (
+                <button
+                  className="flex items-center justify-between rounded-lg border border-aviation-border bg-black/10 px-3 py-2 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                  onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
+                  type="button"
+                >
+                  <span className="font-data text-sm text-aviation-text">
+                    Frequencies{freqCount > 0 ? ` (${freqCount})` : ""}
+                  </span>
+                  <span className="text-xs text-cyan-400">→ view</span>
+                </button>
+              ) : (
+                <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                  <span className="font-data text-sm text-aviation-text">Frequencies: {freqCount}</span>
+                </div>
+              )}
+            </div>
 
             {hours && (
               <p className="text-xs text-aviation-muted">Source: {hours.source}{hours.timezone?.isDst ? " · DST active" : ""}</p>
