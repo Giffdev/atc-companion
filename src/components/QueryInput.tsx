@@ -246,11 +246,8 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           <div>
             <p className="data-label">Query Console</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-aviation-text md:text-4xl">
-              Type or speak your next ATC query.
+              Type or speak your next query.
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-aviation-muted md:text-base">
-              Input is tuned for concise operational phrasing, with intent parsing previewed before dispatch. No light mode, no clutter, no hidden provenance.
-            </p>
           </div>
 
           <div className="hidden flex-wrap items-center gap-2 text-xs text-aviation-muted sm:flex">

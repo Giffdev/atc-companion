@@ -122,9 +122,9 @@ export function FacilitySelector({ selectedFacility, onSelect }: FacilitySelecto
                     <span className="sr-only">Search facilities</span>
                     <input
                       autoFocus
-                      className="h-12 w-full rounded-2xl border border-aviation-border bg-[#0b1526] px-4 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70"
+                      className="h-12 w-full rounded-2xl border border-aviation-border bg-[#0b1526] px-3 font-data text-xs text-aviation-text placeholder:text-aviation-muted/70 sm:px-4 sm:text-sm"
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search by ICAO, airport, city, or type"
+                      placeholder="ICAO, name, or city"
                       type="text"
                       value={query}
                     />
