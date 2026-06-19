@@ -231,7 +231,19 @@ Fetches traffic state vectors around:
 - an airport-derived bounding box, or
 - explicit bounds
 
-Upstream: OpenSky Network.
+Upstream: ADSB.fi (primary, no auth required), OpenSky Network (fallback).
+
+### `TrafficMap.tsx`
+
+SVG-based radar display:
+
+- Airport always at center (`MAP_CENTER_X/Y`)
+- `normalizeTraffic()` positions targets relative to airport, scales to fit within range rings
+- Directional arrow glyphs (pointing in heading direction)
+- Three concentric range rings with NM distance labels
+- `defaultRangeNm` prop: 10 for airports, 30 for approach/center
+- Hover/tap tooltip system showing callsign, altitude, speed
+- Targets outside visible range filtered out
 
 ### `plates.ts`
 
@@ -292,11 +304,56 @@ Falls back to inference for major airports when the FAA page is unavailable.
 
 ### `runway-info.ts`
 
-Parses runway characteristics from FAA airport display HTML and falls back to bundled airport reference data.
+Parses runway characteristics from FAA airport display HTML:
+
+- Extracts runway sections by div ID (`runway_16_34`) or heading regex
+- Parses dimensions, surface type, lighting from table cell pairs
+- Three-tier fallback chain:
+  1. **FAA NFDC HTML parsing** — full details (length, width, surface, lighting)
+  2. **Approach plate inference** (`inferRunwaysFromPlates`) — derives runway designators from procedure names (e.g., "ILS RWY 16" → 16/34), pairs reciprocals
+  3. **Static airport data** — bundled runway designators for a few major airports
 
 ### `datis.ts`
 
 Fetches D-ATIS entries for single or multiple airports. In practice, the UI bulk path uses `/api/atis`, while the service exposes a typed helper for direct usage.
+
+## Airport Name Resolution
+
+Primary file: `src/data/airports.ts`
+
+### Key generation (`createAirportSearchKeys`)
+
+For each airport, generates search keys from:
+
+- Full name (exact match)
+- Stripped name (without "Airport", "International", etc.)
+- 2-3 word sub-phrases from name (≥8 chars)
+- Single distinctive words from name (≥6 chars, not in stopword list)
+- City name (as a partial key)
+
+### Matching (`findAirportReferencesInText`)
+
+Matches input text against all airport keys with:
+
+- Word-boundary-aware regex matching
+- Relaxed end-boundary for keys ≥8 chars
+- Sorting by: position → full-match vs partial → key length → city context
+
+### City context disambiguation (`hasCityContextMatch`)
+
+Checks if the input contains location hints that match an airport:
+
+- Direct city name (e.g., "kansas city" → KMKC)
+- City abbreviation map (KC, LA, SF, PDX, SEA, NYC, etc.)
+- State code pattern ("in MO", "in NY")
+
+### Ambiguity detection (`detectAirportAmbiguity`)
+
+Flags when multiple airports share the same name-derived key without disambiguation:
+
+- Only checks name-word keys (not city keys — cities naturally have multiple airports)
+- Returns candidate list for clarification prompt
+- Returns null when city context resolves the ambiguity
 
 ## API route pattern
 
