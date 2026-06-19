@@ -263,7 +263,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           <label className="space-y-2">
             <span className="data-label">Operational Query</span>
             <input
-              className="h-16 w-full rounded-2xl border border-aviation-border bg-black/30 px-4 font-data text-base text-aviation-text placeholder:text-aviation-muted/70 sm:px-5"
+              className="h-16 w-full rounded-2xl border border-aviation-border bg-black/30 px-4 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70 sm:text-base sm:px-5"
               disabled={isSubmitting}
               onChange={(event) => updateQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -272,7 +272,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
                   handleSubmit();
                 }
               }}
-              placeholder="Example: METAR and TAF for KSEA"
+              placeholder="e.g. METAR for KSEA, ILS 14R at BFI…"
               type="text"
               value={query}
             />
