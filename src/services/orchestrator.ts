@@ -6,7 +6,7 @@ import { getAirportHours, type AirportHours } from "@/services/airport-hours";
 import { getFrequencies } from "@/services/frequencies";
 import { getNavigationBetween } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
-import { getAirportDiagram, getPlates, getSids, getStars } from "@/services/plates";
+import { getAirportDiagram, getOdps, getPlates, getSids, getStars } from "@/services/plates";
 import { searchFars } from "@/services/regulatory";
 import { getAirportRunways, type AirportRunways } from "@/services/runway-info";
 import { getTraffic } from "@/services/traffic";
@@ -174,6 +174,10 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
 
       if (intent.procedure_type === "STAR") {
         return getStars(intent.airport);
+      }
+
+      if (intent.procedure_type === "ODP") {
+        return getOdps(intent.airport);
       }
 
       return getPlates({

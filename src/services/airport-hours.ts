@@ -4,6 +4,7 @@ import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
+import { collapseWhitespace, extractTableCellPairs, findFirstPairValue, stripHtmlToText } from "@/services/nfdc-html";
 
 const NASR_SOURCE = getDataSource("faaNasr");
 const NASR_SOURCE_URL = "https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp";
@@ -238,57 +239,70 @@ const parseTowerSchedule = (rawText: string, tz: string): TowerSchedule | null =
   return null;
 };
 
-const parseAirportHoursFromHtml = (
+const normalizeFieldValue = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = collapseWhitespace(value).replace(/\b(?:&NBSP;|\u00A0)\b/gi, "").trim();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const extractCommunicationsSection = (html: string): string => {
+  const match = html.match(/<div\b[^>]*id=["']communications["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*tab-pane|<\/body>)/i);
+  return match?.[1] ?? html;
+};
+
+const findTowerHoursText = (html: string, pairs: Array<{ label: string; value: string }>): string | null => {
+  const structuredTowerHours = normalizeFieldValue(
+    findFirstPairValue(pairs, (label) => label === "tower hours" || label.endsWith(" tower hours"))
+  );
+  if (structuredTowerHours) {
+    return structuredTowerHours;
+  }
+
+  const pageText = stripHtmlToText(html);
+  const inlineTowerHours = pageText.match(/\b(?:ATCT|TOWER)\s*(?:HOURS?|HRS?)\b\s*[:\-–]?\s*([A-Z0-9 \-–]+)/i)?.[1];
+  if (inlineTowerHours) {
+    return normalizeFieldValue(inlineTowerHours);
+  }
+
+  const nearbyTowerHours = pageText.match(/\bTOWER\s*HOURS\b[\s\S]{0,40}?(24\s*(?:HR|HOUR|HRS|HOURS)|CONTINUOUS|\d{4}\s*[-–]\s*\d{4}(?:\s*(?:LOCAL|LCL|UTC|Z))?)/i)?.[1];
+  return normalizeFieldValue(nearbyTowerHours ?? null);
+};
+
+export const parseAirportHoursFromHtml = (
   html: string,
   icaoCode: string,
   airportName: string,
   tz: string,
   tzInfo: ReturnType<typeof formatTimezone>
 ): AirportHours => {
-  // Priority 1: Structured table format — "Tower Hours</td>" followed by the value in next <td>
-  const structuredTowerMatch =
-    html.match(/Tower\s*Hours<\/t[dh]>\s*(?:<\/tr>\s*<tr>\s*)?<td[^>]*>\s*(.*?)\s*<\/td>/is)
-    ?? html.match(/Tower\s*Hours<\/t[dh]>\s*\n?\s*([\w\s]+?)(?:\n|<)/is);
-
-  // Priority 2: Inline "ATCT Hours: ..." or "Tower HRS: ..."
-  const inlineTowerMatch =
-    html.match(/ATCT\s*(?:Hours|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i)
-    ?? html.match(/Tower\s*(?:Hours|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i);
-
-  // Priority 3: Look for "24 Hours" or "Continuous" near "Tower Hours" label
-  // but NOT in remarks/comments
-  const near24HrMatch = html.match(/Tower\s*Hours[\s\S]{0,80}?(24\s*Hours?|Continuous)/i);
-
-  // Priority 4: Time range NOT inside remarks/comments
-  // Avoid matching ANG/Base Ops/military times that appear in <li> remarks
-  const cleanHtml = html.replace(/<ul>[\s\S]*?<\/ul>/gi, "").replace(/<li>[\s\S]*?<\/li>/gi, "");
-  const timeRangeMatch = cleanHtml.match(/((?:\d{4})-(?:\d{4})\s*(?:LOCAL|UTC|Z))/i)
-    ?? cleanHtml.match(/ATCT[^<]*?((?:\d{4})\s*[-–]\s*(?:\d{4})[^<]*)/i);
-
-  // Priority 5: Standalone "24 HR" pattern (outside remarks)
-  const standalone24Match = cleanHtml.match(/(24\s*(?:HR|HOUR|HRS))/i);
-
-  const towerHoursMatch = structuredTowerMatch ?? inlineTowerMatch ?? near24HrMatch ?? timeRangeMatch ?? standalone24Match;
-
-  const attendanceMatch = html.match(/Attendance[^<]*?(?::|–)\s*([^<\n]+)/i)
-    ?? html.match(/ATTENDED[^<]*?([^<\n]+)/i);
-
-  const lightingMatch = html.match(/Lighting[^<]*?(?:Schedule|HRS)[^<]*?(?::|–)\s*([^<\n]+)/i);
-
-  const airportUseMatch = html.match(/Airport Use[^<]*?(?::|–)\s*([^<\n]+)/i)
-    ?? html.match(/(Public|Private|Military|Joint)\s+Use/i);
-
-  const rawTowerHours = towerHoursMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null;
+  const pairs = extractTableCellPairs(html);
+  const rawTowerHours = findTowerHoursText(html, pairs);
   const towerSchedule = rawTowerHours ? parseTowerSchedule(rawTowerHours, tz) : null;
+  const controlTowerText = normalizeFieldValue(findFirstPairValue(pairs, (label) => label === "control tower"));
+  const attendanceText = normalizeFieldValue(findFirstPairValue(pairs, (label) => label === "attendance"));
+  const lightingText = normalizeFieldValue(
+    findFirstPairValue(pairs, (label) => label === "lighting schedule" || (label.includes("lighting") && label.includes("schedule")))
+  );
+  const airportUseText = normalizeFieldValue(findFirstPairValue(pairs, (label) => label === "airport use"));
 
-  // Detect if airport actually has a tower — multiple signals
-  const hasTowerFromHours = rawTowerHours !== null && !/\bnone\b/i.test(rawTowerHours);
-  // Secondary signal: ATCT or TWR frequency in the COMMUNICATIONS section
-  const hasTowerFromComms = /\bATCT\b/i.test(html) || /\bLC\/TWR\b/i.test(html) || /\bTWR\b[\s\S]{0,30}\d{3}\.\d/i.test(html);
-  // Tertiary: "control tower" phrase anywhere
-  const hasTowerFromLabel = /(?:air(?:port)?\s+)?(?:traffic\s+)?control\s+tower/i.test(html);
+  const communicationsSection = extractCommunicationsSection(html);
+  const hasExplicitNoTower = /no\s+air\s+traffic\s+control\s+tower|no\s+control\s+tower|non-?towered/i.test(controlTowerText ?? "");
+  const hasTowerFromHours = rawTowerHours !== null && !/\b(?:none|n\/a|na|unattended)\b/i.test(rawTowerHours);
+  const hasTowerFromControlField = !!controlTowerText && !hasExplicitNoTower && /\b(?:ATCT|TRACON|CONTROL\s+TOWER|TOWER)\b/i.test(controlTowerText);
+  const hasTowerFromComms = /\bATCT\b/i.test(communicationsSection)
+    || /\b(?:LC\/TWR|GND\/TWR|CLNC\s+DEL\/GND\/TWR)\b/i.test(communicationsSection)
+    || /\bTWR\b[\s\S]{0,30}\d{3}\.\d{1,3}\b/i.test(communicationsSection);
+  const hasTowerFromLabel = /airport\s+traffic\s+control\s+tower|control\s+tower/i.test(controlTowerText ?? "")
+    || /airport\s+traffic\s+control\s+tower/i.test(stripHtmlToText(html));
 
-  const isTowered = hasTowerFromHours || hasTowerFromComms || hasTowerFromLabel;
+  const isTowered = hasExplicitNoTower
+    ? false
+    : hasTowerFromHours || hasTowerFromControlField || hasTowerFromComms || hasTowerFromLabel
+      ? true
+      : null;
 
   return {
     airportIcao: icaoCode,
@@ -297,9 +311,9 @@ const parseAirportHoursFromHtml = (
     towerSchedule,
     timezone: { iana: tz, ...tzInfo },
     isTowered,
-    airportUse: airportUseMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
-    attendanceSchedule: attendanceMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
-    lightingSchedule: lightingMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
+    airportUse: airportUseText,
+    attendanceSchedule: attendanceText,
+    lightingSchedule: lightingText,
     rawChartSupplement: null,
     source: "FAA NFDC Airport Display"
   };

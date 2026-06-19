@@ -42,7 +42,7 @@ import type { AirportHours } from "@/services/airport-hours";
 import type { Notam } from "@/types/aviation";
 
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
-const RESULT_ORDER: DashboardResultType[] = ["weather", "notam", "frequency", "plates", "navigation", "traffic", "regulatory"];
+const RESULT_ORDER: DashboardResultType[] = ["weather", "plates", "frequency", "traffic", "navigation", "regulatory", "notam"];
 
 /** Format a rich airport label like "KSEA — Seattle-Tacoma Intl, WA" */
 const formatAirportLabel = (icao: string, name?: string | null, city?: string | null, state?: string | null): string => {

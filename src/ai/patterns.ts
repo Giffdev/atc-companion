@@ -84,7 +84,7 @@ const NOTAM_PATTERN = /\b(?:notam|notams|fdc|tfr)\b/i;
 const FREQUENCY_PATTERN = /\b(?:frequency|frequencies|tower|twr|ground|gnd|approach|app|departure|delivery|del|atis|ctaf)\b/i;
 const CHART_SUPPLEMENT_PATTERN = /\bchart\s+supplement\b/i;
 const PLATES_PATTERN =
-  /\b(?:plate|plates|chart(?!\s+supplement)|charts(?!\s+supplement)|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|ils|rnav|vor|visual)\b/i;
+  /\b(?:plate|plates|chart(?!\s+supplement)|charts(?!\s+supplement)|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|odp|ils|rnav|vor|visual|departure procedure|obstacle departure|takeoff minimums?|standard instrument departure|standard (?:terminal )?arrival)\b/i;
 const TRAFFIC_PATTERN = /\b(?:traffic|ads-b|adsb|targets|planes?\s+(?:near|around)|aircraft\s+(?:near|around)|in the pattern)\b/i;
 const NAVIGATION_PATTERN =
   /\b(?:heading(?:\s+vector)?|vector|direct|distance|bearing|route)\b|\bhow far is\b|\bfrom\s+(?:my airport|[A-Za-z]{3,4})\s+to\s+(?:my airport|[A-Za-z]{3,4})\b/i;

@@ -205,6 +205,13 @@ export interface Star extends SourceTracked {
   chartUrl: string;
 }
 
+/** Obstacle Departure Procedure — takeoff minimums and/or departure routing to avoid obstacles. */
+export interface Odp extends SourceTracked {
+  airportIcao: string;
+  procedureName: string;
+  chartUrl: string;
+}
+
 /** ILS equipment installed for a runway end. */
 export interface RunwayIlsEquipment {
   runwayEnd: string;

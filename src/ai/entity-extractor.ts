@@ -400,6 +400,18 @@ export const detectProcedureType = (input: string): ProcedureType | undefined =>
   if (/\bSTAR\b/.test(normalized)) {
     return "STAR";
   }
+  if (/\bODP\b/.test(normalized) || /OBSTACLE\s*DEPARTURE/i.test(normalized) || /TAKEOFF\s*MINIMUMS?/i.test(normalized)) {
+    return "ODP";
+  }
+  if (/\b(?:DEPARTURE\s+PROCEDURE|DEPARTURE\s+CHART)\b/.test(normalized) && !/STANDARD\s+INSTRUMENT\s+DEPARTURE/.test(normalized)) {
+    return "ODP";
+  }
+  if (/STANDARD\s+INSTRUMENT\s+DEPARTURE/.test(normalized)) {
+    return "SID";
+  }
+  if (/\b(?:STANDARD\s+(?:TERMINAL\s+)?ARRIVAL|ARRIVAL\s+PROCEDURE)\b/.test(normalized)) {
+    return "STAR";
+  }
 
   return undefined;
 };

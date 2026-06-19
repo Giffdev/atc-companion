@@ -4,6 +4,7 @@ import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
+import { collapseWhitespace, extractTableCellPairs } from "@/services/nfdc-html";
 
 const NASR_SOURCE = getDataSource("faaNasr");
 
@@ -90,55 +91,112 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
  * Parse runway data from the FAA NFDC airport display HTML page.
  * The page contains runway rows with designator, length, width, surface, and lighting.
  */
-const parseRunwaysFromHtml = (html: string): RunwayInfo[] => {
-  const runways: RunwayInfo[] = [];
+const RUNWAY_HEADER_REGEX = /<div\b[^>]*id=["']runway_[^"']+["'][^>]*>[\s\S]*?<span[^>]*>\s*RUNWAY\s+([^<]+?)\s*<\/span>[\s\S]*?<\/div>/gi;
 
-  // The FAA NFDC page typically lists runways in a table or structured format.
-  // Pattern: runway designator like "16/34", "16R/34L", etc.
-  // Look for runway designator patterns followed by dimensional data.
+const normalizeRunwayDesignator = (value: string): string => {
+  return collapseWhitespace(value)
+    .toUpperCase()
+    .replace(/^RUNWAY\s+/, "")
+    .replace(/\s+/g, "")
+    .replace(/[^0-9A-Z/]/g, "");
+};
 
-  // Match patterns like "RWY 16R/34L" or "Runway 16/34" or "16R/34L"
-  const rwyPattern = /(?:RWY|Runway|RY)\s*(\d{1,2}[LRCG]?\s*\/\s*\d{1,2}[LRCG]?)/gi;
-  const rwyMatches = [...html.matchAll(rwyPattern)];
+const parseRunwayDimensions = (value: string): Pick<RunwayInfo, "lengthFeet" | "widthFeet"> => {
+  const match = value.match(/(\d[\d,]*)\s*(?:FT\.?|FEET)?\s*[X×]\s*(\d[\d,]*)\s*(?:FT\.?|FEET)?/i)
+    ?? value.match(/(\d{3,5})\s*[X×]\s*(\d{2,4})/i);
 
-  for (const match of rwyMatches) {
-    const designator = match[1].replace(/\s/g, "");
+  return {
+    lengthFeet: match ? Number.parseInt(match[1].replace(/,/g, ""), 10) : null,
+    widthFeet: match ? Number.parseInt(match[2].replace(/,/g, ""), 10) : null
+  };
+};
 
-    // Look for length near this runway mention
-    const afterMatch = html.slice(match.index!, match.index! + 500);
-    const lengthMatch = afterMatch.match(/(\d{3,5})\s*(?:x|×|X)\s*(\d{2,4})/);
-    const surfaceMatch = afterMatch.match(/(?:ASPH|CONC|TURF|GRVL|DIRT|ASPHALT|CONCRETE|GRASS|GRAVEL)/i);
-    const lightingMatch = afterMatch.match(/(?:HIRL|MIRL|LIRL|REIL|VASI|PAPI|ALS|MALSR|ALSF)/i);
-
-    // Avoid duplicates
-    if (!runways.some((r) => r.designator === designator)) {
-      runways.push({
-        designator,
-        lengthFeet: lengthMatch ? parseInt(lengthMatch[1], 10) : null,
-        widthFeet: lengthMatch ? parseInt(lengthMatch[2], 10) : null,
-        surface: surfaceMatch?.[0]?.toUpperCase() ?? null,
-        lighting: lightingMatch?.[0]?.toUpperCase() ?? null
-      });
-    }
+const normalizeSurfaceType = (value: string): string | null => {
+  const normalized = collapseWhitespace(value).toUpperCase();
+  if (!normalized) {
+    return null;
   }
 
-  // Also try a more general pattern for standalone runway designators in tables
-  if (runways.length === 0) {
-    const generalPattern = /\b(\d{1,2}[LRCG]?\s*\/\s*\d{1,2}[LRCG]?)\b.*?(\d{3,5})\s*(?:x|×|X)\s*(\d{2,4})/gi;
-    const generalMatches = [...html.matchAll(generalPattern)];
+  if (/\bASPH(?:ALT)?\b/.test(normalized)) return "ASPH";
+  if (/\bCONC(?:RETE)?\b/.test(normalized)) return "CONC";
+  if (/\bPEM\b|\bPENETRATED\s+MACADAM\b/.test(normalized)) return "PEM";
+  if (/\bGRVL\b|\bGRAVEL\b/.test(normalized)) return "GRVL";
+  if (/\bTURF\b/.test(normalized)) return "TURF";
+  if (/\bGRASS\b/.test(normalized)) return "GRASS";
+  if (/\bDIRT\b/.test(normalized)) return "DIRT";
 
-    for (const match of generalMatches) {
-      const designator = match[1].replace(/\s/g, "");
-      if (!runways.some((r) => r.designator === designator)) {
-        runways.push({
-          designator,
-          lengthFeet: parseInt(match[2], 10),
-          widthFeet: parseInt(match[3], 10),
-          surface: null,
-          lighting: null
-        });
-      }
+  return normalized;
+};
+
+const normalizeLightingType = (value: string): string | null => {
+  const normalized = collapseWhitespace(value).toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/\bHIRL\b|HIGH\s+INTENSITY/.test(normalized)) return "HIRL";
+  if (/\bMIRL\b|MEDIUM\s+INTENSITY/.test(normalized)) return "MIRL";
+  if (/\bLIRL\b|LOW\s+INTENSITY/.test(normalized)) return "LIRL";
+
+  const acronym = normalized.match(/\b(HIRL|MIRL|LIRL|REIL|PAPI|VASI|MALSR|MALSF|ALSF(?:-\d+)?|ODALS|SSALS|SSALR)\b/);
+  return acronym?.[1] ?? normalized;
+};
+
+export const parseRunwaysFromHtml = (html: string): RunwayInfo[] => {
+  const runways: RunwayInfo[] = [];
+  const seen = new Set<string>();
+  const sections = [...html.matchAll(RUNWAY_HEADER_REGEX)];
+
+  for (let index = 0; index < sections.length; index += 1) {
+    const current = sections[index];
+    const designator = normalizeRunwayDesignator(current[1]);
+    if (!designator || seen.has(designator)) {
+      continue;
     }
+
+    const sectionStart = (current.index ?? 0) + current[0].length;
+    const sectionEnd = sections[index + 1]?.index ?? html.length;
+    const sectionHtml = html.slice(sectionStart, sectionEnd);
+    const tableHtml = sectionHtml.match(/<table\b[^>]*>[\s\S]*?<\/table>/i)?.[0] ?? sectionHtml;
+    const pairs = extractTableCellPairs(tableHtml);
+
+    const dimensions = parseRunwayDimensions(
+      pairs.find(({ label }) => label === "dimensions")?.value ?? ""
+    );
+
+    runways.push({
+      designator,
+      lengthFeet: dimensions.lengthFeet,
+      widthFeet: dimensions.widthFeet,
+      surface: normalizeSurfaceType(pairs.find(({ label }) => label === "surface type")?.value ?? ""),
+      lighting: normalizeLightingType(
+        pairs.find(({ label }) => label === "runway edge lights")?.value
+          ?? pairs.find(({ label }) => label.includes("lights"))?.value
+          ?? ""
+      )
+    });
+
+    seen.add(designator);
+  }
+
+  if (runways.length > 0) {
+    return runways;
+  }
+
+  for (const match of html.matchAll(/\b(\d{1,2}[LRCG]?\s*\/\s*\d{1,2}[LRCG]?)\b[\s\S]{0,400}?(\d[\d,]*)\s*(?:FT\.?|FEET)?\s*[X×]\s*(\d[\d,]*)/gi)) {
+    const designator = normalizeRunwayDesignator(match[1]);
+    if (!designator || seen.has(designator)) {
+      continue;
+    }
+
+    runways.push({
+      designator,
+      lengthFeet: Number.parseInt(match[2].replace(/,/g, ""), 10),
+      widthFeet: Number.parseInt(match[3].replace(/,/g, ""), 10),
+      surface: null,
+      lighting: null
+    });
+    seen.add(designator);
   }
 
   return runways;

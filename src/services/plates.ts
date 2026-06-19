@@ -4,7 +4,7 @@ import { createCacheKey, getCacheTtlMs } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
-import type { ApproachPlate, ApproachType, Sid, Star } from "@/types/aviation";
+import type { ApproachPlate, ApproachType, Odp, Sid, Star } from "@/types/aviation";
 import { toServiceErrorResponse } from "@/services/_shared";
 
 const DTPP_SOURCE = getDataSource("faaDtpp");
@@ -288,6 +288,39 @@ export const getStars = async (airport: string): Promise<ApiResponse<Star[]>> =>
     }
 
     return toServiceErrorResponse(error, DTPP_SOURCE, "star");
+  }
+};
+
+export const getOdps = async (airport: string): Promise<ApiResponse<Odp[]>> => {
+  try {
+    const airportData = await getDtppAirportData(airport);
+    const source = { ...DTPP_SOURCE, url: airportData.sourceUrl };
+    const odps = airportData.records
+      .filter((record) => record.chart_code === "MIN" && record.pdf_name)
+      .map(
+        (record): Odp => ({
+          airportIcao: airportData.icaoId,
+          procedureName: record.chart_name,
+          chartUrl: toPdfUrl(airportData.cycle, record.pdf_name),
+          source,
+          fetchedAt: airportData.fetchedAt,
+          isStale: false
+        })
+      );
+
+    recordPlateUrls(odps);
+
+    return createApiResponse(odps, source, {
+      fetchedAt: airportData.fetchedAt,
+      stalenessCategory: "sid",
+      cache: airportData.cache
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "ok" in error) {
+      return error as ApiResponse<Odp[]>;
+    }
+
+    return toServiceErrorResponse(error, DTPP_SOURCE, "odp");
   }
 };
 

@@ -10,6 +10,7 @@ export const STALENESS_THRESHOLDS_MS = {
   approachPlate: 28 * 24 * 60 * 60 * 1000,
   sid: 28 * 24 * 60 * 60 * 1000,
   star: 28 * 24 * 60 * 60 * 1000,
+  odp: 28 * 24 * 60 * 60 * 1000,
   airportInfo: 28 * 24 * 60 * 60 * 1000,
   frequency: 28 * 24 * 60 * 60 * 1000,
   runway: 28 * 24 * 60 * 60 * 1000,
