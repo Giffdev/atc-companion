@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { SourceBadge } from "@/components/SourceBadge";
 import { toFaaCode } from "@/data/airports";
@@ -153,6 +153,12 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
 
   const [activeTab, setActiveTab] = useState<PlateViewerTab>(resolveDefaultTab);
   const [refLoading, setRefLoading] = useState(true);
+
+  // Re-sync active tab when the selected procedure or default tab changes
+  useEffect(() => {
+    setActiveTab(resolveDefaultTab());
+    setRefLoading(true);
+  }, [selectedProcedureName, selectedProcedureType, defaultTab, airportCode]);
 
   const faaCode = airportCode ? toFaaCode(airportCode) : null;
   const supplementUrl = faaCode ? `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}` : null;

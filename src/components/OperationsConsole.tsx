@@ -339,7 +339,54 @@ const collectWarnings = (
   return [...warnings];
 };
 
-const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: boolean, submittedQuery: string, onFollowUp?: (query: string) => void) => {
+const OVERLYING_FREQUENCY_TYPES = new Set(["APP", "CENTER", "DEL"]);
+
+const buildFacilityOverviewData = (
+  airportInfo: AirportInfoQueryPayload,
+  facilityAirportInfo?: AirportInfoQueryPayload | null
+) => {
+  const supplemental = facilityAirportInfo?.airport === airportInfo.airport ? facilityAirportInfo : null;
+  const primaryFrequencies = airportInfo.frequencies.ok ? airportInfo.frequencies.data : [];
+  const supplementalFrequencies = supplemental?.frequencies?.ok ? supplemental.frequencies.data : [];
+  const frequencies = [...primaryFrequencies];
+  const frequencyKeys = new Set(primaryFrequencies.map((freq) => `${freq.type}|${freq.valueMHz}|${freq.name}`));
+
+  supplementalFrequencies.forEach((freq) => {
+    const key = `${freq.type}|${freq.valueMHz}|${freq.name}`;
+    if (!frequencyKeys.has(key)) {
+      frequencyKeys.add(key);
+      frequencies.push(freq);
+    }
+  });
+
+  const primaryRunways = airportInfo.runwayDetails?.ok ? airportInfo.runwayDetails.data.runways : [];
+  const supplementalRunways = supplemental?.runwayDetails?.ok ? supplemental.runwayDetails.data.runways : [];
+  const runways = [...primaryRunways];
+  const runwayDesignators = new Set(primaryRunways.map((runway) => runway.designator));
+
+  supplementalRunways.forEach((runway) => {
+    if (!runwayDesignators.has(runway.designator)) {
+      runwayDesignators.add(runway.designator);
+      runways.push(runway);
+    }
+  });
+
+  return {
+    hours: airportInfo.hours?.ok ? airportInfo.hours.data : supplemental?.hours?.ok ? supplemental.hours.data : null,
+    frequencies,
+    overlyingFrequencies: frequencies.filter((freq) => OVERLYING_FREQUENCY_TYPES.has(freq.type)),
+    runways
+  };
+};
+
+const renderQuerySummary = (
+  liveResult: LiveQueryResult | null,
+  isSubmitting: boolean,
+  submittedQuery: string,
+  referenceTime: string,
+  facilityAirportInfo?: AirportInfoQueryPayload | null,
+  onFollowUp?: (query: string) => void
+) => {
   if (isSubmitting) {
     return (
       <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
@@ -446,225 +493,290 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       const sidCount = airportInfo.sids?.ok ? airportInfo.sids.data.length : 0;
       const starCount = airportInfo.stars?.ok ? airportInfo.stars.data.length : 0;
       const odpCount = airportInfo.odps?.ok ? airportInfo.odps.data.length : 0;
-      const freqCount = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
+      const { hours, frequencies, overlyingFrequencies, runways } = buildFacilityOverviewData(airportInfo, facilityAirportInfo);
+      const freqCount = frequencies.length;
       const diagram = airportInfo.diagram?.ok ? airportInfo.diagram.data : null;
-      const hours = airportInfo.hours?.ok ? airportInfo.hours.data : null;
       const airportLabel = formatAirportLabel(airportInfo.airport, airportInfo.airportName, airportInfo.airportCity, airportInfo.airportState);
+      const procedureTotal = approachCount + sidCount + starCount + odpCount + (diagram ? 1 : 0);
+      const subtitle = [
+        hours ? "Tower hours" : null,
+        runways.length > 0 || airportInfo.runways.length > 0 ? "runway configuration" : null,
+        overlyingFrequencies.length > 0 ? "overlying frequencies" : null,
+        procedureTotal > 0 ? "procedures" : null
+      ].filter(Boolean).join(", ");
 
       return (
-        <div className="space-y-3">
-          {/* Airport identity banner */}
-          <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-            <p className="font-data text-base font-semibold text-aviation-text">{airportLabel}</p>
-            {airportInfo.airportCity && airportInfo.airportState && (
-              <p className="mt-0.5 text-xs text-aviation-muted">{airportInfo.airportCity}, {airportInfo.airportState}</p>
-            )}
-          </div>
-
-          {/* Hours of operation (if requested/available) */}
-          {hours && (
+        <ResultCard
+          fetchedAt={liveResult.response.fetchedAt}
+          isActive={false}
+          isStale={liveResult.response.isStale}
+          kind="facility"
+          referenceTime={referenceTime}
+          source={liveResult.response.source}
+          stalenessWarning={liveResult.response.stalenessWarning}
+          subtitle={`${subtitle || "Facility overview"} from live FAA-backed airport data.`}
+          title={`${formatAirportTitle(airportInfo.airport, airportInfo.airportName)} facility overview`}
+        >
+          <div className="space-y-4">
             <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-              <p className="data-label">Hours of Operation — {formatAirportTitle(airportInfo.airport, airportInfo.airportName)}</p>
-              <div className="mt-3 space-y-3">
-                {/* Tower status and schedule */}
-                <div className="flex flex-wrap items-start gap-3">
-                  <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    hours.isTowered === true
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                      : hours.isTowered === false
-                        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-                        : "border-slate-500/30 bg-slate-500/10 text-slate-300"
-                  }`}>
-                    {hours.isTowered === true ? "✦ Towered" : hours.isTowered === false ? "Non-Towered" : "⟳ Tower status loading…"}
-                  </span>
-                  {hours.timezone && (
-                    <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
-                      {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST active" : ""}
-                    </span>
-                  )}
-                </div>
-
-                {hours.towerSchedule ? (
-                  <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
-                    {hours.towerSchedule.is24Hour ? (
-                      <p className="mt-1.5 font-data text-sm text-emerald-200">24-hour operation (continuous)</p>
-                    ) : (
-                      <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                        <div>
-                          <p className="text-xs text-aviation-muted">Local</p>
-                          <p className="font-data text-sm text-aviation-text">
-                            {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-aviation-muted">Zulu</p>
-                          <p className="font-data text-sm text-cyan-200">
-                            {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {hours.towerSchedule.rawText && !hours.towerSchedule.is24Hour && (
-                      <p className="mt-1.5 break-words font-data text-xs text-aviation-muted">Raw: {hours.towerSchedule.rawText}</p>
-                    )}
-                  </div>
-                ) : hours.towerHours ? (
-                  <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
-                    <p className="mt-1.5 font-data text-sm text-aviation-text">{hours.towerHours}</p>
-                    {hours.timezone && (() => {
-                      // Try to extract Zulu times from the raw string and show local conversion
-                      const zuluMatch = hours.towerHours!.match(/(\d{4})Z?\s*[-–]\s*(\d{4})Z?/);
-                      if (!zuluMatch) return null;
-                      const offsetStr = hours.timezone!.utcOffset; // e.g. "UTC-7"
-                      const offsetH = parseFloat(offsetStr.replace("UTC", ""));
-                      if (isNaN(offsetH)) return null;
-                      const toLocal = (hhmm: string) => {
-                        const h = parseInt(hhmm.slice(0, 2), 10) + offsetH;
-                        const m = hhmm.slice(2);
-                        const norm = ((h % 24) + 24) % 24;
-                        return `${Math.floor(norm).toString().padStart(2, "0")}${m}`;
-                      };
-                      return (
-                        <p className="mt-1 font-data text-xs text-cyan-300/80">
-                          ≈ {toLocal(zuluMatch[1])}–{toLocal(zuluMatch[2])} {hours.timezone!.abbreviation} (local)
-                        </p>
-                      );
-                    })()}
-                  </div>
-                ) : null}
-
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {hours.attendanceSchedule && (
-                    <div>
-                      <p className="text-xs text-aviation-muted">Attendance</p>
-                      <p className="font-data text-sm text-aviation-text">{hours.attendanceSchedule}</p>
-                    </div>
-                  )}
-                  {hours.lightingSchedule && (
-                    <div>
-                      <p className="text-xs text-aviation-muted">Lighting</p>
-                      <p className="font-data text-sm text-aviation-text">{hours.lightingSchedule}</p>
-                    </div>
-                  )}
-                  {hours.airportUse && (
-                    <div>
-                      <p className="text-xs text-aviation-muted">Use</p>
-                      <p className="font-data text-sm text-aviation-text">{hours.airportUse}</p>
-                    </div>
-                  )}
-                </div>
-
-                {!hours.towerHours && hours.isTowered === false && !hours.attendanceSchedule && (
-                  <p className="text-sm text-aviation-muted">
-                    Non-towered airport.{" "}
-                    <a
-                      className="text-cyan-400 hover:text-cyan-300 underline"
-                      href={`https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${hours.airportIcao.replace(/^K/, "")}`}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      View Chart Supplement ↗
-                    </a>
-                  </p>
-                )}
-                {hours.isTowered === null && (
-                  <p className="text-sm text-slate-400">
-                    Tower status could not be confirmed — FAA source temporarily unavailable.{" "}
-                    <a
-                      className="text-cyan-400 hover:text-cyan-300 underline"
-                      href={`https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${hours.airportIcao.replace(/^K/, "")}`}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Check Chart Supplement ↗
-                    </a>
-                  </p>
-                )}
-              </div>
-              <p className="mt-2 text-xs text-aviation-muted">
-                Source: {hours.source}
-                {hours.timezone?.isDst ? " · Times reflect current DST offset" : ""}
-              </p>
-            </div>
-          )}
-
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-              <p className="data-label">Airport</p>
-              <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.airport}</p>
-              {airportInfo.airportName && (
-                <p className="mt-0.5 text-xs text-aviation-muted">{airportInfo.airportName}</p>
+              <p className="font-data text-base font-semibold text-aviation-text">{airportLabel}</p>
+              {airportInfo.airportCity && airportInfo.airportState && (
+                <p className="mt-0.5 text-xs text-aviation-muted">{airportInfo.airportCity}, {airportInfo.airportState}</p>
               )}
             </div>
-            <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 md:col-span-1">
-              <p className="data-label">Runways</p>
-              {airportInfo.runwayDetails?.ok && airportInfo.runwayDetails.data.runways.length > 0 ? (
-                <div className="mt-2 space-y-1">
-                  {airportInfo.runwayDetails.data.runways.map((rwy) => (
-                    <div key={rwy.designator} className="font-data text-sm text-aviation-text">
-                      <span>{rwy.designator}</span>
-                      {rwy.lengthFeet && <span className="text-xs text-aviation-muted"> · {rwy.lengthFeet.toLocaleString()}×{rwy.widthFeet ?? "?"}ft</span>}
-                      {rwy.surface && <span className="text-xs text-aviation-muted"> · {rwy.surface}</span>}
+
+            {hours && (
+              <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Hours of Operation</p>
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                      hours.isTowered === true
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                        : hours.isTowered === false
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                          : "border-slate-500/30 bg-slate-500/10 text-slate-300"
+                    }`}>
+                      {hours.isTowered === true ? "✦ Towered" : hours.isTowered === false ? "Non-Towered" : "⟳ Tower status loading…"}
+                    </span>
+                    {hours.timezone && (
+                      <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
+                        {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST active" : ""}
+                      </span>
+                    )}
+                    {hours.airportUse && (
+                      <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
+                        {hours.airportUse}
+                      </span>
+                    )}
+                  </div>
+
+                  {hours.towerSchedule ? (
+                    <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
+                      {hours.towerSchedule.is24Hour ? (
+                        <p className="mt-1.5 font-data text-sm text-emerald-200">24-hour operation (continuous)</p>
+                      ) : (
+                        <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <p className="text-xs text-aviation-muted">Local</p>
+                            <p className="font-data text-sm text-aviation-text">
+                              {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-aviation-muted">Zulu</p>
+                            <p className="font-data text-sm text-cyan-200">
+                              {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {hours.towerSchedule.rawText && !hours.towerSchedule.is24Hour && (
+                        <p className="mt-1.5 break-words font-data text-xs text-aviation-muted">Raw: {hours.towerSchedule.rawText}</p>
+                      )}
+                    </div>
+                  ) : hours.towerHours ? (
+                    <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
+                      <p className="mt-1.5 font-data text-sm text-aviation-text">{hours.towerHours}</p>
+                      {hours.timezone && (() => {
+                        const zuluMatch = hours.towerHours!.match(/(\d{4})Z?\s*[-–]\s*(\d{4})Z?/);
+                        if (!zuluMatch) return null;
+                        const offsetH = parseFloat(hours.timezone!.utcOffset.replace("UTC", ""));
+                        if (isNaN(offsetH)) return null;
+                        const toLocal = (hhmm: string) => {
+                          const h = parseInt(hhmm.slice(0, 2), 10) + offsetH;
+                          const m = hhmm.slice(2);
+                          const norm = ((h % 24) + 24) % 24;
+                          return `${Math.floor(norm).toString().padStart(2, "0")}${m}`;
+                        };
+                        return (
+                          <p className="mt-1 font-data text-xs text-cyan-300/80">
+                            ≈ {toLocal(zuluMatch[1])}–{toLocal(zuluMatch[2])} {hours.timezone!.abbreviation} (local)
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {hours.attendanceSchedule && (
+                      <div>
+                        <p className="text-xs text-aviation-muted">Attendance</p>
+                        <p className="font-data text-sm text-aviation-text">{hours.attendanceSchedule}</p>
+                      </div>
+                    )}
+                    {hours.lightingSchedule && (
+                      <div>
+                        <p className="text-xs text-aviation-muted">Lighting</p>
+                        <p className="font-data text-sm text-aviation-text">{hours.lightingSchedule}</p>
+                      </div>
+                    )}
+                    {hours.airportUse && (
+                      <div>
+                        <p className="text-xs text-aviation-muted">Use</p>
+                        <p className="font-data text-sm text-aviation-text">{hours.airportUse}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {!hours.towerHours && hours.isTowered === false && !hours.attendanceSchedule && (
+                    <p className="text-sm text-aviation-muted">
+                      Non-towered airport.{" "}
+                      <a
+                        className="text-cyan-400 hover:text-cyan-300 underline"
+                        href={`https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${hours.airportIcao.replace(/^K/, "")}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        View Chart Supplement ↗
+                      </a>
+                    </p>
+                  )}
+                  {hours.isTowered === null && (
+                    <p className="text-sm text-slate-400">
+                      Tower status could not be confirmed — FAA source temporarily unavailable.{" "}
+                      <a
+                        className="text-cyan-400 hover:text-cyan-300 underline"
+                        href={`https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${hours.airportIcao.replace(/^K/, "")}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Check Chart Supplement ↗
+                      </a>
+                    </p>
+                  )}
+                </div>
+                <p className="mt-3 text-xs text-aviation-muted">
+                  Source: {hours.source}
+                  {hours.timezone?.isDst ? " · Times reflect current DST offset" : ""}
+                </p>
+              </div>
+            )}
+
+            {(runways.length > 0 || airportInfo.runways.length > 0) && (
+              <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Runway Configuration</p>
+                {runways.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {runways.map((rwy) => (
+                      <div key={rwy.designator} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="font-data text-sm text-aviation-text">{rwy.designator}</p>
+                        <p className="break-words font-data text-xs text-aviation-muted">
+                          {rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}×${rwy.widthFeet ?? "?"}ft` : "Dimensions unavailable"}
+                          {rwy.surface ? ` · ${rwy.surface}` : ""}
+                        </p>
+                        {rwy.lighting && <p className="break-words font-data text-xs text-aviation-muted">{rwy.lighting}</p>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-data text-sm text-aviation-text">{airportInfo.runways.join(" • ")}</p>
+                )}
+              </div>
+            )}
+
+            {overlyingFrequencies.length > 0 && (
+              <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Overlying Frequencies</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {overlyingFrequencies.map((freq) => (
+                    <div key={`${freq.type}-${freq.valueMHz}-${freq.name}`} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 font-data text-xs ${
+                          freq.type === "APP" ? "border border-violet-500/30 bg-violet-500/10 text-violet-200"
+                            : freq.type === "CENTER" ? "border border-blue-500/30 bg-blue-500/10 text-blue-200"
+                              : "border border-amber-500/30 bg-amber-500/10 text-amber-200"
+                        }`}>
+                          {freq.type}
+                        </span>
+                        <span className="font-data text-sm text-cyan-100">{freq.valueMHz.toFixed(3)}</span>
+                      </div>
+                      <p className="mt-1 break-words text-xs text-aviation-muted">{freq.name}</p>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Procedures</p>
+              {procedureTotal > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {approachCount > 0 && (
+                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                      <p className="text-xs text-aviation-muted">Approaches</p>
+                      <p className="mt-1 font-data text-sm text-aviation-text">{approachCount}</p>
+                    </div>
+                  )}
+                  {sidCount > 0 && (
+                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                      <p className="text-xs text-aviation-muted">SIDs</p>
+                      <p className="mt-1 font-data text-sm text-aviation-text">{sidCount}</p>
+                    </div>
+                  )}
+                  {starCount > 0 && (
+                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                      <p className="text-xs text-aviation-muted">STARs</p>
+                      <p className="mt-1 font-data text-sm text-aviation-text">{starCount}</p>
+                    </div>
+                  )}
+                  {odpCount > 0 && (
+                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                      <p className="text-xs text-aviation-muted">ODPs</p>
+                      <p className="mt-1 font-data text-sm text-aviation-text">{odpCount}</p>
+                    </div>
+                  )}
+                  {diagram && (
+                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                      <p className="text-xs text-aviation-muted">Diagram</p>
+                      <p className="mt-1 font-data text-sm text-aviation-text">1</p>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <p className="mt-2 font-data text-sm text-aviation-text">{airportInfo.runways.join(" • ") || "Unavailable"}</p>
+                <p className="font-data text-sm text-aviation-muted">None found</p>
               )}
             </div>
-            {onFollowUp ? (
-              <button
-                className="min-h-[44px] rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
-                type="button"
-              >
-                <p className="data-label">Frequencies</p>
-                <p className="mt-2 font-data text-sm text-aviation-text">{freqCount} <span className="text-xs text-cyan-400">→ view</span></p>
-              </button>
-            ) : (
-              <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-                <p className="data-label">Frequencies</p>
-                <p className="mt-2 font-data text-sm text-aviation-text">{freqCount}</p>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Quick Links</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {onFollowUp ? (
+                  <button
+                    className="min-h-[44px] rounded-xl border border-aviation-border bg-black/10 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                    onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
+                    type="button"
+                  >
+                    <p className="data-label">Frequencies</p>
+                    <p className="mt-2 font-data text-sm text-aviation-text">{freqCount} <span className="text-xs text-cyan-400">→ view</span></p>
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-aviation-border bg-black/10 px-4 py-3">
+                    <p className="data-label">Frequencies</p>
+                    <p className="mt-2 font-data text-sm text-aviation-text">{freqCount}</p>
+                  </div>
+                )}
+                {onFollowUp ? (
+                  <button
+                    className="min-h-[44px] rounded-xl border border-aviation-border bg-black/10 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                    onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
+                    type="button"
+                  >
+                    <p className="data-label">Procedures</p>
+                    <p className="mt-2 font-data text-sm text-aviation-text">{procedureTotal > 0 ? `${procedureTotal} available` : "None found"} <span className="text-xs text-cyan-400">→ view all</span></p>
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-aviation-border bg-black/10 px-4 py-3">
+                    <p className="data-label">Procedures</p>
+                    <p className="mt-2 font-data text-sm text-aviation-text">{procedureTotal > 0 ? `${procedureTotal} available` : "None found"}</p>
+                  </div>
+                )}
               </div>
-            )}
-            {onFollowUp ? (
-              <button
-                className="min-h-[44px] rounded-2xl border border-aviation-border bg-black/15 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
-                type="button"
-              >
-                <p className="data-label">Procedures</p>
-                <div className="mt-2 space-y-0.5">
-                  {approachCount > 0 && <p className="font-data text-xs text-aviation-text">{approachCount} approaches</p>}
-                  {sidCount > 0 && <p className="font-data text-xs text-aviation-text">{sidCount} SIDs</p>}
-                  {starCount > 0 && <p className="font-data text-xs text-aviation-text">{starCount} STARs</p>}
-                  {odpCount > 0 && <p className="font-data text-xs text-aviation-text">{odpCount} ODPs</p>}
-                  {diagram && <p className="font-data text-xs text-aviation-text">1 diagram</p>}
-                  {approachCount + sidCount + starCount + odpCount === 0 && (
-                    <p className="font-data text-xs text-aviation-muted">None found</p>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-cyan-400">→ view all</p>
-              </button>
-            ) : (
-              <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-                <p className="data-label">Procedures</p>
-                <div className="mt-2 space-y-0.5">
-                  {approachCount > 0 && <p className="font-data text-xs text-aviation-text">{approachCount} approaches</p>}
-                  {sidCount > 0 && <p className="font-data text-xs text-aviation-text">{sidCount} SIDs</p>}
-                  {starCount > 0 && <p className="font-data text-xs text-aviation-text">{starCount} STARs</p>}
-                  {odpCount > 0 && <p className="font-data text-xs text-aviation-text">{odpCount} ODPs</p>}
-                  {diagram && <p className="font-data text-xs text-aviation-text">1 diagram</p>}
-                  {approachCount + sidCount + starCount + odpCount === 0 && (
-                    <p className="font-data text-xs text-aviation-muted">None found</p>
-                  )}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        </ResultCard>
       );
     }
     case "facility_info": {
@@ -807,15 +919,24 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   };
 
   const dashboardData = useMemo(() => {
-    // Start from empty base — no hardcoded demo data
     let merged = { ...EMPTY_DASHBOARD };
 
-    // Apply all facility results first (these are the baseline for the selected facility)
-    for (const [, result] of facilityResults) {
+    // Detect if the live query targets a different airport than the facility
+    const liveAirport = liveResult?.intent.type === "plates" ? liveResult.intent.airport
+      : liveResult?.intent.type === "airport_info" ? liveResult.intent.airport
+      : null;
+    const facilityAirport = selectedFacility?.primaryAirport;
+    const isLiveQueryForDifferentAirport = liveAirport && facilityAirport &&
+      liveAirport.toUpperCase() !== facilityAirport.toUpperCase();
+
+    // Apply facility results first (baseline for selected facility)
+    for (const [key, result] of facilityResults) {
+      // Skip facility plate data when live query targets a different airport
+      if (isLiveQueryForDifferentAirport && key === "plates") continue;
       merged = mergeLiveDashboardData(merged, result);
     }
 
-    // Layer the active live query result on top (user's explicit query takes precedence)
+    // Layer the active live query result on top
     if (liveResult && liveResult.response.ok) {
       const liveType = mapIntentToDashboardType(liveResult.intent);
       const isFacilityResult = facilityResults.has(liveType as DashboardResultType) &&
@@ -825,8 +946,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       }
     }
 
-    // Pull SIDs/STARs/ODPs from facilityAirportInfo if not already populated
-    if (facilityAirportInfo) {
+    // Pull SIDs/STARs/ODPs from facilityAirportInfo only if same airport
+    if (facilityAirportInfo && !isLiveQueryForDifferentAirport) {
       if (!merged.sids.length && facilityAirportInfo.sids?.ok) {
         merged = { ...merged, sids: facilityAirportInfo.sids.data };
       }
@@ -853,7 +974,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     }
 
     return merged;
-  }, [liveResult, facilityResults, facilityAirportInfo, supplementaryProcedures]);
+  }, [liveResult, facilityResults, facilityAirportInfo, supplementaryProcedures, selectedFacility]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(EMPTY_DASHBOARD.sourceStatuses, liveResult), [liveResult]);
   const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
   const selectedProcedureName = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_name : undefined;
@@ -1224,7 +1345,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
           {liveResult ? (
             <div className="mt-4 space-y-4">
-              {renderQuerySummary(liveResult, isSubmitting, submittedQuery, (followUpQuery) => {
+              {renderQuerySummary(liveResult, isSubmitting, submittedQuery, initialNow, facilityAirportInfo, (followUpQuery) => {
                 handleSubmit(followUpQuery, null);
               })}
 
@@ -1518,135 +1639,6 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         </section>
         ) : null}
 
-        {/* Airport stats card — rendered when facilityAirportInfo is available from dashboard fetch */}
-        {facilityAirportInfo && (facilityAirportInfo.hours?.ok || facilityAirportInfo.runwayDetails?.ok || facilityAirportInfo.frequencies?.ok) && (
-          <section className="mt-6 grid gap-6 xl:grid-cols-12">
-            <div className={`min-w-0 xl:col-span-12`}>
-              <ResultCard
-                className="h-full"
-                fetchedAt={new Date().toISOString()}
-                isActive={false}
-                kind="facility"
-                rawData={facilityAirportInfo}
-                referenceTime={initialNow}
-                source={getDataSource("faaNasr")}
-                subtitle={[
-                  facilityAirportInfo.hours?.ok ? "Tower hours" : null,
-                  facilityAirportInfo.runwayDetails?.ok && facilityAirportInfo.runwayDetails.data.runways.length > 0 ? "runway configuration" : null,
-                  facilityAirportInfo.frequencies?.ok && facilityAirportInfo.frequencies.data.some(f => f.type === "APP" || f.type === "CENTER") ? "overlying frequencies" : null
-                ].filter(Boolean).join(", ") + " from FAA Chart Supplement data."}
-                title={`${formatAirportTitle(facilityAirportInfo.airport, facilityAirportInfo.airportName)} facility overview`}
-              >
-                <div className="space-y-4">
-                  {/* Hours */}
-                  {facilityAirportInfo.hours?.ok && (() => {
-                    const hours = facilityAirportInfo.hours!.data;
-                    return (
-                      <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                        <div className="mb-3 flex flex-wrap items-start gap-3">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                            hours.isTowered === true
-                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                              : hours.isTowered === false
-                                ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-                                : "border-slate-500/30 bg-slate-500/10 text-slate-300"
-                          }`}>
-                            {hours.isTowered === true ? "✦ Towered" : hours.isTowered === false ? "Non-Towered" : "⟳ Tower status loading…"}
-                          </span>
-                          {hours.timezone && (
-                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
-                              {hours.timezone.abbreviation} ({hours.timezone.utcOffset}){hours.timezone.isDst ? " · DST" : ""}
-                            </span>
-                          )}
-                          {hours.airportUse && (
-                            <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
-                              {hours.airportUse}
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Tower Hours</p>
-                        {hours.towerSchedule ? (
-                          hours.towerSchedule.is24Hour ? (
-                            <p className="mt-1.5 font-data text-sm text-emerald-200">24-hour operation (continuous)</p>
-                          ) : (
-                            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                              <div>
-                                <p className="text-xs text-aviation-muted">Local</p>
-                                <p className="font-data text-sm text-aviation-text">
-                                  {hours.towerSchedule.openLocal}–{hours.towerSchedule.closeLocal} {hours.timezone?.abbreviation ?? "LCL"}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-aviation-muted">Zulu</p>
-                                <p className="font-data text-sm text-cyan-200">
-                                  {hours.towerSchedule.openZulu}–{hours.towerSchedule.closeZulu}
-                                </p>
-                              </div>
-                            </div>
-                          )
-                        ) : hours.towerHours ? (
-                          <p className="mt-1.5 font-data text-sm text-aviation-text">{hours.towerHours}</p>
-                        ) : (
-                          <p className="mt-1.5 text-sm text-aviation-muted">No tower data available</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Runways */}
-                  {facilityAirportInfo.runwayDetails?.ok && facilityAirportInfo.runwayDetails.data.runways.length > 0 && (
-                    <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Runways</p>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {facilityAirportInfo.runwayDetails.data.runways.map((rwy) => (
-                          <div key={rwy.designator} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                            <p className="font-data text-sm text-aviation-text">{rwy.designator}</p>
-                            <p className="break-words font-data text-xs text-aviation-muted">
-                              {rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}×${rwy.widthFeet ?? "?"}ft` : ""}
-                              {rwy.surface ? ` · ${rwy.surface}` : ""}
-                            </p>
-                            {rwy.lighting && <p className="break-words font-data text-xs text-aviation-muted">{rwy.lighting}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Overlying approach/departure/center frequencies */}
-                  {facilityAirportInfo.frequencies?.ok && (() => {
-                    const appFreqs = facilityAirportInfo.frequencies.data.filter(
-                      (f) => f.type === "APP" || f.type === "CENTER" || f.type === "DEL"
-                    );
-                    if (!appFreqs.length) return null;
-                    return (
-                      <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Overlying Frequencies</p>
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {appFreqs.map((freq) => (
-                            <div key={`${freq.type}-${freq.valueMHz}-${freq.name}`} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span className={`rounded-full px-2 py-0.5 font-data text-xs ${
-                                  freq.type === "APP" ? "border border-violet-500/30 bg-violet-500/10 text-violet-200"
-                                    : freq.type === "CENTER" ? "border border-blue-500/30 bg-blue-500/10 text-blue-200"
-                                    : "border border-amber-500/30 bg-amber-500/10 text-amber-200"
-                                }`}>
-                                  {freq.type}
-                                </span>
-                                <span className="font-data text-sm text-cyan-100">{freq.valueMHz.toFixed(3)}</span>
-                              </div>
-                              <p className="mt-1 break-words text-xs text-aviation-muted">{freq.name}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </ResultCard>
-            </div>
-          </section>
-        )}
       </div>
 
       <StatusBar liveStatus={autoRefreshConfig?.label ?? null} referenceTime={initialNow} sources={sourceStatuses} warnings={warnings} />

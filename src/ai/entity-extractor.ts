@@ -450,7 +450,7 @@ export const detectNotamTypeFilter = (input: string): NotamTypeFilter | undefine
 export const detectProcedureName = (input: string): string | undefined => {
   const normalized = normalizeAviationText(input).toUpperCase();
   // Match "the NRVNA departure", "BANGR ONE arrival", "SUMMA TWO departure"
-  const namedMatch = normalized.match(/\b(?:THE\s+)?([A-Z][A-Z0-9]{2,12}(?:\s+(?:ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|\d{1,2}))?)\s+(?:DEPARTURE|ARRIVAL|SID|STAR|TRANSITION)\b/);
+  const namedMatch = normalized.match(/\b(?:THE\s+)?([A-Z][A-Z0-9]{2,12}(?:\s+(?:ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|\d{1,2}))?)\s+(?:DEPARTURE|ARRIVAL|SID|STAR|TRANSITION|PROCEDURE|APPROACH)\b/);
   if (namedMatch) {
     return namedMatch[1].trim();
   }
