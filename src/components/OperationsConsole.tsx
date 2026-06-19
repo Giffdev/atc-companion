@@ -797,6 +797,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     odps: ApproachPlate[];
     approaches: ApproachPlate[];
   }>({ sids: [], stars: [], odps: [], approaches: [] });
+  const [supplementaryDiagram, setSupplementaryDiagram] = useState<ApproachPlate | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
 
   // Hydrate facility from localStorage after mount to avoid SSR mismatch
@@ -929,10 +930,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const plateDiagram = useMemo(() => {
     if (liveResult?.intent.type === "airport_info" && liveResult.response.ok) {
       const info = liveResult.response.data as AirportInfoQueryPayload;
-      return info.diagram?.ok ? info.diagram.data : null;
+      if (info.diagram?.ok) return info.diagram.data;
     }
-    return null;
-  }, [liveResult]);
+    if (facilityAirportInfo?.diagram?.ok) return facilityAirportInfo.diagram.data;
+    return supplementaryDiagram;
+  }, [liveResult, facilityAirportInfo, supplementaryDiagram]);
   const fallbackSource = PLACEHOLDER_SOURCE;
   const fallbackFetchedAt = initialNow;
 
@@ -977,6 +979,15 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       }
     }
     setSupplementaryProcedures(merged);
+
+    // Also fetch airport diagram
+    try {
+      const infoPayload = await fetchLiveQuery(`airport info for ${airport}`);
+      if (infoPayload.intent.type === "airport_info" && infoPayload.response.ok) {
+        const info = infoPayload.response.data as AirportInfoQueryPayload;
+        setSupplementaryDiagram(info.diagram?.ok ? info.diagram.data : null);
+      }
+    } catch { /* diagram is optional */ }
   }, [fetchLiveQuery]);
 
   const autoRefreshConfig = useMemo(
@@ -1412,6 +1423,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                             traffic={dashboardData.traffic}
                             airportIcao={trafficAirportIcao}
                             airportPosition={trafficAirportPosition}
+                            defaultRangeNm={selectedFacility?.type === "approach" || selectedFacility?.type === "center" ? 30 : 10}
                           />
                         ) : (
                           <div className="text-sm text-aviation-muted">No live traffic targets returned.</div>

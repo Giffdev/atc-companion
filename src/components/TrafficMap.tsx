@@ -8,6 +8,7 @@ type TrafficMapProps = {
   traffic: TrafficTarget[];
   airportIcao?: string;
   airportPosition?: { latitude: number; longitude: number };
+  defaultRangeNm?: number;
 };
 
 const getAltitudeTone = (altitudeFeet: number | null): string => {
@@ -36,7 +37,8 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 const normalizeTraffic = (
   traffic: TrafficTarget[],
   zoom: number,
-  anchorPosition?: { latitude: number; longitude: number }
+  anchorPosition?: { latitude: number; longitude: number },
+  defaultRangeNm = DEFAULT_VISIBLE_RANGE_NM
 ): { targets: NormalizedTarget[]; airportPx: { x: number; y: number } | null; nmPerPx: number } => {
   const positions = traffic
     .map((target) => target.position)
@@ -69,7 +71,7 @@ const normalizeTraffic = (
   });
 
   const farthestTargetNm = targetVectors.reduce((maxDistance, { distanceNm }) => Math.max(maxDistance, distanceNm), 0);
-  const baseVisibleRangeNm = Math.max(DEFAULT_VISIBLE_RANGE_NM, farthestTargetNm / 0.85);
+  const baseVisibleRangeNm = Math.max(defaultRangeNm, farthestTargetNm / 0.85);
   const visibleRangeNm = Math.max(1, baseVisibleRangeNm / zoom);
   const nmPerPx = visibleRangeNm / OUTER_RING_RADIUS;
   const pxPerNm = PLOT_RADIUS / visibleRangeNm;
@@ -95,12 +97,12 @@ const AircraftGlyph = ({ trackDegrees }: { trackDegrees: number | null }) => (
   </g>
 );
 
-export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMapProps) {
+export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRangeNm = 10 }: TrafficMapProps) {
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null);
 
   const zoom = ZOOM_LEVELS[zoomIndex];
-  const { targets: normalizedTraffic, airportPx, nmPerPx } = normalizeTraffic(traffic, zoom, airportPosition);
+  const { targets: normalizedTraffic, nmPerPx } = normalizeTraffic(traffic, zoom, airportPosition, defaultRangeNm);
   const hoveredTraffic = normalizedTraffic.find(({ target }) => target.icao24 === hoveredTarget) ?? null;
 
   const ringNm = nmPerPx > 0 ? (OUTER_RING_RADIUS * nmPerPx).toFixed(0) : "";
@@ -163,45 +165,42 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
           <title>ADS-B traffic map{airportIcao ? ` centered on ${airportIcao}` : ""}</title>
           <rect fill="#050914" height={SVG_HEIGHT} rx="18" width={SVG_WIDTH} />
 
-          {/* Range rings — centered on airport or SVG center */}
+          {/* Range rings with NM labels */}
           {(() => {
-            const cx = airportPx?.x ?? MAP_CENTER_X;
-            const cy = airportPx?.y ?? MAP_CENTER_Y;
+            const outerNm = nmPerPx > 0 ? Math.round(OUTER_RING_RADIUS * nmPerPx) : 0;
+            const midNm = nmPerPx > 0 ? Math.round(60 * nmPerPx) : 0;
+            const innerNm = nmPerPx > 0 ? Math.round(30 * nmPerPx) : 0;
             return (
               <>
-                <circle cx={cx} cy={cy} fill="none" r="90" stroke="rgba(34,197,94,0.15)" strokeDasharray="4 3" />
-                <circle cx={cx} cy={cy} fill="none" r="60" stroke="rgba(34,197,94,0.12)" strokeDasharray="4 3" />
-                <circle cx={cx} cy={cy} fill="none" r="30" stroke="rgba(34,197,94,0.10)" strokeDasharray="4 3" />
-                <path d={`M${cx} ${cy - OUTER_RING_RADIUS}v${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
-                <path d={`M${cx - OUTER_RING_RADIUS} ${cy}h${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
+                <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} fill="none" r="90" stroke="rgba(34,197,94,0.18)" strokeDasharray="4 3" />
+                <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} fill="none" r="60" stroke="rgba(34,197,94,0.14)" strokeDasharray="4 3" />
+                <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} fill="none" r="30" stroke="rgba(34,197,94,0.10)" strokeDasharray="4 3" />
+                <path d={`M${MAP_CENTER_X} ${MAP_CENTER_Y - OUTER_RING_RADIUS}v${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
+                <path d={`M${MAP_CENTER_X - OUTER_RING_RADIUS} ${MAP_CENTER_Y}h${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
+                {outerNm > 0 && <text fill="rgba(34,197,94,0.45)" fontSize="9" fontFamily="monospace" x={MAP_CENTER_X + 92} y={MAP_CENTER_Y + 3}>{outerNm}</text>}
+                {midNm > 0 && <text fill="rgba(34,197,94,0.4)" fontSize="9" fontFamily="monospace" x={MAP_CENTER_X + 62} y={MAP_CENTER_Y + 3}>{midNm}</text>}
+                {innerNm > 0 && <text fill="rgba(34,197,94,0.35)" fontSize="9" fontFamily="monospace" x={MAP_CENTER_X + 32} y={MAP_CENTER_Y + 3}>{innerNm}</text>}
               </>
             );
           })()}
 
           {/* Compass labels */}
-          {(() => {
-            const cx = airportPx?.x ?? MAP_CENTER_X;
-            const cy = airportPx?.y ?? MAP_CENTER_Y;
-            return (
-              <>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.max(10, cy - OUTER_RING_RADIUS - 6)}>N</text>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.min(SVG_HEIGHT - 4, cy + OUTER_RING_RADIUS + 14)}>S</text>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={Math.max(10, cx - OUTER_RING_RADIUS - 6)} y={cy + 3}>W</text>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" x={Math.min(SVG_WIDTH - 10, cx + OUTER_RING_RADIUS + 6)} y={cy + 3}>E</text>
-              </>
-            );
-          })()}
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={MAP_CENTER_X} y={MAP_CENTER_Y - OUTER_RING_RADIUS - 6}>N</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={MAP_CENTER_X} y={MAP_CENTER_Y + OUTER_RING_RADIUS + 14}>S</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={MAP_CENTER_X - OUTER_RING_RADIUS - 6} y={MAP_CENTER_Y + 3}>W</text>
+          <text fill="rgba(34,197,94,0.35)" fontSize="12" x={MAP_CENTER_X + OUTER_RING_RADIUS + 6} y={MAP_CENTER_Y + 3}>E</text>
 
-          {/* Airport reference marker */}
-          {airportPx && (airportPosition || airportIcao) && (
+          {/* Airport reference marker at center */}
+          {(airportPosition || airportIcao) && (
             <g>
-              {/* Runway-style cross */}
-              <line x1={airportPx.x - 8} y1={airportPx.y} x2={airportPx.x + 8} y2={airportPx.y} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
-              <line x1={airportPx.x} y1={airportPx.y - 8} x2={airportPx.x} y2={airportPx.y + 8} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
-              <circle cx={airportPx.x} cy={airportPx.y} r="4" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeOpacity="0.5" />
-              <text fill="#22c55e" fillOpacity="0.7" fontSize="12" fontFamily="monospace" x={airportPx.x + 10} y={airportPx.y - 6}>
-                {airportIcao}
-              </text>
+              <line x1={MAP_CENTER_X - 8} y1={MAP_CENTER_Y} x2={MAP_CENTER_X + 8} y2={MAP_CENTER_Y} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
+              <line x1={MAP_CENTER_X} y1={MAP_CENTER_Y - 8} x2={MAP_CENTER_X} y2={MAP_CENTER_Y + 8} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
+              <circle cx={MAP_CENTER_X} cy={MAP_CENTER_Y} r="4" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeOpacity="0.5" />
+              {airportIcao && (
+                <text fill="#22c55e" fillOpacity="0.7" fontSize="12" fontFamily="monospace" x={MAP_CENTER_X + 10} y={MAP_CENTER_Y - 6}>
+                  {airportIcao}
+                </text>
+              )}
             </g>
           )}
 
