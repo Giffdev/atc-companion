@@ -156,7 +156,7 @@ const KNOWN_TOWERED_AIRPORTS = new Set([
 // Format: [openLocalHHMM, closeLocalHHMM] in local time. Updated per AIRAC cycle as needed.
 const STATIC_TOWER_HOURS: Record<string, [string, string]> = {
   // Pacific Northwest
-  "KPAE": ["0600", "2200"], "KBFI": ["0600", "2200"], "KRNT": ["0700", "2100"],
+  "KPAE": ["0700", "2100"], "KBFI": ["0600", "2200"], "KRNT": ["0700", "2100"],
   "KOLM": ["0700", "2000"], "KTIW": ["0700", "2000"],
   "KTTD": ["0700", "2100"], "KHIO": ["0600", "2100"], "KVUO": ["0700", "2000"],
   "KGEG": ["0600", "2200"], "KBOI": ["0600", "2200"],
