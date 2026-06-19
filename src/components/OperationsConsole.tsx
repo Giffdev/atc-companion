@@ -700,81 +700,107 @@ const renderQuerySummary = (
               </div>
             )}
 
-            <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Procedures</p>
-              {procedureTotal > 0 ? (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                  {approachCount > 0 && (
-                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                      <p className="text-xs text-aviation-muted">Approaches</p>
-                      <p className="mt-1 font-data text-sm text-aviation-text">{approachCount}</p>
-                    </div>
-                  )}
-                  {sidCount > 0 && (
-                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                      <p className="text-xs text-aviation-muted">SIDs</p>
-                      <p className="mt-1 font-data text-sm text-aviation-text">{sidCount}</p>
-                    </div>
-                  )}
-                  {starCount > 0 && (
-                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                      <p className="text-xs text-aviation-muted">STARs</p>
-                      <p className="mt-1 font-data text-sm text-aviation-text">{starCount}</p>
-                    </div>
-                  )}
-                  {odpCount > 0 && (
-                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                      <p className="text-xs text-aviation-muted">ODPs</p>
-                      <p className="mt-1 font-data text-sm text-aviation-text">{odpCount}</p>
-                    </div>
-                  )}
-                  {diagram && (
-                    <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                      <p className="text-xs text-aviation-muted">Diagram</p>
-                      <p className="mt-1 font-data text-sm text-aviation-text">1</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="font-data text-sm text-aviation-muted">None found</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-aviation-muted">Quick Links</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {onFollowUp ? (
-                  <button
-                    className="min-h-[44px] rounded-xl border border-aviation-border bg-black/10 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                    onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
-                    type="button"
-                  >
-                    <p className="data-label">Frequencies</p>
-                    <p className="mt-2 font-data text-sm text-aviation-text">{freqCount} <span className="text-xs text-cyan-400">→ view</span></p>
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-aviation-border bg-black/10 px-4 py-3">
-                    <p className="data-label">Frequencies</p>
-                    <p className="mt-2 font-data text-sm text-aviation-text">{freqCount}</p>
+            {onFollowUp ? (
+              <button
+                className="w-full rounded-xl border border-aviation-border bg-black/10 p-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
+                type="button"
+              >
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Procedures <span className="text-xs text-cyan-400">→ view all</span></p>
+                {procedureTotal > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    {approachCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">Approaches</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{approachCount}</p>
+                      </div>
+                    )}
+                    {sidCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">SIDs</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{sidCount}</p>
+                      </div>
+                    )}
+                    {starCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">STARs</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{starCount}</p>
+                      </div>
+                    )}
+                    {odpCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">ODPs</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{odpCount}</p>
+                      </div>
+                    )}
+                    {diagram && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">Diagram</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">1</p>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <p className="font-data text-sm text-aviation-muted">None found</p>
                 )}
-                {onFollowUp ? (
-                  <button
-                    className="min-h-[44px] rounded-xl border border-aviation-border bg-black/10 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                    onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
-                    type="button"
-                  >
-                    <p className="data-label">Charts &amp; Plates</p>
-                    <p className="mt-2 font-data text-sm text-aviation-text">{procedureTotal > 0 ? `${procedureTotal} available` : "None found"} <span className="text-xs text-cyan-400">→ view all</span></p>
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-aviation-border bg-black/10 px-4 py-3">
-                    <p className="data-label">Charts &amp; Plates</p>
-                    <p className="mt-2 font-data text-sm text-aviation-text">{procedureTotal > 0 ? `${procedureTotal} available` : "None found"}</p>
+              </button>
+            ) : (
+              <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Procedures</p>
+                {procedureTotal > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    {approachCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">Approaches</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{approachCount}</p>
+                      </div>
+                    )}
+                    {sidCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">SIDs</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{sidCount}</p>
+                      </div>
+                    )}
+                    {starCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">STARs</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{starCount}</p>
+                      </div>
+                    )}
+                    {odpCount > 0 && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">ODPs</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">{odpCount}</p>
+                      </div>
+                    )}
+                    {diagram && (
+                      <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                        <p className="text-xs text-aviation-muted">Diagram</p>
+                        <p className="mt-1 font-data text-sm text-aviation-text">1</p>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <p className="font-data text-sm text-aviation-muted">None found</p>
                 )}
               </div>
-            </div>
+            )}
+
+            {onFollowUp ? (
+              <button
+                className="w-full min-h-[44px] rounded-xl border border-aviation-border bg-black/10 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
+                type="button"
+              >
+                <p className="data-label">Frequencies</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{freqCount} <span className="text-xs text-cyan-400">→ view</span></p>
+              </button>
+            ) : (
+              <div className="rounded-xl border border-aviation-border bg-black/10 px-4 py-3">
+                <p className="data-label">Frequencies</p>
+                <p className="mt-2 font-data text-sm text-aviation-text">{freqCount}</p>
+              </div>
+            )}
           </div>
         </ResultCard>
       );
