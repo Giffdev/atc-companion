@@ -26,10 +26,10 @@ ATC Assist gives a controller a single dark-theme console for:
 - **Real-time weather** via METAR, TAF, and nearby PIREPs from `aviationweather.gov`
 - **D-ATIS strip** for one or many airports, including facility-wide airport groups
 - **Live traffic map** with zoom, pan, altitude color coding, and callsign labels
-- **FAA approach plates** plus **SIDs**, **STARs**, and **airport diagrams**
+- **FAA approach plates** plus **SIDs**, **STARs**, **ODPs** (obstacle departure procedures), and **airport diagrams**
 - **Inline plate viewer** with best-match selection by procedure type and runway
 - **Airport frequencies** from FAA/NASR-backed seed data, including approach/TRACON sectors for major facilities
-- **NOTAM lookup** with D / FDC / TFR handling (**requires `FAA_NOTAM_API_KEY`**)
+- **NOTAM lookup** — links to FAA NOTAM Search portal (no free programmatic API available)
 - **Airport statistics** such as tower hours, runway layout, lighting/surface hints, timezone, and airport-use metadata
 - **FAR / eCFR lookups** plus locally searchable FAA **JO 7110.65** and **AIM** reference content
 - **Navigation/bearing calculations** with great-circle distance, magnetic heading estimate, and enroute time
@@ -40,7 +40,7 @@ ATC Assist gives a controller a single dark-theme console for:
 
 ## What is implemented vs. planned
 
-Traffic in this repository is currently implemented with **OpenSky Network** (`src/services/traffic.ts`). The codebase does **not** currently contain an ADS-B Exchange client, so documentation below describes the traffic feature as implemented today rather than as a roadmap promise.
+Traffic is currently implemented with **ADSB.fi** as the primary source (fast, free, no auth) with **OpenSky Network** as a fallback (`src/services/traffic.ts`). NOTAMs link to the official FAA NOTAM Search portal — no free programmatic NOTAM API is currently available.
 
 ## Tech stack
 
@@ -58,11 +58,12 @@ Traffic in this repository is currently implemented with **OpenSky Network** (`s
 | Source | Used for | Where in code |
 | --- | --- | --- |
 | **NOAA Aviation Weather Center** (`aviationweather.gov`) | METAR, TAF, PIREP | `src/services/weather.ts` |
-| **FAA DTPP** (`aeronav.faa.gov`, `nfdc.faa.gov`) | approach plates, SIDs, STARs, airport diagrams | `src/services/plates.ts` |
-| **FAA NFDC / NASR / Airport Display** | airport reference info, runway details, tower hours, frequencies | `src/services/frequencies.ts`, `src/services/airport-hours.ts`, `src/services/runway-info.ts` |
-| **FAA NOTAM API** | NOTAMs (D/FDC/TFR) | `src/services/notams.ts` |
+| **FAA DTPP** (`aeronav.faa.gov`, `nfdc.faa.gov`) | approach plates, SIDs, STARs, ODPs, airport diagrams | `src/services/plates.ts` |
+| **FAA NFDC / NASR / Airport Display** | airport reference info, runway details, tower hours, frequencies | `src/services/frequencies.ts`, `src/services/airport-hours.ts`, `src/services/runway-info.ts`, `src/services/nfdc-html.ts` |
+| **FAA NOTAM Search** | NOTAMs (links to portal) | `src/services/notams.ts` |
 | **FAA D-ATIS feed via `datis.clowd.io`** | digital ATIS letters and text | `src/services/datis.ts`, `src/app/api/atis/route.ts` |
-| **OpenSky Network** | live traffic targets | `src/services/traffic.ts` |
+| **ADSB.fi** | live traffic targets (primary) | `src/services/traffic.ts` |
+| **OpenSky Network** | live traffic targets (fallback) | `src/services/traffic.ts` |
 | **eCFR API** | FAR / Title 14 references | `src/services/regulatory.ts` |
 
 ### Official reference corpora bundled locally
@@ -150,7 +151,6 @@ Open `http://localhost:3000`.
 Copy `.env.example` to `.env.local` and set what you need:
 
 ```bash
-FAA_NOTAM_API_KEY=
 OPENAI_API_KEY=
 OPENSKY_USERNAME=
 OPENSKY_PASSWORD=
@@ -158,15 +158,14 @@ OPENSKY_PASSWORD=
 
 #### Variable notes
 
-- `FAA_NOTAM_API_KEY` — required for live NOTAM calls
 - `OPENAI_API_KEY` — enables LLM intent fallback
-- `OPENSKY_USERNAME` / `OPENSKY_PASSWORD` — optional; improves OpenSky rate limits
+- `OPENSKY_USERNAME` / `OPENSKY_PASSWORD` — optional; improves OpenSky fallback rate limits (primary traffic source is ADSB.fi which needs no key)
 
 If keys are missing:
 
-- NOTAMs degrade gracefully with a helpful error message
+- NOTAMs show a link to the FAA NOTAM Search portal
 - LLM parsing falls back to regex/entity parsing only
-- traffic still works anonymously, subject to stricter rate limiting
+- Traffic works via ADSB.fi with no auth required
 
 ## Scripts
 

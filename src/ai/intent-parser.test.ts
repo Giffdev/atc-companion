@@ -62,6 +62,40 @@ describe("parseIntent", () => {
     });
   });
 
+  it("parses SID, STAR, and ODP phrasing while keeping departure frequency as frequency", async () => {
+    const [sidIntent, starIntent, odpIntent, frequencyIntent] = await Promise.all([
+      parseIntent("show me the SIDs for KBFI"),
+      parseIntent("what arrivals are available at KSEA"),
+      parseIntent("takeoff minimums for KBFI"),
+      parseIntent("departure frequency for KSEA")
+    ]);
+
+    expect(sidIntent).toMatchObject({
+      type: "plates",
+      airport: "KBFI",
+      procedure_type: "SID",
+      requiresClarification: false
+    });
+    expect(starIntent).toMatchObject({
+      type: "plates",
+      airport: "KSEA",
+      procedure_type: "STAR",
+      requiresClarification: false
+    });
+    expect(odpIntent).toMatchObject({
+      type: "plates",
+      airport: "KBFI",
+      procedure_type: "ODP",
+      requiresClarification: false
+    });
+    expect(frequencyIntent).toMatchObject({
+      type: "frequency",
+      facility: "KSEA",
+      freq_type: "APP",
+      requiresClarification: false
+    });
+  });
+
   it("parses traffic requests", async () => {
     const intent = await parseIntent("traffic near KLAX between FL180 and FL240");
 

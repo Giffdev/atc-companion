@@ -381,36 +381,50 @@ export const detectFrequencyType = (input: string): FrequencyQueryType | undefin
 
 export const detectProcedureType = (input: string): ProcedureType | undefined => {
   const normalized = normalizeAviationText(input).toUpperCase();
+  const hasFrequencyContext = /\b(?:DEPARTURE\s+(?:FREQUENCY|FREQUENCIES|CONTROL|CONTROLLER)|APPROACH\s+(?:FREQUENCY|FREQUENCIES|CONTROL|CONTROLLER)|CLEARANCE\s+DELIVERY)\b/.test(normalized);
+  const hasOdpContext =
+    /\b(?:ODPS?|OBSTACLE\s+(?:DEPARTURE(?:\s+PROCEDURES?)?|DP)|DEPARTURE\s+OBSTACLES?|TAKEOFF\s+(?:MINIMUMS?|MINS?)|NON[-\s]?STANDARD\s+TAKEOFF\s+MINIMUMS?|DIVERSE\s+VECTOR\s+AREA|DVA|REQUIRED\s+CLIMB\s+GRADIENT|CLIMB\s+GRADIENT)\b/.test(
+      normalized
+    );
+  const hasNamedDeparture = /\b[A-Z][A-Z0-9]{2,7}(?:\s+\d{1,2})?\s+DEPARTURE\b/.test(normalized);
+  const hasNamedArrival = /\b[A-Z][A-Z0-9]{2,7}(?:\s+\d{1,2})?\s+ARRIVAL\b/.test(normalized);
 
-  if (/\bILS\b/.test(normalized)) {
+  if (hasOdpContext) {
+    return "ODP";
+  }
+
+  if (
+    !hasFrequencyContext &&
+    (/\b(?:SIDS?|DP|STANDARD\s+INSTRUMENT\s+DEPARTURES?|CLIMB\s+VIA\s+SID|DEPARTURE\s+(?:PROCEDURES?|ROUTES?|TRANSITIONS?|CHARTS?)|FILED\s+DEPARTURE|ASSIGNED\s+DEPARTURE)\b/.test(
+      normalized
+    ) ||
+      hasNamedDeparture ||
+      /\bDEPARTURES?\b/.test(normalized))
+  ) {
+    return "SID";
+  }
+
+  if (
+    /\b(?:STARS?|STANDARD\s+(?:TERMINAL\s+)?ARRIVALS?|STANDARD\s+ARRIVAL\s+ROUTES?|DESCEND\s+VIA\s+STAR|ARRIVAL\s+(?:PROCEDURES?|ROUTES?|TRANSITIONS?))\b/.test(
+      normalized
+    ) ||
+    hasNamedArrival ||
+    /\b(?:EXPECT\s+(?:THE\s+)?.*\s+ARRIVAL|ARRIVALS?)\b/.test(normalized)
+  ) {
+    return "STAR";
+  }
+
+  if (/\b(?:ILS|LOCALIZER|LOC|LDA|SDF|PAR)\b/.test(normalized) || /\bPRECISION\s+APPROACH\b/.test(normalized)) {
     return "ILS";
   }
-  if (/\bRNAV\b/.test(normalized) || /RNAV\d/i.test(normalized) || /\bGPS\b/.test(normalized)) {
+  if (/\bRNAV\b/.test(normalized) || /RNAV\s*\d/i.test(normalized) || /\b(?:GPS|RNP|LNAV(?:\/VNAV)?|VNAV|LPV|LP)\b/.test(normalized)) {
     return "RNAV";
   }
-  if (/\bVOR\b/.test(normalized)) {
+  if (/\b(?:VOR(?:\/DME)?|VORTAC)\b/.test(normalized)) {
     return "VOR";
   }
-  if (/\bVISUAL\b/.test(normalized)) {
+  if (/\b(?:VISUAL|CONTACT\s+APPROACH|CIRCLING\s+APPROACH|CIRCLE\s+TO\s+LAND)\b/.test(normalized)) {
     return "VISUAL";
-  }
-  if (/\bSID\b/.test(normalized)) {
-    return "SID";
-  }
-  if (/\bSTAR\b/.test(normalized)) {
-    return "STAR";
-  }
-  if (/\bODP\b/.test(normalized) || /OBSTACLE\s*DEPARTURE/i.test(normalized) || /TAKEOFF\s*MINIMUMS?/i.test(normalized)) {
-    return "ODP";
-  }
-  if (/\b(?:DEPARTURE\s+PROCEDURE|DEPARTURE\s+CHART)\b/.test(normalized) && !/STANDARD\s+INSTRUMENT\s+DEPARTURE/.test(normalized)) {
-    return "ODP";
-  }
-  if (/STANDARD\s+INSTRUMENT\s+DEPARTURE/.test(normalized)) {
-    return "SID";
-  }
-  if (/\b(?:STANDARD\s+(?:TERMINAL\s+)?ARRIVAL|ARRIVAL\s+PROCEDURE)\b/.test(normalized)) {
-    return "STAR";
   }
 
   return undefined;
@@ -438,7 +452,7 @@ export const detectAirportInfoDetail = (input: string): AirportInfoDetail | unde
   if (/\bchart\s+supplement\b/.test(normalized)) {
     return "supplement";
   }
-  if (/\b(?:runway|airport diagram|field layout)\b/.test(normalized)) {
+  if (/\b(?:runways?|airport diagram|field layout)\b/.test(normalized)) {
     return "runways";
   }
   if (/\bfrequenc(?:y|ies)|tower|ground|atis|ctaf/.test(normalized) && !/\b(?:hours|open|close|operat)/i.test(normalized)) {
@@ -450,7 +464,7 @@ export const detectAirportInfoDetail = (input: string): AirportInfoDetail | unde
   if (/\bairport info|airport information|details|all\s+(?:data|info)|everything|all\b/.test(normalized)) {
     return "all";
   }
-  if (/\bshow\s+me\b/.test(normalized) && !/\b(?:metar|taf|pirep|weather|notam|plate|chart|freq|traffic|approach|ils|rnav|vor|gps|loc|procedure)\b/.test(normalized)) {
+  if (/\bshow\s+me\b/.test(normalized) && !/\b(?:metar|taf|pirep|weather|notam|plate|charts?|freq|traffic|approach(?:es)?|ils|localizer|loc|lda|sdf|par|asr|rnav|vor|gps|rnp|lnav|vnav|lpv|lp|visual|sids?|stars?|odps?|dp|departures?|arrivals?|takeoff\s+(?:minimums?|mins?)|dva|climb\s+gradient|procedures?)\b/.test(normalized)) {
     return "all";
   }
 

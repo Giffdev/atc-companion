@@ -84,14 +84,14 @@ const NOTAM_PATTERN = /\b(?:notam|notams|fdc|tfr)\b/i;
 const FREQUENCY_PATTERN = /\b(?:frequency|frequencies|tower|twr|ground|gnd|approach|app|departure|delivery|del|atis|ctaf)\b/i;
 const CHART_SUPPLEMENT_PATTERN = /\bchart\s+supplement\b/i;
 const PLATES_PATTERN =
-  /\b(?:plate|plates|chart(?!\s+supplement)|charts(?!\s+supplement)|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sid|star|odp|ils|rnav|vor|visual|departure procedure|obstacle departure|takeoff minimums?|standard instrument departure|standard (?:terminal )?arrival)\b/i;
+  /\b(?:plate|plates|chart(?!\s+supplement)|charts(?!\s+supplement)|approach plates?|instrument approach(?:es)?|approach procedure(?:s)?|approaches|sids?|stars?|odps?|dp|ils|localizer|loc|lda|sdf|rnav|gps|rnp|lnav(?:\/vnav)?|vnav|lpv|lp|vor(?:\/dme)?|vortac|ndb|visual(?:\s+approach)?|contact approach|circling approach|circle(?:\s+to\s+land)?|precision approach|non[-\s]?precision approach|par|asr|climb via sid|descend via star|standard instrument departures?|standard (?:terminal )?arrivals?|standard arrival routes?|departure procedures?|departure routes?|filed departures?|assigned departures?|departures?(?!\s+(?:frequency|frequencies|control|controller|clearance|delivery))|arrival procedures?|arrival routes?|arrival transitions?|arrivals?(?!\s+(?:frequency|frequencies|control))|obstacle (?:departure procedures?|departures?|dp)|takeoff minimums?|takeoff mins?|non[-\s]?standard takeoff minimums?|diverse vector area|dva|departure obstacles?|required climb gradient|climb gradient)\b/i;
 const TRAFFIC_PATTERN = /\b(?:traffic|ads-b|adsb|targets|planes?\s+(?:near|around)|aircraft\s+(?:near|around)|in the pattern)\b/i;
 const NAVIGATION_PATTERN =
   /\b(?:heading(?:\s+vector)?|vector|direct|distance|bearing|route)\b|\bhow far is\b|\bfrom\s+(?:my airport|[A-Za-z]{3,4})\s+to\s+(?:my airport|[A-Za-z]{3,4})\b/i;
 const REGULATORY_PATTERN =
   /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
 const AIRPORT_INFO_PATTERN =
-  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? at|airport diagram|field layout|chart supplement|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed))\b/i;
+  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? (?:at|for)|how many runways|airport diagram|field layout|chart supplement|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed)|(?:how many|what|which) runways?)\b/i;
 const HOURS_CONTEXT_PATTERN = /\b(?:hours|open|close|closing|operat|schedule|staffed|manned|unmanned|part.?time|24.?hour)\b/i;
 const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on)|show me (?:everything|all|all data)|everything (?:for|on|about|at)|all (?:data|info) (?:for|on|about|at)|give me (?:everything|all))\b/i;
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
