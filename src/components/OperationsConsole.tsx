@@ -898,7 +898,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         if (payload.intent.detail === "all" || !payload.intent.detail) {
           airportInfoPanels.push("notam", "traffic");
         }
-        setActiveCard("weather");
+        // Set active card based on what the user actually asked about
+        const detailCard = mapIntentToDashboardType(payload.intent);
+        setActiveCard(detailCard ?? "weather");
         setVisiblePanels(new Set(airportInfoPanels));
       } else if (returnedCard) {
         setActiveCard(returnedCard);
@@ -1073,7 +1075,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   }, [autoRefreshConfig, fetchLiveQuery, submittedQuery]);
 
   return (
-    <main className="flex min-h-screen flex-col">
+    <main className="flex min-h-screen flex-col overflow-x-hidden">
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">
         <header className="aviation-panel relative overflow-hidden px-5 py-4 md:px-7">
           <div className="absolute inset-y-0 right-[-8rem] hidden w-80 rounded-full bg-cyan-500/10 blur-3xl xl:block" />
@@ -1167,7 +1169,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
             switch (cardType) {
               case "weather":
                 return (
-                  <div key="weather" className="xl:col-span-7">
+                  <div key="weather" className="min-w-0 xl:col-span-7">
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.weather.fetchedAt}
@@ -1198,7 +1200,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "notam":
                 return (
-                  <div key="notam" className="xl:col-span-5">
+                  <div key="notam" className="min-w-0 xl:col-span-5">
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.notams[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1245,7 +1247,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "traffic":
                 return (
-                  <div key="traffic" className="xl:col-span-7">
+                  <div key="traffic" className="min-w-0 xl:col-span-7">
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.traffic[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1286,7 +1288,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "navigation":
                 return (
-                  <div key="navigation" className="xl:col-span-5">
+                  <div key="navigation" className="min-w-0 xl:col-span-5">
                     <ResultCard
                       className="h-full"
                       fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : fallbackFetchedAt}
@@ -1304,7 +1306,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "frequency":
                 return (
-                  <div key="frequency" className="xl:col-span-5">
+                  <div key="frequency" className="min-w-0 xl:col-span-5">
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.frequencies[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1355,7 +1357,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "plates":
                 return (
-                  <div key="plates" className="xl:col-span-7">
+                  <div key="plates" className="min-w-0 xl:col-span-7">
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.plates[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1384,7 +1386,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "regulatory":
                 return (
-                  <div key="regulatory" className="xl:col-span-5">
+                  <div key="regulatory" className="min-w-0 xl:col-span-5">
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.regulatory[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1422,7 +1424,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         {/* Airport stats card — rendered when facilityAirportInfo is available from dashboard fetch */}
         {facilityAirportInfo?.hours?.ok && (
           <section className="mt-6 grid gap-6 xl:grid-cols-12">
-            <div className="xl:col-span-12">
+            <div className="min-w-0 xl:col-span-12">
               <ResultCard
                 className="h-full"
                 fetchedAt={facilityAirportInfo.hours.data.source ? new Date().toISOString() : fallbackFetchedAt}
