@@ -116,21 +116,44 @@ const detectWeatherSubtype = (input: string): WeatherSubtype => {
 
 const extractAltitudeRange = (input: string): [number, number] | undefined => {
   const normalized = input.toLowerCase();
-  const betweenMatch = /\bbetween\s+(\d{3,5}|fl\d{2,3})\s+(?:and|-)\s+(\d{3,5}|fl\d{2,3})\b/i.exec(normalized);
-
-  if (!betweenMatch) {
-    return undefined;
-  }
+  const altitudeValuePattern = "(?:fl\\s*\\d{2,3}|\\d{1,3}(?:,\\d{3})+|\\d{3,5})(?:\\s*(?:ft|feet|foot|'))?";
 
   const toFeet = (value: string): number => {
-    if (/^fl/i.test(value)) {
-      return Number(value.replace(/^fl/i, "")) * 100;
+    const normalizedValue = value
+      .trim()
+      .replace(/(?:ft|feet|foot|')$/i, "")
+      .replace(/,/g, "")
+      .replace(/\s+/g, "");
+
+    if (/^fl/i.test(normalizedValue)) {
+      return Number(normalizedValue.replace(/^fl/i, "")) * 100;
     }
 
-    return Number(value);
+    return Number(normalizedValue);
   };
 
-  return [toFeet(betweenMatch[1]), toFeet(betweenMatch[2])];
+  const betweenMatch = new RegExp(
+    `\\bbetween\\s+(${altitudeValuePattern})\\s*(?:and|-)\\s*(${altitudeValuePattern})`,
+    "i"
+  ).exec(normalized);
+
+  if (betweenMatch) {
+    const minAltitude = toFeet(betweenMatch[1]);
+    const maxAltitude = toFeet(betweenMatch[2]);
+    return minAltitude <= maxAltitude ? [minAltitude, maxAltitude] : [maxAltitude, minAltitude];
+  }
+
+  const belowMatch = new RegExp(`\\b(?:below|under)\\s+(${altitudeValuePattern})`, "i").exec(normalized);
+  if (belowMatch) {
+    return [0, toFeet(belowMatch[1])];
+  }
+
+  const aboveMatch = new RegExp(`\\b(?:above|over)\\s+(${altitudeValuePattern})`, "i").exec(normalized);
+  if (aboveMatch) {
+    return [toFeet(aboveMatch[1]), 99999];
+  }
+
+  return undefined;
 };
 
 const extractBounds = (input: string): BoundingBox | undefined => {

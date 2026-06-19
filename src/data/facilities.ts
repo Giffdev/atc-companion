@@ -38,17 +38,46 @@ const compactAirportName = (airport: AirportReference): string => {
   return sanitized || airport.city || airport.icao;
 };
 
-const TOWER_FACILITIES: ControllerFacility[] = AIRPORT_REFERENCES.map((airport) => ({
-  id: `${airport.icao}-TWR`,
-  name: `${compactAirportName(airport)} Tower`,
-  type: "tower",
-  primaryAirport: airport.icao,
-  location: `${airport.city}, ${airport.state}`,
-  position: {
-    latitude: airport.latitude,
-    longitude: airport.longitude
-  }
-}));
+// Airports known to have control towers (Class B, C, and D with active ATCT)
+const TOWERED_AIRPORTS = new Set([
+  // Class B (24hr)
+  "KATL", "KORD", "KDEN", "KDFW", "KJFK", "KLAX", "KSFO", "KSEA", "KMCO",
+  "KLAS", "KPHX", "KMIA", "KEWR", "KIAH", "KMSP", "KBOS", "KDTW", "KFLL",
+  "KBWI", "KSLC", "KDCA", "KSAN", "KTPA", "KPDX", "KSTL", "KHNL", "KMCI",
+  "KAUS", "KCLT", "KRDU", "KPIT", "KCLE", "KMKE", "KIND", "KCVG", "KSMF",
+  "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI", "KLGA", "KIAD", "KMDW",
+  "KDAL", "KHOU", "KMSY", "KABQ", "KONT", "KBUR", "KSNA",
+  // Class C & D with towers
+  "KPAE", "KBFI", "KRNT", "KOLM", "KTTD", "KHIO", "KVUO", "KTIW",
+  "KGEG", "KBOI", "KSUN", "KMFR", "KRDM", "KEUG", "KFAT", "KSBP",
+  "KSTS", "KCCR", "KSQL", "KPAO", "KCRQ", "KSEE", "KMYF", "KFUL",
+  "KLGB", "KVNY", "KSMO", "KCMA", "KOXR", "KSBA", "KPSP", "KIFP",
+  "KFFZ", "KIWA", "KCHD", "KDVT", "KTUS", "KFLG", "KPRC", "KELP",
+  "KAMA", "KLBB", "KFTW", "KAFW", "KADS", "KGKY", "KACT", "KCLL",
+  "KCRP", "KLRD", "KMFE", "KGRK", "KTUL", "KOKC", "KLIT", "KFSM",
+  "KSHV", "KBTR", "KLFT", "KGPT", "KJAX", "KGNV", "KDAB", "KMLB",
+  "KFMY", "KRSW", "KSRQ", "KPIE", "KCHS", "KCAE", "KGSP", "KAGS",
+  "KSAV", "KVPS", "KECP", "KPNS", "KMOB", "KHSV", "KBHM", "KMGM",
+  "KCHA", "KTYS", "KTRI", "KSDF", "KLEX", "KDAY", "KCMH", "KTOL",
+  "KFWA", "KSBN", "KGRR", "KLAN", "KFNT", "KDSM", "KCID", "KMLI",
+  "KPIA", "KSPI", "KBMI", "KSGF", "KICT", "KOMA", "KLNK", "KFSD",
+  "KRAP", "KFAR", "KBIS", "KDLH", "KRST", "KATW", "KGRB", "KMSN",
+  "KGSO", "KRNO", "KCOS", "KICT", "KGSB", "KOFF", "KSKA"
+]);
+
+const TOWER_FACILITIES: ControllerFacility[] = AIRPORT_REFERENCES
+  .filter((airport) => TOWERED_AIRPORTS.has(airport.icao))
+  .map((airport) => ({
+    id: `${airport.icao}-TWR`,
+    name: `${compactAirportName(airport)} Tower`,
+    type: "tower",
+    primaryAirport: airport.icao,
+    location: `${airport.city}, ${airport.state}`,
+    position: {
+      latitude: airport.latitude,
+      longitude: airport.longitude
+    }
+  }));
 
 const APPROACH_CONTROLLER_FACILITIES: ControllerFacility[] = APPROACH_FACILITIES.map((facility) => {
   const airportReferences = facility.airports

@@ -87,6 +87,9 @@ const EMPTY_DASHBOARD = {
   navigation: { from: { icao: "", name: "", position: { latitude: 0, longitude: 0 } }, to: { icao: "", name: "", position: { latitude: 0, longitude: 0 } }, magneticHeading: 0, trueHeading: 0, distanceNm: 0, distanceSm: 0 } as NavigationResult,
   frequencies: [] as Frequency[],
   plates: [] as ApproachPlate[],
+  sids: [] as ApproachPlate[],
+  stars: [] as ApproachPlate[],
+  odps: [] as ApproachPlate[],
   regulatory: [] as FarReference[],
   sourceStatuses: [] as SourceStatusItem[]
 };
@@ -205,11 +208,14 @@ const mergeLiveDashboardData = (
         ...dashboardData,
         frequencies: liveResult.response.data as Frequency[]
       };
-    case "plates":
-      return {
-        ...dashboardData,
-        plates: liveResult.response.data as ApproachPlate[]
-      };
+    case "plates": {
+      const plateData = liveResult.response.data as ApproachPlate[];
+      const procType = liveResult.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
+      if (procType === "SID") return { ...dashboardData, sids: plateData };
+      if (procType === "STAR") return { ...dashboardData, stars: plateData };
+      if (procType === "ODP") return { ...dashboardData, odps: plateData };
+      return { ...dashboardData, plates: plateData };
+    }
     case "regulatory":
       return {
         ...dashboardData,
@@ -222,7 +228,10 @@ const mergeLiveDashboardData = (
         ...dashboardData,
         weather: airportInfo.weather.ok ? airportInfo.weather.data : dashboardData.weather,
         frequencies: airportInfo.frequencies.ok ? airportInfo.frequencies.data : dashboardData.frequencies,
-        plates: airportInfo.plates.ok ? airportInfo.plates.data : dashboardData.plates
+        plates: airportInfo.plates.ok ? airportInfo.plates.data : dashboardData.plates,
+        sids: airportInfo.sids?.ok ? airportInfo.sids.data : dashboardData.sids,
+        stars: airportInfo.stars?.ok ? airportInfo.stars.data : dashboardData.stars,
+        odps: airportInfo.odps?.ok ? airportInfo.odps.data : dashboardData.odps
       };
     }
     case "unknown":
@@ -400,15 +409,8 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       );
     case "traffic":
       return <p className="text-sm text-aviation-text">Traffic card updated with {(liveResult.response.data as TrafficTarget[]).length} live targets.</p>;
-    case "navigation": {
-      const navigation = liveResult.response.data as NavigationResult;
-      return (
-        <p className="text-sm text-aviation-text">
-          Direct vector {navigation.from.icao} → {navigation.to.icao}: {navigation.magneticHeading.toString().padStart(3, "0")}° magnetic for{" "}
-          {navigation.distanceNm.toFixed(1)} NM.
-        </p>
-      );
-    }
+    case "navigation":
+      return null;
     case "frequency": {
       const freqs = liveResult.response.data as Frequency[];
       return (
@@ -440,7 +442,10 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
       );
     case "airport_info": {
       const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
-      const plateCount = airportInfo.plates.ok ? airportInfo.plates.data.length : 0;
+      const approachCount = airportInfo.plates.ok ? airportInfo.plates.data.length : 0;
+      const sidCount = airportInfo.sids?.ok ? airportInfo.sids.data.length : 0;
+      const starCount = airportInfo.stars?.ok ? airportInfo.stars.data.length : 0;
+      const odpCount = airportInfo.odps?.ok ? airportInfo.odps.data.length : 0;
       const freqCount = airportInfo.frequencies.ok ? airportInfo.frequencies.data.length : 0;
       const diagram = airportInfo.diagram?.ok ? airportInfo.diagram.data : null;
       const hours = airportInfo.hours?.ok ? airportInfo.hours.data : null;
@@ -630,13 +635,32 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                 onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
                 type="button"
               >
-                <p className="data-label">Plates</p>
-                <p className="mt-2 font-data text-sm text-aviation-text">{plateCount} <span className="text-xs text-cyan-400">→ view</span></p>
+                <p className="data-label">Procedures</p>
+                <div className="mt-2 space-y-0.5">
+                  {approachCount > 0 && <p className="font-data text-xs text-aviation-text">{approachCount} approaches</p>}
+                  {sidCount > 0 && <p className="font-data text-xs text-aviation-text">{sidCount} SIDs</p>}
+                  {starCount > 0 && <p className="font-data text-xs text-aviation-text">{starCount} STARs</p>}
+                  {odpCount > 0 && <p className="font-data text-xs text-aviation-text">{odpCount} ODPs</p>}
+                  {diagram && <p className="font-data text-xs text-aviation-text">1 diagram</p>}
+                  {approachCount + sidCount + starCount + odpCount === 0 && (
+                    <p className="font-data text-xs text-aviation-muted">None found</p>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-cyan-400">→ view all</p>
               </button>
             ) : (
               <div className="rounded-2xl border border-aviation-border bg-black/15 px-4 py-3">
-                <p className="data-label">Plates</p>
-                <p className="mt-2 font-data text-sm text-aviation-text">{plateCount}</p>
+                <p className="data-label">Procedures</p>
+                <div className="mt-2 space-y-0.5">
+                  {approachCount > 0 && <p className="font-data text-xs text-aviation-text">{approachCount} approaches</p>}
+                  {sidCount > 0 && <p className="font-data text-xs text-aviation-text">{sidCount} SIDs</p>}
+                  {starCount > 0 && <p className="font-data text-xs text-aviation-text">{starCount} STARs</p>}
+                  {odpCount > 0 && <p className="font-data text-xs text-aviation-text">{odpCount} ODPs</p>}
+                  {diagram && <p className="font-data text-xs text-aviation-text">1 diagram</p>}
+                  {approachCount + sidCount + starCount + odpCount === 0 && (
+                    <p className="font-data text-xs text-aviation-muted">None found</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -795,8 +819,21 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       }
     }
 
+    // Pull SIDs/STARs/ODPs from facilityAirportInfo if not already populated
+    if (facilityAirportInfo) {
+      if (!merged.sids.length && facilityAirportInfo.sids?.ok) {
+        merged = { ...merged, sids: facilityAirportInfo.sids.data };
+      }
+      if (!merged.stars.length && facilityAirportInfo.stars?.ok) {
+        merged = { ...merged, stars: facilityAirportInfo.stars.data };
+      }
+      if (!merged.odps.length && facilityAirportInfo.odps?.ok) {
+        merged = { ...merged, odps: facilityAirportInfo.odps.data };
+      }
+    }
+
     return merged;
-  }, [liveResult, facilityResults]);
+  }, [liveResult, facilityResults, facilityAirportInfo]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(EMPTY_DASHBOARD.sourceStatuses, liveResult), [liveResult]);
   const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
   const selectedPlateRunway = liveResult?.intent.type === "plates" ? liveResult.intent.runway : undefined;
@@ -1166,10 +1203,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         {visiblePanels.size > 0 && (liveResult || facilityResults.size > 0) ? (
         <section className="grid gap-6 xl:grid-cols-12">
           {orderedCards.filter((cardType) => visiblePanels.has(cardType)).map((cardType) => {
+            const isSinglePanel = visiblePanels.size === 1;
             switch (cardType) {
               case "weather":
                 return (
-                  <div key="weather" className="min-w-0 xl:col-span-7">
+                  <div key="weather" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-7"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.weather.fetchedAt}
@@ -1200,7 +1238,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "notam":
                 return (
-                  <div key="notam" className="min-w-0 xl:col-span-5">
+                  <div key="notam" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-5"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.notams[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1247,7 +1285,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "traffic":
                 return (
-                  <div key="traffic" className="min-w-0 xl:col-span-7">
+                  <div key="traffic" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-7"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.traffic[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1288,7 +1326,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "navigation":
                 return (
-                  <div key="navigation" className="min-w-0 xl:col-span-5">
+                  <div key="navigation" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-5"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={liveResult?.intent.type === "navigation" ? liveResult.response.fetchedAt : fallbackFetchedAt}
@@ -1306,7 +1344,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "frequency":
                 return (
-                  <div key="frequency" className="min-w-0 xl:col-span-5">
+                  <div key="frequency" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-5"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.frequencies[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1357,7 +1395,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "plates":
                 return (
-                  <div key="plates" className="min-w-0 xl:col-span-7">
+                  <div key="plates" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-7"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.plates[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1372,21 +1410,29 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                     >
                       <PlateViewer
                         airportCode={platePanelAirport !== "Field" ? platePanelAirport : undefined}
-                        defaultTab={liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "supplement" ? "supplement"
+                        defaultTab={
+                          liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "supplement" ? "supplement"
                           : liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "runways" ? "diagram"
-                          : "procedures"}
+                          : liveResult?.intent.type === "plates" && liveResult.intent.procedure_type === "SID" ? "departures"
+                          : liveResult?.intent.type === "plates" && liveResult.intent.procedure_type === "STAR" ? "arrivals"
+                          : liveResult?.intent.type === "plates" && liveResult.intent.procedure_type === "ODP" ? "odps"
+                          : undefined
+                        }
                         diagram={plateDiagram}
+                        odps={dashboardData.odps}
                         plates={dashboardData.plates}
                         referenceTime={initialNow}
                         selectedProcedureType={selectedPlateProcedureType}
                         selectedRunway={selectedPlateRunway}
+                        sids={dashboardData.sids}
+                        stars={dashboardData.stars}
                       />
                     </ResultCard>
                   </div>
                 );
               case "regulatory":
                 return (
-                  <div key="regulatory" className="min-w-0 xl:col-span-5">
+                  <div key="regulatory" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-5"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.regulatory[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}
@@ -1422,23 +1468,23 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         ) : null}
 
         {/* Airport stats card — rendered when facilityAirportInfo is available from dashboard fetch */}
-        {facilityAirportInfo?.hours?.ok && (
+        {facilityAirportInfo && (facilityAirportInfo.hours?.ok || facilityAirportInfo.runwayDetails?.ok || facilityAirportInfo.frequencies?.ok) && (
           <section className="mt-6 grid gap-6 xl:grid-cols-12">
-            <div className="min-w-0 xl:col-span-12">
+            <div className={`min-w-0 xl:col-span-12`}>
               <ResultCard
                 className="h-full"
-                fetchedAt={facilityAirportInfo.hours.data.source ? new Date().toISOString() : fallbackFetchedAt}
+                fetchedAt={new Date().toISOString()}
                 isActive={false}
-                kind="navigation"
+                kind="facility"
                 rawData={facilityAirportInfo}
                 referenceTime={initialNow}
                 source={getDataSource("faaNasr")}
-                subtitle="Tower hours, runway information, and airport classification from FAA Chart Supplement data."
-                title={`${formatAirportTitle(facilityAirportInfo.airport, facilityAirportInfo.airportName)} airport statistics`}
+                subtitle="Tower hours, runway configuration, overlying frequencies, and airport classification from FAA Chart Supplement data."
+                title={`${formatAirportTitle(facilityAirportInfo.airport, facilityAirportInfo.airportName)} facility overview`}
               >
                 <div className="space-y-4">
                   {/* Hours */}
-                  {(() => {
+                  {facilityAirportInfo.hours?.ok && (() => {
                     const hours = facilityAirportInfo.hours!.data;
                     return (
                       <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
@@ -1512,21 +1558,35 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                     </div>
                   )}
 
-                  {/* Diagram link */}
-                  {facilityAirportInfo.diagram?.ok && facilityAirportInfo.diagram.data && (
-                    <a
-                      className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3 transition hover:border-cyan-300/40 hover:bg-cyan-500/10"
-                      href={facilityAirportInfo.diagram.data.chartUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Airport Diagram</p>
-                        <p className="mt-1 text-sm text-aviation-text">{facilityAirportInfo.diagram.data.procedureName}</p>
+                  {/* Overlying approach/departure/center frequencies */}
+                  {facilityAirportInfo.frequencies?.ok && (() => {
+                    const appFreqs = facilityAirportInfo.frequencies.data.filter(
+                      (f) => f.type === "APP" || f.type === "CENTER" || f.type === "DEL"
+                    );
+                    if (!appFreqs.length) return null;
+                    return (
+                      <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-aviation-muted">Overlying Frequencies</p>
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {appFreqs.map((freq) => (
+                            <div key={`${freq.type}-${freq.valueMHz}-${freq.name}`} className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`rounded-full px-2 py-0.5 font-data text-xs ${
+                                  freq.type === "APP" ? "border border-violet-500/30 bg-violet-500/10 text-violet-200"
+                                    : freq.type === "CENTER" ? "border border-blue-500/30 bg-blue-500/10 text-blue-200"
+                                    : "border border-amber-500/30 bg-amber-500/10 text-amber-200"
+                                }`}>
+                                  {freq.type}
+                                </span>
+                                <span className="font-data text-sm text-cyan-100">{freq.valueMHz.toFixed(3)}</span>
+                              </div>
+                              <p className="mt-1 break-words text-xs text-aviation-muted">{freq.name}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-cyan-400">↗</span>
-                    </a>
-                  )}
+                    );
+                  })()}
                 </div>
               </ResultCard>
             </div>

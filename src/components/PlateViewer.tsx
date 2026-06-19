@@ -7,10 +7,13 @@ import { toFaaCode } from "@/data/airports";
 import type { ProcedureType } from "@/types/intents";
 import type { ApproachPlate } from "@/types/aviation";
 
-type PlateViewerTab = "procedures" | "diagram" | "supplement";
+type PlateViewerTab = "approaches" | "departures" | "arrivals" | "odps" | "diagram" | "supplement";
 
 type PlateViewerProps = {
   plates: ApproachPlate[];
+  sids?: ApproachPlate[];
+  stars?: ApproachPlate[];
+  odps?: ApproachPlate[];
   referenceTime?: string;
   selectedProcedureType?: ProcedureType;
   selectedRunway?: string;
@@ -98,23 +101,24 @@ export const pickBestMatchingPlate = (
   return bestPlate;
 };
 
-export function PlateViewer({ plates, referenceTime, selectedProcedureType, selectedRunway, airportCode, diagram, defaultTab }: PlateViewerProps) {
+export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenceTime, selectedProcedureType, selectedRunway, airportCode, diagram, defaultTab }: PlateViewerProps) {
   const bestMatch = useMemo(
     () => pickBestMatchingPlate(plates, selectedProcedureType, selectedRunway),
     [plates, selectedProcedureType, selectedRunway]
   );
-  const viewerKey = useMemo(
-    () =>
-      [
-        selectedProcedureType ?? "all-procedures",
-        selectedRunway ?? "all-runways",
-        ...plates.map((plate) => getPlateKey(plate))
-      ].join("|"),
-    [plates, selectedProcedureType, selectedRunway]
-  );
 
-  const initialTab = defaultTab ?? "procedures";
-  const [activeTab, setActiveTab] = useState<PlateViewerTab>(initialTab);
+  const resolveDefaultTab = (): PlateViewerTab => {
+    if (defaultTab) return defaultTab;
+    if (selectedProcedureType === "SID" && sids.length > 0) return "departures";
+    if (selectedProcedureType === "STAR" && stars.length > 0) return "arrivals";
+    if (selectedProcedureType === "ODP" && odps.length > 0) return "odps";
+    if (plates.length > 0) return "approaches";
+    if (sids.length > 0) return "departures";
+    if (stars.length > 0) return "arrivals";
+    return "approaches";
+  };
+
+  const [activeTab, setActiveTab] = useState<PlateViewerTab>(resolveDefaultTab);
   const [refLoading, setRefLoading] = useState(true);
 
   const faaCode = airportCode ? toFaaCode(airportCode) : null;
@@ -124,10 +128,23 @@ export function PlateViewer({ plates, referenceTime, selectedProcedureType, sele
   const proxiedDiagramUrl = diagramUrl ? getProxiedPlateUrl(diagram!) : null;
 
   const tabs: { id: PlateViewerTab; label: string; available: boolean }[] = [
-    { id: "procedures", label: `Procedures (${plates.length})`, available: plates.length > 0 },
-    { id: "diagram", label: "Airport Diagram", available: Boolean(proxiedDiagramUrl) },
-    { id: "supplement", label: "Chart Supplement", available: Boolean(proxiedSupplementUrl) }
+    { id: "approaches", label: `Approaches (${plates.length})`, available: plates.length > 0 },
+    { id: "departures", label: `SIDs (${sids.length})`, available: sids.length > 0 },
+    { id: "arrivals", label: `STARs (${stars.length})`, available: stars.length > 0 },
+    { id: "odps", label: `ODPs (${odps.length})`, available: odps.length > 0 },
+    { id: "diagram", label: "Diagram", available: Boolean(proxiedDiagramUrl) },
+    { id: "supplement", label: "Supplement", available: Boolean(proxiedSupplementUrl) }
   ];
+
+  const activeTabPlates = activeTab === "approaches" ? plates
+    : activeTab === "departures" ? sids
+    : activeTab === "arrivals" ? stars
+    : activeTab === "odps" ? odps
+    : [];
+
+  const activeTabBestMatch = activeTab === "approaches" ? bestMatch
+    : activeTabPlates.length > 0 ? activeTabPlates[0]
+    : undefined;
 
   return (
     <div className="space-y-4">
@@ -149,19 +166,21 @@ export function PlateViewer({ plates, referenceTime, selectedProcedureType, sele
         ))}
       </div>
 
-      {/* Procedures tab */}
-      {activeTab === "procedures" && (
-        bestMatch ? (
+      {/* Procedure tabs (Approaches, SIDs, STARs, ODPs) */}
+      {(activeTab === "approaches" || activeTab === "departures" || activeTab === "arrivals" || activeTab === "odps") && (
+        activeTabBestMatch ? (
           <PlateViewerBody
-            key={viewerKey}
-            bestMatch={bestMatch}
-            plates={plates}
+            key={`${activeTab}-${activeTabPlates.map(getPlateKey).join("|")}`}
+            bestMatch={activeTabBestMatch}
+            plates={activeTabPlates}
             referenceTime={referenceTime}
-            selectedProcedureType={selectedProcedureType}
-            selectedRunway={selectedRunway}
+            selectedProcedureType={activeTab === "approaches" ? selectedProcedureType : undefined}
+            selectedRunway={activeTab === "approaches" ? selectedRunway : undefined}
           />
         ) : (
-          <div className="text-sm text-aviation-muted">No approach plates available for this airport.</div>
+          <div className="text-sm text-aviation-muted">
+            No {activeTab === "approaches" ? "approach plates" : activeTab === "departures" ? "SIDs" : activeTab === "arrivals" ? "STARs" : "ODPs"} available for this airport.
+          </div>
         )
       )}
 

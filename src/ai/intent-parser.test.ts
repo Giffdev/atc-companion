@@ -107,6 +107,40 @@ describe("parseIntent", () => {
     });
   });
 
+  it("parses traffic altitude ceilings and floors", async () => {
+    const [belowIntent, aboveIntent, underIntent, overIntent] = await Promise.all([
+      parseIntent("traffic near KSEA below 12,000 ft"),
+      parseIntent("traffic near KSEA above 5000"),
+      parseIntent("traffic near KSEA under 12000 feet"),
+      parseIntent("traffic near KSEA over FL240")
+    ]);
+
+    expect(belowIntent).toMatchObject({
+      type: "traffic",
+      airport: "KSEA",
+      altitude_range: [0, 12000],
+      requiresClarification: false
+    });
+    expect(aboveIntent).toMatchObject({
+      type: "traffic",
+      airport: "KSEA",
+      altitude_range: [5000, 99999],
+      requiresClarification: false
+    });
+    expect(underIntent).toMatchObject({
+      type: "traffic",
+      airport: "KSEA",
+      altitude_range: [0, 12000],
+      requiresClarification: false
+    });
+    expect(overIntent).toMatchObject({
+      type: "traffic",
+      airport: "KSEA",
+      altitude_range: [24000, 99999],
+      requiresClarification: false
+    });
+  });
+
   it("parses navigation requests with facility context", async () => {
     const intent = await parseIntent("what is the direct heading vector from my airport to KORD", {
       facilityId: "KSEA-TWR"

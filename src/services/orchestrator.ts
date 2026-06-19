@@ -12,7 +12,7 @@ import { getAirportRunways, type AirportRunways } from "@/services/runway-info";
 import { getTraffic } from "@/services/traffic";
 import { getMetar, getPireps, getTaf, getWeather } from "@/services/weather";
 import type { ApiResponse, DataSource } from "@/types/api";
-import type { ApproachPlate, Frequency, WeatherBundle } from "@/types/aviation";
+import type { ApproachPlate, Frequency, TrafficTarget, WeatherBundle } from "@/types/aviation";
 import type { ParsedIntent } from "@/types/intents";
 
 const ORCHESTRATOR_SOURCE: DataSource = {
@@ -33,6 +33,9 @@ export interface AirportInfoQueryPayload {
   weather: ApiResponse<WeatherBundle>;
   frequencies: ApiResponse<Frequency[]>;
   plates: ApiResponse<ApproachPlate[]>;
+  sids?: ApiResponse<ApproachPlate[]>;
+  stars?: ApiResponse<ApproachPlate[]>;
+  odps?: ApiResponse<ApproachPlate[]>;
   diagram?: ApiResponse<ApproachPlate | null>;
   hours?: ApiResponse<AirportHours>;
 }
@@ -64,6 +67,29 @@ const dedupeSources = (sources: DataSource[]): DataSource[] => {
 
 const isDataSource = (source: DataSource | undefined): source is DataSource => Boolean(source);
 
+const isGroundTrafficTarget = (target: TrafficTarget): boolean =>
+  target.onGround ||
+  (typeof target.groundspeedKnots === "number" &&
+    target.groundspeedKnots < 30 &&
+    typeof target.altitudeFeet === "number" &&
+    target.altitudeFeet < 100);
+
+const filterTrafficTargets = (
+  targets: TrafficTarget[],
+  altitudeRange?: [number, number]
+): TrafficTarget[] =>
+  targets.filter((target) => {
+    if (isGroundTrafficTarget(target)) {
+      return false;
+    }
+
+    if (!altitudeRange || target.altitudeFeet === null) {
+      return true;
+    }
+
+    return target.altitudeFeet >= altitudeRange[0] && target.altitudeFeet <= altitudeRange[1];
+  });
+
 const getClarificationResponse = (intent: ParsedIntent): ApiResponse<never> =>
   createApiErrorResponse(
     {
@@ -84,13 +110,16 @@ const executeAirportInfo = async (
   options: ExecuteQueryOptions = {}
 ): Promise<ApiResponse<AirportInfoQueryPayload>> => {
   const fetchHours = intent.detail === "hours" || intent.detail === "all" || !intent.detail;
-  const [weather, frequencies, plates, diagram, hours, runwayDetails] = await Promise.all([
+  const [weather, frequencies, plates, diagram, hours, runwayDetails, sids, stars, odps] = await Promise.all([
     getWeather(intent.airport, { bypassCache: options.bypassCache }),
     getFrequencies(intent.airport),
     getPlates({ airport: intent.airport }),
     getAirportDiagram(intent.airport),
     fetchHours ? getAirportHours(intent.airport) : Promise.resolve(undefined),
-    getAirportRunways(intent.airport)
+    getAirportRunways(intent.airport),
+    getSids(intent.airport),
+    getStars(intent.airport),
+    getOdps(intent.airport)
   ]);
 
   // Build runway designator list: prefer live FAA data, fall back to static
@@ -134,6 +163,9 @@ const executeAirportInfo = async (
       weather,
       frequencies,
       plates,
+      sids: sids as ApiResponse<ApproachPlate[]>,
+      stars: stars as ApiResponse<ApproachPlate[]>,
+      odps: odps as ApiResponse<ApproachPlate[]>,
       diagram,
       hours
     },
@@ -184,8 +216,8 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
         airport: intent.airport,
         type: intent.procedure_type
       });
-    case "traffic":
-      return getTraffic({
+    case "traffic": {
+      const trafficResponse = await getTraffic({
         airport: intent.airport,
         bounds: intent.bounds
           ? {
@@ -197,6 +229,15 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
           : undefined,
         bypassCache: options.bypassCache
       });
+      if (!trafficResponse.ok) {
+        return trafficResponse;
+      }
+
+      return {
+        ...trafficResponse,
+        data: filterTrafficTargets(trafficResponse.data, intent.altitude_range)
+      };
+    }
     case "navigation": {
       const selectedFacility = options.facilityId ? getFacilityById(options.facilityId) : null;
       const fromAirport = intent.from ?? selectedFacility?.primaryAirport;
