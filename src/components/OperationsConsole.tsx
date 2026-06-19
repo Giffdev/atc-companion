@@ -609,17 +609,25 @@ const renderQuerySummary = (
               )}
 
               {(runways.length > 0 || airportInfo.runways.length > 0) && (
-                <div className={runways.length > 2 ? "sm:col-span-2 lg:col-span-3" : ""}>
+                <div className="sm:col-span-2 lg:col-span-3">
                   <p className="text-xs text-aviation-muted">Runways</p>
                   {runways.length > 0 ? (
-                    <p className="font-data text-aviation-text">
-                      {runways.map((rwy) => {
-                        const dim = rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}×${rwy.widthFeet ?? "?"}ft` : "";
-                        return `${rwy.designator}${dim ? ` (${dim}${rwy.surface ? ` ${rwy.surface}` : ""})` : ""}`;
-                      }).join(" · ")}
-                    </p>
+                    <div className="mt-1 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                      {runways.map((rwy) => (
+                        <div key={rwy.designator} className="flex items-baseline gap-2 font-data text-sm text-aviation-text">
+                          <span className="font-semibold">{rwy.designator}</span>
+                          <span className="text-xs text-aviation-muted">
+                            {[
+                              rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}×${rwy.widthFeet ?? "?"}ft` : null,
+                              rwy.surface ?? null,
+                              rwy.lighting ?? null
+                            ].filter(Boolean).join(" · ") || ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="font-data text-aviation-text">{airportInfo.runways.join(" · ")}</p>
+                    <p className="mt-1 font-data text-sm text-aviation-text">{airportInfo.runways.join(" · ")}</p>
                   )}
                 </div>
               )}
@@ -645,41 +653,23 @@ const renderQuerySummary = (
               </div>
             )}
 
-            {/* Procedures + Frequencies action row */}
-            <div className="grid gap-2 sm:grid-cols-2">
-              {onFollowUp ? (
-                <button
-                  className="flex items-center justify-between rounded-lg border border-aviation-border bg-black/10 px-3 py-2 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                  onClick={() => onFollowUp(`approach plates at ${airportInfo.airport}`)}
-                  type="button"
-                >
-                  <span className="font-data text-sm text-aviation-text">
-                    Procedures{procedureTotal > 0 ? ` (${procedureTotal})` : ""}
-                  </span>
-                  <span className="text-xs text-cyan-400">→ view</span>
-                </button>
-              ) : (
-                <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                  <span className="font-data text-sm text-aviation-text">Procedures: {procedureTotal}</span>
-                </div>
-              )}
-              {onFollowUp ? (
-                <button
-                  className="flex items-center justify-between rounded-lg border border-aviation-border bg-black/10 px-3 py-2 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                  onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
-                  type="button"
-                >
-                  <span className="font-data text-sm text-aviation-text">
-                    Frequencies{freqCount > 0 ? ` (${freqCount})` : ""}
-                  </span>
-                  <span className="text-xs text-cyan-400">→ view</span>
-                </button>
-              ) : (
-                <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
-                  <span className="font-data text-sm text-aviation-text">Frequencies: {freqCount}</span>
-                </div>
-              )}
-            </div>
+            {/* Frequencies action link */}
+            {onFollowUp ? (
+              <button
+                className="flex items-center justify-between rounded-lg border border-aviation-border bg-black/10 px-3 py-2 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+                onClick={() => onFollowUp(`frequencies at ${airportInfo.airport}`)}
+                type="button"
+              >
+                <span className="font-data text-sm text-aviation-text">
+                  Frequencies{freqCount > 0 ? ` (${freqCount})` : ""}
+                </span>
+                <span className="text-xs text-cyan-400">→ view</span>
+              </button>
+            ) : (
+              <div className="rounded-lg border border-aviation-border bg-black/10 px-3 py-2">
+                <span className="font-data text-sm text-aviation-text">Frequencies: {freqCount}</span>
+              </div>
+            )}
 
             {hours && (
               <p className="text-xs text-aviation-muted">Source: {hours.source}{hours.timezone?.isDst ? " · DST active" : ""}</p>
@@ -930,6 +920,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
   const trafficAirportIcao = useMemo(() => {
     if (activeIntent?.type === "traffic" && activeIntent.airport) return activeIntent.airport;
+    if (activeIntent?.type === "airport_info" && activeIntent.airport) return activeIntent.airport;
+    if (activeIntent?.type === "plates" && activeIntent.airport) return activeIntent.airport;
     return selectedFacility?.primaryAirport ?? undefined;
   }, [activeIntent, selectedFacility]);
   const trafficAirportRef = trafficAirportIcao ? findAirportReference(trafficAirportIcao) : null;

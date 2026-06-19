@@ -480,7 +480,7 @@ export const detectAirportInfoDetail = (input: string): AirportInfoDetail | unde
   if (/\b(?:hours|open|close|closing|operat|schedule|24.?hour|staffed|manned|unmanned|part.?time)\b/.test(normalized)) {
     return "hours";
   }
-  if (/\bairport info|airport information|details|all\s+(?:data|info)|everything|all\b/.test(normalized)) {
+  if (/\bairport info|airport information|details|facility overview|all\s+(?:data|info)|everything|all\b/.test(normalized)) {
     return "all";
   }
   if (/\bshow\s+me\b/.test(normalized) && !/\b(?:metar|taf|pirep|weather|notam|plate|charts?|freq|traffic|approach(?:es)?|ils|localizer|loc|lda|sdf|par|asr|rnav|vor|gps|rnp|lnav|vnav|lpv|lp|visual|sids?|stars?|odps?|dp|departures?|arrivals?|takeoff\s+(?:minimums?|mins?)|dva|climb\s+gradient|procedures?)\b/.test(normalized)) {

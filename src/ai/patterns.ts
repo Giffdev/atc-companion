@@ -91,7 +91,7 @@ const NAVIGATION_PATTERN =
 const REGULATORY_PATTERN =
   /\b(?:far|cfr|aim|regulation|regulatory|part|section|7110(?:\.65)?|wake turbulence|light gun|nordo|squawk|speed restrictions?|speed limits?|weather minimums?|vfr minimums?|class [bcdeg]|line up and wait|position and hold|hold short|go around|cleared to land|special vfr|airspace class)\b/i;
 const AIRPORT_INFO_PATTERN =
-  /\b(?:airport info|airport information|airport details|runway configuration|runway layout|runways? (?:at|for)|how many runways|airport diagram|field layout|chart supplement|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed)|(?:how many|what|which) runways?)\b/i;
+  /\b(?:airport info|airport information|airport details|facility overview|runway configuration|runway layout|runways? (?:at|for)|how many runways|airport diagram|field layout|chart supplement|hours of operation|(?:how long|when) (?:is|does|are).*(?:open|close|operat|staffed)|(?:how many|what|which) runways?)\b/i;
 const HOURS_CONTEXT_PATTERN = /\b(?:hours|open|close|closing|operat|schedule|staffed|manned|unmanned|part.?time|24.?hour)\b/i;
 const GENERIC_AIRPORT_INFO_PATTERN = /\b(?:tell me about|information (?:for|on)|details (?:for|on)|info (?:for|on)|show me (?:everything|all|all data)|everything (?:for|on|about|at)|all (?:data|info) (?:for|on|about|at)|give me (?:everything|all))\b/i;
 const WEATHER_MINIMUMS_PATTERN = /\b(?:vfr\s+)?weather minimums?\b|\bvfr minimums?\b/i;
