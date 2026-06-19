@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { TrafficTarget } from "@/types/aviation";
 
@@ -23,133 +23,92 @@ const DEFAULT_ZOOM_INDEX = 2;
 
 const SVG_WIDTH = 320;
 const SVG_HEIGHT = 240;
-const PADDING = 30;
+const MAP_CENTER_X = SVG_WIDTH / 2;
+const MAP_CENTER_Y = SVG_HEIGHT / 2;
+const OUTER_RING_RADIUS = 90;
+const PLOT_RADIUS = OUTER_RING_RADIUS * 0.85;
+const DEFAULT_VISIBLE_RANGE_NM = 8;
 
 type NormalizedTarget = { target: TrafficTarget; x: number; y: number };
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const normalizeTraffic = (
   traffic: TrafficTarget[],
   zoom: number,
-  panOffset: { x: number; y: number },
   anchorPosition?: { latitude: number; longitude: number }
 ): { targets: NormalizedTarget[]; airportPx: { x: number; y: number } | null; nmPerPx: number } => {
   const positions = traffic
-    .map((t) => t.position)
-    .filter((p): p is NonNullable<typeof p> => p !== null);
+    .map((target) => target.position)
+    .filter((position): position is NonNullable<typeof position> => position !== null);
 
-  // Determine center — prefer airport position, fall back to traffic centroid
-  let centerLat: number;
-  let centerLon: number;
-
-  if (anchorPosition) {
-    centerLat = anchorPosition.latitude;
-    centerLon = anchorPosition.longitude;
-  } else if (positions.length) {
-    const lats = positions.map((p) => p.latitude);
-    const lons = positions.map((p) => p.longitude);
-    centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-    centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
-  } else {
+  if (!anchorPosition && positions.length === 0) {
     return { targets: [], airportPx: null, nmPerPx: 0 };
   }
 
-  // Apply pan offset (in degrees)
-  centerLat -= panOffset.y;
-  centerLon += panOffset.x;
+  const referencePosition = anchorPosition ?? {
+    latitude: positions.reduce((sum, position) => sum + position.latitude, 0) / positions.length,
+    longitude: positions.reduce((sum, position) => sum + position.longitude, 0) / positions.length
+  };
 
-  // Compute span to fit all traffic, then apply zoom
-  let spanLat = 0.15; // ~9 NM default
-  let spanLon = 0.20;
+  const cosLatitude = Math.cos((referencePosition.latitude * Math.PI) / 180);
+  const targetVectors = traffic.map((target) => {
+    if (!target.position) {
+      return { target, distanceNm: 0, xNm: 0, yNm: 0 };
+    }
 
-  if (positions.length) {
-    const lats = positions.map((p) => p.latitude);
-    const lons = positions.map((p) => p.longitude);
-    spanLat = Math.max(Math.max(...lats) - Math.min(...lats), 0.08);
-    spanLon = Math.max(Math.max(...lons) - Math.min(...lons), 0.10);
-    // Add padding
-    spanLat *= 1.4;
-    spanLon *= 1.4;
-  }
+    const yNm = (target.position.latitude - referencePosition.latitude) * 60;
+    const xNm = (target.position.longitude - referencePosition.longitude) * 60 * cosLatitude;
 
-  spanLat /= zoom;
-  spanLon /= zoom;
-
-  const usableW = SVG_WIDTH - 2 * PADDING;
-  const usableH = SVG_HEIGHT - 2 * PADDING;
-  const nmPerDegLat = 60;
-  const nmPerPx = (spanLat * nmPerDegLat) / usableH;
-
-  const toX = (lon: number) => PADDING + ((lon - (centerLon - spanLon / 2)) / spanLon) * usableW;
-  const toY = (lat: number) => SVG_HEIGHT - PADDING - ((lat - (centerLat - spanLat / 2)) / spanLat) * usableH;
-
-  const targets = traffic.map((target) => {
-    if (!target.position) return { target, x: SVG_WIDTH / 2, y: SVG_HEIGHT / 2 };
-    return { target, x: toX(target.position.longitude), y: toY(target.position.latitude) };
+    return {
+      target,
+      distanceNm: Math.hypot(xNm, yNm),
+      xNm,
+      yNm
+    };
   });
 
-  const airportPx = anchorPosition ? { x: toX(anchorPosition.longitude), y: toY(anchorPosition.latitude) } : null;
+  const farthestTargetNm = targetVectors.reduce((maxDistance, { distanceNm }) => Math.max(maxDistance, distanceNm), 0);
+  const baseVisibleRangeNm = Math.max(DEFAULT_VISIBLE_RANGE_NM, farthestTargetNm / 0.85);
+  const visibleRangeNm = Math.max(1, baseVisibleRangeNm / zoom);
+  const nmPerPx = visibleRangeNm / OUTER_RING_RADIUS;
+  const pxPerNm = PLOT_RADIUS / visibleRangeNm;
 
-  return { targets, airportPx, nmPerPx };
+  const targets = targetVectors
+    .filter(({ target, distanceNm }) => !target.position || distanceNm <= visibleRangeNm)
+    .map(({ target, xNm, yNm }) => ({
+      target,
+      x: MAP_CENTER_X + xNm * pxPerNm,
+      y: MAP_CENTER_Y - yNm * pxPerNm
+    }));
+
+  return {
+    targets,
+    airportPx: { x: MAP_CENTER_X, y: MAP_CENTER_Y },
+    nmPerPx
+  };
 };
 
 const AircraftGlyph = ({ trackDegrees }: { trackDegrees: number | null }) => (
   <g style={{ transform: `rotate(${trackDegrees ?? 0}deg)`, transformOrigin: "center" }}>
-    <path d="M0,-8 L3,8 L0,5 L-3,8 Z" fill="currentColor" />
+    <path d="M0,-11 L4.5,10 L0,6.5 L-4.5,10 Z" fill="currentColor" stroke="rgba(15,23,42,0.9)" strokeWidth="1.2" />
   </g>
 );
 
 export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMapProps) {
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const isDragging = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-  const svgRef = useRef<SVGSVGElement>(null);
-
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null);
 
   const zoom = ZOOM_LEVELS[zoomIndex];
-  const { targets: normalizedTraffic, airportPx, nmPerPx } = normalizeTraffic(traffic, zoom, panOffset, airportPosition);
+  const { targets: normalizedTraffic, airportPx, nmPerPx } = normalizeTraffic(traffic, zoom, airportPosition);
+  const hoveredTraffic = normalizedTraffic.find(({ target }) => target.icao24 === hoveredTarget) ?? null;
 
-  // Approximate NM for the range ring radii
-  const ringRadiusPx = 60;
-  const ringNm = nmPerPx > 0 ? (ringRadiusPx * nmPerPx).toFixed(0) : "";
+  const ringNm = nmPerPx > 0 ? (OUTER_RING_RADIUS * nmPerPx).toFixed(0) : "";
 
-  const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-  }, []);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!isDragging.current || !svgRef.current) return;
-
-    const rect = svgRef.current.getBoundingClientRect();
-    const scaleX = SVG_WIDTH / rect.width;
-    const scaleY = SVG_HEIGHT / rect.height;
-
-    const dx = (e.clientX - dragStart.current.x) * scaleX;
-    const dy = (e.clientY - dragStart.current.y) * scaleY;
-
-    // Convert pixel delta to degree offset (rough)
-    const degPerPxX = 0.20 / (zoom * (SVG_WIDTH - 2 * PADDING));
-    const degPerPxY = 0.15 / (zoom * (SVG_HEIGHT - 2 * PADDING));
-
-    setPanOffset((prev) => ({
-      x: prev.x - dx * degPerPxX,
-      y: prev.y + dy * degPerPxY
-    }));
-
-    dragStart.current = { x: e.clientX, y: e.clientY };
-  }, [zoom]);
-
-  const handlePointerUp = useCallback(() => {
-    isDragging.current = false;
-  }, []);
-
-  const resetView = useCallback(() => {
-    setPanOffset({ x: 0, y: 0 });
+  const resetView = () => {
     setZoomIndex(DEFAULT_ZOOM_INDEX);
-  }, []);
+    setHoveredTarget(null);
+  };
 
   return (
     <div className="space-y-4">
@@ -157,7 +116,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-data text-xs text-aviation-muted">
-              {zoom}x{ringNm ? ` · ~${ringNm} NM ring` : ""}
+              {zoom}x{ringNm ? ` · ~${ringNm} NM outer ring` : ""}
             </span>
             {airportIcao && (
               <span className="font-data text-xs text-cyan-300">
@@ -196,12 +155,8 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
         </div>
 
         <svg
-          ref={svgRef}
-          className="h-[260px] w-full cursor-grab active:cursor-grabbing touch-none"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          className="h-[260px] w-full touch-none"
+          onPointerDown={() => setHoveredTarget(null)}
           role="img"
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         >
@@ -210,35 +165,35 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
 
           {/* Range rings — centered on airport or SVG center */}
           {(() => {
-            const cx = airportPx?.x ?? SVG_WIDTH / 2;
-            const cy = airportPx?.y ?? SVG_HEIGHT / 2;
+            const cx = airportPx?.x ?? MAP_CENTER_X;
+            const cy = airportPx?.y ?? MAP_CENTER_Y;
             return (
               <>
                 <circle cx={cx} cy={cy} fill="none" r="90" stroke="rgba(34,197,94,0.15)" strokeDasharray="4 3" />
                 <circle cx={cx} cy={cy} fill="none" r="60" stroke="rgba(34,197,94,0.12)" strokeDasharray="4 3" />
                 <circle cx={cx} cy={cy} fill="none" r="30" stroke="rgba(34,197,94,0.10)" strokeDasharray="4 3" />
-                <path d={`M${cx} ${PADDING}v${SVG_HEIGHT - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
-                <path d={`M${PADDING} ${cy}h${SVG_WIDTH - 2 * PADDING}`} stroke="rgba(34,197,94,0.10)" />
+                <path d={`M${cx} ${cy - OUTER_RING_RADIUS}v${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
+                <path d={`M${cx - OUTER_RING_RADIUS} ${cy}h${OUTER_RING_RADIUS * 2}`} stroke="rgba(34,197,94,0.10)" />
               </>
             );
           })()}
 
           {/* Compass labels */}
           {(() => {
-            const cx = airportPx?.x ?? SVG_WIDTH / 2;
-            const cy = airportPx?.y ?? SVG_HEIGHT / 2;
+            const cx = airportPx?.x ?? MAP_CENTER_X;
+            const cy = airportPx?.y ?? MAP_CENTER_Y;
             return (
               <>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.max(10, cy - 95)}>N</text>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.min(SVG_HEIGHT - 4, cy + 103)}>S</text>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={Math.max(10, cx - 95)} y={cy + 3}>W</text>
-                <text fill="rgba(34,197,94,0.35)" fontSize="12" x={Math.min(SVG_WIDTH - 10, cx + 95)} y={cy + 3}>E</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.max(10, cy - OUTER_RING_RADIUS - 6)}>N</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="middle" x={cx} y={Math.min(SVG_HEIGHT - 4, cy + OUTER_RING_RADIUS + 14)}>S</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" textAnchor="end" x={Math.max(10, cx - OUTER_RING_RADIUS - 6)} y={cy + 3}>W</text>
+                <text fill="rgba(34,197,94,0.35)" fontSize="12" x={Math.min(SVG_WIDTH - 10, cx + OUTER_RING_RADIUS + 6)} y={cy + 3}>E</text>
               </>
             );
           })()}
 
           {/* Airport reference marker */}
-          {airportPx && (
+          {airportPx && (airportPosition || airportIcao) && (
             <g>
               {/* Runway-style cross */}
               <line x1={airportPx.x - 8} y1={airportPx.y} x2={airportPx.x + 8} y2={airportPx.y} stroke="#22c55e" strokeWidth="2" strokeOpacity="0.6" />
@@ -260,24 +215,53 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
                 transform={`translate(${x} ${y})`}
                 onPointerEnter={() => setHoveredTarget(target.icao24)}
                 onPointerLeave={() => setHoveredTarget(null)}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  setHoveredTarget(target.icao24);
+                }}
                 className="cursor-pointer"
               >
-                <circle r="12" fill="transparent" />
+                <circle r="14" fill="transparent" />
                 <AircraftGlyph trackDegrees={target.trackDegrees} />
-                {isHovered && (
-                  <g>
-                    <rect x="12" y="-18" width={Math.max(80, (target.callsign ?? target.icao24).length * 8 + 16)} height="34" rx="4" fill="#0f172a" fillOpacity="0.92" stroke="rgba(34,197,94,0.3)" strokeWidth="0.5" />
-                    <text className="font-data" fill="#e2e8f0" fontSize="11" x="16" y="-4">
-                      {target.callsign ?? target.icao24.toUpperCase()}
-                    </text>
-                    <text className="font-data" fill="#94a3b8" fontSize="10" x="16" y="10">
-                      {target.altitudeFeet?.toLocaleString() ?? "UNK"}ft · {target.groundspeedKnots ?? "--"}kt
-                    </text>
-                  </g>
-                )}
+                {isHovered && <circle r="16" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" />}
               </g>
             );
           })}
+
+          {hoveredTraffic && (() => {
+            const label = hoveredTraffic.target.callsign ?? hoveredTraffic.target.icao24.toUpperCase();
+            const detail = `${hoveredTraffic.target.altitudeFeet?.toLocaleString() ?? "UNK"} ft · ${hoveredTraffic.target.groundspeedKnots ?? "--"} kt`;
+            const tooltipWidth = Math.max(116, Math.max(label.length * 7.2 + 20, detail.length * 6.4 + 20));
+            const tooltipHeight = 40;
+            const tooltipX = clamp(
+              hoveredTraffic.x + 14 > SVG_WIDTH - tooltipWidth - 8 ? hoveredTraffic.x - tooltipWidth - 14 : hoveredTraffic.x + 14,
+              8,
+              SVG_WIDTH - tooltipWidth - 8
+            );
+            const tooltipY = clamp(hoveredTraffic.y - tooltipHeight - 12, 8, SVG_HEIGHT - tooltipHeight - 8);
+
+            return (
+              <g pointerEvents="none">
+                <rect
+                  x={tooltipX}
+                  y={tooltipY}
+                  width={tooltipWidth}
+                  height={tooltipHeight}
+                  rx="6"
+                  fill="#0f172a"
+                  fillOpacity="0.95"
+                  stroke="rgba(34,197,94,0.35)"
+                  strokeWidth="0.75"
+                />
+                <text className="font-data" fill="#e2e8f0" fontSize="11" x={tooltipX + 10} y={tooltipY + 15}>
+                  {label}
+                </text>
+                <text className="font-data" fill="#94a3b8" fontSize="10" x={tooltipX + 10} y={tooltipY + 29}>
+                  {detail}
+                </text>
+              </g>
+            );
+          })()}
 
           {/* Empty state */}
           {normalizedTraffic.length === 0 && (
@@ -293,7 +277,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition }: TrafficMap
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#06b6d4" }} />3-6k</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#3b82f6" }} />6-10k</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#f59e0b" }} />{">10k ft"}</span>
-          <span className="w-full sm:ml-auto sm:w-auto">Drag to pan</span>
+          <span className="w-full sm:ml-auto sm:w-auto">Hover or tap a target for details</span>
         </div>
       </div>
 
