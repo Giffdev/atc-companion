@@ -6,10 +6,11 @@ import {
 } from "@/ai/entity-extractor";
 import { classifyIntentWithLlm } from "@/ai/llm-classifier";
 import { detectIntentPatternCandidates, matchIntentPattern, type IntentPatternMatch } from "@/ai/patterns";
+import { detectAirportAmbiguity } from "@/data/airports";
 import { getFacilityById } from "@/data/facilities";
 import { toIsoNow } from "@/lib/utils";
 import type { DataSource } from "@/types/api";
-import type { ParsedIntent } from "@/types/intents";
+import type { ClarificationReason, ParsedIntent } from "@/types/intents";
 
 const CONFIDENCE_THRESHOLD = 0.7;
 
@@ -36,7 +37,7 @@ const createUnknownIntent = (
   options: {
     confidence: number;
     prompt: string;
-    reason: "ambiguous" | "low-confidence" | "missing-entity" | "empty-input";
+    reason: ClarificationReason;
     candidates?: ParsedIntent["type"][];
   }
 ): ParsedIntent => ({
@@ -370,6 +371,22 @@ export const parseIntent = async (input: string, options: ParseIntentOptions = {
     const parsedIntent = createIntentFromPattern(rawInput, parsedAt, entities, PATTERN_SOURCE, patternMatch);
 
     if (parsedIntent.confidence >= CONFIDENCE_THRESHOLD || parsedIntent.type === "unknown") {
+      // Check for ambiguous airport names before returning
+      if (parsedIntent.type !== "unknown" && "airport" in parsedIntent && parsedIntent.airport) {
+        const ambiguity = detectAirportAmbiguity(normalizedInput);
+        if (ambiguity && ambiguity.candidates.length > 1) {
+          const options = ambiguity.candidates
+            .slice(0, 4)
+            .map((a) => `${a.icao} (${a.name}, ${a.city} ${a.state})`)
+            .join(", ");
+          return createUnknownIntent(rawInput, parsedAt, entities, {
+            confidence: 0.55,
+            prompt: `Multiple airports match that name: ${options}. Please specify which one (e.g., include the city, state, or ICAO code).`,
+            reason: "ambiguous-airport",
+            candidates: [parsedIntent.type]
+          });
+        }
+      }
       return parsedIntent;
     }
   }

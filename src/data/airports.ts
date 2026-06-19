@@ -1300,6 +1300,86 @@ export const findAirportReferencesInText = (input: string): AirportReference[] =
     });
 };
 
+/**
+ * Detect if the top airport match is ambiguous — i.e., multiple airports share
+ * the same name-derived matching key without city context to disambiguate.
+ * Only triggers for name-word matches, not city matches.
+ * Returns the ambiguous candidates if detected, or null if the match is clear.
+ */
+export const detectAirportAmbiguity = (input: string): { primary: AirportReference; candidates: AirportReference[] } | null => {
+  const normalizedInput = normalizeAirportLookupKey(input);
+
+  // Build per-airport match info including which keys matched
+  const scored = AIRPORT_REFERENCES.map((airport) => {
+    const allKeys = createAirportSearchKeys(airport);
+    const nameKeys = new Set(allKeys.filter((_, i) => {
+      // Keys from name/aliases are first; city keys are appended at end (line 1068-1072)
+      // A key is city-derived if it matches the airport's normalized city
+      const normalizedCity = normalizeAirportLookupKey(airport.city);
+      return !normalizedCity || allKeys[i].key !== normalizedCity;
+    }).map((k) => k.key));
+
+    const keyMatches = allKeys
+      .map(({ key, partial }) => ({
+        key,
+        partial,
+        position: findAirportKeyPosition(normalizedInput, key),
+        isNameKey: nameKeys.has(key)
+      }))
+      .filter((match) => match.position >= 0);
+
+    if (!keyMatches.length) return null;
+
+    const bestMatch = keyMatches.sort((left, right) => {
+      if (left.position !== right.position) return left.position - right.position;
+      if (left.partial !== right.partial) return Number(left.partial) - Number(right.partial);
+      return right.key.length - left.key.length;
+    })[0];
+
+    return {
+      airport,
+      position: bestMatch.position,
+      keyLength: bestMatch.key.length,
+      partial: bestMatch.partial,
+      key: bestMatch.key,
+      isNameKey: bestMatch.isNameKey,
+      cityMatch: hasCityContextMatch(normalizedInput, airport)
+    };
+  }).filter((v): v is NonNullable<typeof v> => v !== null);
+
+  if (scored.length < 2) return null;
+
+  scored.sort((left, right) => {
+    if (left.position !== right.position) return left.position - right.position;
+    if (left.partial !== right.partial) return Number(left.partial) - Number(right.partial);
+    return right.keyLength - left.keyLength;
+  });
+
+  const top = scored[0];
+
+  // Only detect ambiguity for name-based matches (not city)
+  // If the top match is via city key, the user is looking for an airport in that city — not ambiguous
+  if (!top.isNameKey) return null;
+
+  // Find other airports matching on the SAME name-derived key
+  const ambiguous = scored.filter(
+    (s) => s.position === top.position && s.partial === top.partial && s.key === top.key
+      && s.isNameKey && s.airport.icao !== top.airport.icao
+  );
+
+  if (ambiguous.length === 0) return null;
+
+  // If city context already disambiguates, no ambiguity
+  const allCandidates = [top, ...ambiguous];
+  const withCity = allCandidates.filter((c) => c.cityMatch);
+  if (withCity.length === 1) return null;
+
+  return {
+    primary: top.airport,
+    candidates: allCandidates.map((c) => c.airport)
+  };
+};
+
 export const toIcaoCode = (code: string): string => findAirportReference(code)?.icao ?? code.trim().toUpperCase();
 
 export const toFaaCode = (code: string): string => findAirportReference(code)?.faa ?? code.trim().toUpperCase().replace(/^K/, "");

@@ -24,7 +24,7 @@ export type NotamTypeFilter = "D" | "FDC" | "TFR";
 export type FrequencyQueryType = "TWR" | "APP" | "GND" | "DEL" | "ATIS" | "CTAF";
 export type ProcedureType = "ILS" | "RNAV" | "VOR" | "VISUAL" | "SID" | "STAR" | "ODP";
 export type AirportInfoDetail = "runways" | "frequencies" | "hours" | "supplement" | "all";
-export type ClarificationReason = "ambiguous" | "low-confidence" | "missing-entity" | "empty-input";
+export type ClarificationReason = "ambiguous" | "ambiguous-airport" | "low-confidence" | "missing-entity" | "empty-input";
 
 export interface IntentEntity {
   label: string;
