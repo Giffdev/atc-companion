@@ -1325,7 +1325,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           />
         )}
 
-        {visiblePanels.size > 0 && (liveResult || facilityResults.size > 0) ? (
+        {visiblePanels.size > 0 && (liveResult || facilityResults.size > 0 || loadingPanels.size > 0) ? (
         <section className="grid gap-6 xl:grid-cols-12">
           {orderedCards.filter((cardType) => visiblePanels.has(cardType)).map((cardType) => {
             const isSinglePanel = visiblePanels.size === 1;
