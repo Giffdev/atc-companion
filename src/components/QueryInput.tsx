@@ -351,7 +351,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
             <button
               key={suggestion}
               className="min-h-[44px] rounded-full border border-aviation-border bg-black/10 px-3 py-1.5 text-left text-xs text-aviation-muted hover:border-cyan-400/30 hover:text-aviation-text"
-              onClick={() => updateQuery(suggestion)}
+              onClick={() => { updateQuery(suggestion); void onSubmit?.(suggestion, null); }}
               type="button"
             >
               {suggestion}
