@@ -88,7 +88,7 @@ const executeAirportInfo = async (
     getWeather(intent.airport, { bypassCache: options.bypassCache }),
     getFrequencies(intent.airport),
     getPlates({ airport: intent.airport }),
-    intent.detail === "runways" ? getAirportDiagram(intent.airport) : Promise.resolve(undefined),
+    getAirportDiagram(intent.airport),
     fetchHours ? getAirportHours(intent.airport) : Promise.resolve(undefined),
     getAirportRunways(intent.airport)
   ]);

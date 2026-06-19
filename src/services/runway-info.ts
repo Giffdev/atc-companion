@@ -1,4 +1,4 @@
-import { findAirportReference, toFaaCode } from "@/data/airports";
+import { fetchAirportFromNfdc, findAirportReference, toFaaCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
@@ -29,7 +29,7 @@ export interface AirportRunways {
 export const getAirportRunways = async (airportCodeInput: string): Promise<ApiResponse<AirportRunways>> => {
   const faaCode = toFaaCode(airportCodeInput);
   const icaoCode = airportCodeInput.toUpperCase();
-  const airportRef = findAirportReference(airportCodeInput);
+  const airportRef = findAirportReference(airportCodeInput) ?? await fetchAirportFromNfdc(airportCodeInput);
   const cacheKey = createCacheKey("airport-runways", { airport: icaoCode });
   const sourceUrl = `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}`;
 
@@ -37,7 +37,7 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
     return createApiErrorResponse(
       {
         code: "AIRPORT_NOT_FOUND",
-        message: `Airport ${airportCodeInput} not found.`,
+        message: `Airport ${airportCodeInput} not found in FAA database.`,
         retryable: false,
         status: 404
       },

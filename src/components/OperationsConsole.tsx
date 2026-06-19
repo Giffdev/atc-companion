@@ -344,6 +344,23 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
   }
 
   if (!liveResult.response.ok) {
+    const isNotamSearch = liveResult.response.error.code === "NOTAM_EMBEDDED_SEARCH";
+    if (isNotamSearch) {
+      const searchUrl = liveResult.response.error.details ?? "https://notams.aim.faa.gov/notamSearch/";
+      return (
+        <div className="space-y-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
+          <p>{liveResult.response.error.message}</p>
+          <a
+            className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/20"
+            href={searchUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open FAA NOTAM Search ↗
+          </a>
+        </div>
+      );
+    }
     return (
       <div className="space-y-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
         <p>{liveResult.response.error.message}</p>
@@ -796,6 +813,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     dashboardData.plates[0]?.airportIcao ??
     (activeIntent?.type === "plates" || activeIntent?.type === "airport_info" ? activeIntent.airport : undefined) ??
     "Field";
+  const plateDiagram = useMemo(() => {
+    if (liveResult?.intent.type === "airport_info" && liveResult.response.ok) {
+      const info = liveResult.response.data as AirportInfoQueryPayload;
+      return info.diagram?.ok ? info.diagram.data : null;
+    }
+    return null;
+  }, [liveResult]);
   const fallbackSource = PLACEHOLDER_SOURCE;
   const fallbackFetchedAt = initialNow;
 
@@ -1331,6 +1355,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                         defaultTab={liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "supplement" ? "supplement"
                           : liveResult?.intent.type === "airport_info" && liveResult.intent.detail === "runways" ? "diagram"
                           : "procedures"}
+                        diagram={plateDiagram}
                         plates={dashboardData.plates}
                         referenceTime={initialNow}
                         selectedProcedureType={selectedPlateProcedureType}
