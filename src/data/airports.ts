@@ -1182,6 +1182,53 @@ export const fetchAirportFromNfdc = async (code: string): Promise<AirportReferen
   }
 };
 
+/** Common city abbreviations/nicknames used in ATC context */
+const CITY_ABBREVIATIONS: Record<string, string[]> = {
+  "KC": ["KANSAS CITY"],
+  "LA": ["LOS ANGELES"],
+  "SF": ["SAN FRANCISCO"],
+  "NYC": ["NEW YORK"],
+  "DC": ["WASHINGTON"],
+  "DFW": ["DALLAS", "FORT WORTH"],
+  "MSP": ["MINNEAPOLIS", "SAINT PAUL"],
+  "ATL": ["ATLANTA"],
+  "CHI": ["CHICAGO"],
+  "PHX": ["PHOENIX"],
+  "PDX": ["PORTLAND"],
+  "SEA": ["SEATTLE"],
+  "STL": ["SAINT LOUIS", "ST LOUIS"],
+  "NOLA": ["NEW ORLEANS"],
+  "VEGAS": ["LAS VEGAS"],
+  "PHILLY": ["PHILADELPHIA"],
+  "JVILLE": ["JACKSONVILLE"],
+};
+
+/** Check if the input text contains a city reference matching the airport */
+const hasCityContextMatch = (normalizedInput: string, airport: AirportReference): boolean => {
+  const city = normalizeAirportLookupKey(airport.city);
+  if (!city) return false;
+
+  // Direct city name match
+  if (normalizedInput.includes(city)) return true;
+
+  // Check if any word in the input is a known abbreviation for this airport's city
+  const inputWords = normalizedInput.split(" ");
+  for (const word of inputWords) {
+    const expansions = CITY_ABBREVIATIONS[word];
+    if (expansions) {
+      for (const expansion of expansions) {
+        if (city.includes(expansion) || expansion.includes(city)) return true;
+      }
+    }
+  }
+
+  // Check state abbreviation context (e.g., "in MO", "in NY")
+  const stateMatch = normalizedInput.match(/\bIN\s+([A-Z]{2})\b/);
+  if (stateMatch && airport.state === stateMatch[1]) return true;
+
+  return false;
+};
+
 export const findAirportReferencesInText = (input: string): AirportReference[] => {
   const normalizedInput = normalizeAirportLookupKey(input);
   const matches = AIRPORT_REFERENCES.map((airport) => {
@@ -1226,7 +1273,18 @@ export const findAirportReferencesInText = (input: string): AirportReference[] =
         return Number(left.partial) - Number(right.partial);
       }
 
-      return right.keyLength - left.keyLength;
+      if (left.keyLength !== right.keyLength) {
+        return right.keyLength - left.keyLength;
+      }
+
+      // Tie-break: boost airports whose city name appears elsewhere in the input
+      const leftCityMatch = hasCityContextMatch(normalizedInput, left.airport);
+      const rightCityMatch = hasCityContextMatch(normalizedInput, right.airport);
+      if (leftCityMatch !== rightCityMatch) {
+        return leftCityMatch ? -1 : 1;
+      }
+
+      return 0;
     });
 
   const seen = new Set<string>();
