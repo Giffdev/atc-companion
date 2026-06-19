@@ -16,7 +16,7 @@ type QueryInputProps = {
 };
 
 const SUGGESTIONS = [
-  "METAR and TAF for KSEA",
+  "METAR and TAF for MCI",
   "Show the NRVNA departure from KBFI",
   "Traffic near KDEN below 12,000",
   "Direct heading vector from KLAS to KORD"
