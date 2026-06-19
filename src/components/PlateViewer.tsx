@@ -154,9 +154,15 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
   const [activeTab, setActiveTab] = useState<PlateViewerTab>(resolveDefaultTab);
   const [refLoading, setRefLoading] = useState(true);
 
-  // Re-sync active tab when the selected procedure or default tab changes
+  // Re-sync active tab when the selected procedure or default tab changes,
+  // but only if the current tab is no longer valid
   useEffect(() => {
-    setActiveTab(resolveDefaultTab());
+    const newDefault = resolveDefaultTab();
+    setActiveTab((prev) => {
+      // If default changed (user made a new query), switch to it
+      if (newDefault !== prev) return newDefault;
+      return prev;
+    });
     setRefLoading(true);
   }, [selectedProcedureName, selectedProcedureType, defaultTab, airportCode]);
 
@@ -270,7 +276,7 @@ function ReferenceIframe({ src, title, rawUrl, label, isLoading, onLoad }: {
         </a>
       </div>
       {/* Desktop: inline viewer */}
-      <div className="hidden sm:block overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
+      <div className="hidden sm:block overflow-hidden rounded-2xl border border-aviation-border bg-black/20" style={{ contain: "layout" }}>
         <div className="relative min-h-[500px]">
           {isLoading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm">

@@ -329,3 +329,50 @@ const inferRunwaysFromAirportData = (airport: { runways?: string[] }): RunwayInf
 
   return [];
 };
+
+/**
+ * Extract unique runway designators from approach plate names.
+ * Plates have names like "ILS RWY 16", "RNAV (GPS) RWY 34", "LOC/DME RWY 16".
+ * Returns paired designators (e.g., "16/34") when both ends are found.
+ */
+export const inferRunwaysFromPlates = (plates: Array<{ procedureName?: string; runway?: string }>): RunwayInfo[] => {
+  const runwayNumbers = new Set<string>();
+
+  for (const plate of plates) {
+    const rwy = plate.runway?.trim();
+    if (rwy && /^\d{1,2}[LRCG]?$/.test(rwy)) {
+      runwayNumbers.add(rwy.padStart(2, "0").toUpperCase());
+    }
+    const nameMatch = plate.procedureName?.match(/\bRWY\s+(\d{1,2}[LRCG]?)\b/i);
+    if (nameMatch) {
+      runwayNumbers.add(nameMatch[1].padStart(2, "0").toUpperCase());
+    }
+  }
+
+  if (runwayNumbers.size === 0) return [];
+
+  // Pair reciprocal runways (e.g., 16 and 34)
+  const paired = new Set<string>();
+  const result: RunwayInfo[] = [];
+  const sorted = [...runwayNumbers].sort();
+
+  for (const rwy of sorted) {
+    if (paired.has(rwy)) continue;
+    const num = parseInt(rwy.replace(/[LRCG]$/, ""), 10);
+    const suffix = rwy.match(/[LRCG]$/)?.[0] ?? "";
+    const reciprocalNum = ((num + 18 - 1) % 36) + 1;
+    const reciprocalSuffix = suffix === "L" ? "R" : suffix === "R" ? "L" : suffix;
+    const reciprocal = `${reciprocalNum.toString().padStart(2, "0")}${reciprocalSuffix}`;
+
+    if (runwayNumbers.has(reciprocal)) {
+      paired.add(rwy);
+      paired.add(reciprocal);
+      result.push({ designator: `${rwy}/${reciprocal}`, lengthFeet: null, widthFeet: null, surface: null, lighting: null });
+    } else {
+      paired.add(rwy);
+      result.push({ designator: `${rwy}/${reciprocal}`, lengthFeet: null, widthFeet: null, surface: null, lighting: null });
+    }
+  }
+
+  return result;
+};

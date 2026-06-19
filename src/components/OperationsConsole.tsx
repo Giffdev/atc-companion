@@ -1503,7 +1503,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 );
               case "plates":
                 return (
-                  <div key="plates" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-7"}`}>
+                  <div key="plates" className={`min-w-0 ${isSinglePanel || activeCard === "plates" ? "xl:col-span-12" : "xl:col-span-7"}`}>
                     <ResultCard
                       className="h-full"
                       fetchedAt={dashboardData.plates[0]?.fetchedAt ?? liveResult?.response.fetchedAt ?? fallbackFetchedAt}

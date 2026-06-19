@@ -8,7 +8,7 @@ import { getNavigationBetween } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
 import { getAirportDiagram, getOdps, getPlates, getSids, getStars } from "@/services/plates";
 import { searchFars } from "@/services/regulatory";
-import { getAirportRunways, type AirportRunways } from "@/services/runway-info";
+import { getAirportRunways, inferRunwaysFromPlates, type AirportRunways } from "@/services/runway-info";
 import { getTraffic } from "@/services/traffic";
 import { getMetar, getPireps, getTaf, getWeather } from "@/services/weather";
 import type { ApiResponse, DataSource } from "@/types/api";
@@ -122,11 +122,23 @@ const executeAirportInfo = async (
     getOdps(intent.airport)
   ]);
 
-  // Build runway designator list: prefer live FAA data, fall back to static
+  // Build runway designator list: prefer live FAA data, fall back to plates inference, then static
   const airportReference = findAirportReference(intent.airport) ?? await fetchAirportFromNfdc(intent.airport);
+  const platesData = plates.ok ? plates.data : [];
   const runways = runwayDetails.ok && runwayDetails.data.runways.length > 0
     ? runwayDetails.data.runways.map((r) => r.designator)
-    : airportReference?.runways ?? [];
+    : airportReference?.runways && airportReference.runways.length > 0
+      ? airportReference.runways
+      : inferRunwaysFromPlates(platesData).map((r) => r.designator);
+
+  // Enrich runwayDetails with plate-inferred data if NFDC returned empty
+  if (runwayDetails.ok && runwayDetails.data.runways.length === 0 && platesData.length > 0) {
+    const inferred = inferRunwaysFromPlates(platesData);
+    if (inferred.length > 0) {
+      runwayDetails.data.runways = inferred;
+      runwayDetails.data.source = "Inferred from approach plates";
+    }
+  }
 
   if (!weather.ok && !frequencies.ok && !plates.ok && !runways.length && !diagram?.ok && !hours?.ok && !runwayDetails.ok) {
     return createApiErrorResponse(
