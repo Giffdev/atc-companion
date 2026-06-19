@@ -82,17 +82,17 @@ export function NavigationDisplay({ navigation }: NavigationDisplayProps) {
             <text x={midPoint.x + 12} y={midPoint.y - 12} fill="#67e8f9" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
               {navigation.magneticHeading.toString().padStart(3, "0")}°M • {navigation.distanceNm.toFixed(1)}NM
             </text>
-            <text x="20" y="28" fill="#7dd3fc" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
+            <text x={ROUTE_WIDTH / 2 - 4} y="20" fill="#7dd3fc" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace" textAnchor="middle">
               N
             </text>
-            <text x={ROUTE_WIDTH - 28} y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
-              E
+            <text x={ROUTE_WIDTH / 2 - 4} y={ROUTE_HEIGHT - 10} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace" textAnchor="middle">
+              S
             </text>
-            <text x="18" y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
+            <text x="14" y={ROUTE_HEIGHT / 2 + 4} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace" textAnchor="middle">
               W
             </text>
-            <text x={ROUTE_WIDTH / 2 - 4} y={ROUTE_HEIGHT - 18} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace">
-              S
+            <text x={ROUTE_WIDTH - 14} y={ROUTE_HEIGHT / 2 + 4} fill="#64748b" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, monospace" textAnchor="middle">
+              E
             </text>
           </svg>
         </div>

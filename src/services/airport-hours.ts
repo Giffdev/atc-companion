@@ -119,6 +119,41 @@ export interface AirportHours {
   source: string;
 }
 
+const TWENTY_FOUR_HOUR_TOWERED_AIRPORTS = new Set([
+  "KATL", "KORD", "KDEN", "KDFW", "KJFK", "KLAX", "KSFO", "KSEA", "KMCO",
+  "KLAS", "KPHX", "KMIA", "KEWR", "KIAH", "KMSP", "KBOS", "KDTW", "KFLL",
+  "KBWI", "KSLC", "KDCA", "KSAN", "KTPA", "KPDX", "KSTL", "KHNL", "KMCI",
+  "KAUS", "KCLT", "KRDU", "KPIT", "KCLE", "KMKE", "KIND", "KCVG", "KSMF",
+  "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI", "KLGA", "KIAD", "KMSP",
+  "KMDW", "KDAL", "KHOU", "KFLL", "KMSY", "KABQ", "KONT", "KBUR", "KSNA"
+]);
+
+const KNOWN_TOWERED_AIRPORTS = new Set([
+  ...TWENTY_FOUR_HOUR_TOWERED_AIRPORTS,
+  "KABR",
+  "KPAE", "KBFI", "KRNT", "KOLM", "KTTD", "KHIO", "KVUO", "KTIW",
+  "KGEG", "KSKA", "KBOI", "KSUN", "KTWF", "KMFR", "KRDM", "KEUG",
+  "KFAT", "KSBP", "KSTS", "KCCR", "KHWD", "KSQL", "KPAO", "KNUQ",
+  "KCRQ", "KSEE", "KMYF", "KSDM", "KFUL", "KLGB", "KVNY", "KSMO",
+  "KCMA", "KOXR", "KSBA", "KPSP", "KIFP", "KFFZ", "KIWA", "KCHD",
+  "KDVT", "KGEU", "KTUS", "KFLG", "KPRC", "KELP", "KAMA", "KLBB",
+  "KFTW", "KAFW", "KADS", "KGKY", "KRBD", "KDTO", "KACT", "KCLL",
+  "KCRP", "KLRD", "KMFE", "KGRK", "KABI", "KSPS", "KTUL", "KOKC",
+  "KPWA", "KLIT", "KFSM", "KSHV", "KBTR", "KLFT", "KGPT", "KJAX",
+  "KGNV", "KDAB", "KMLB", "KFMY", "KRSW", "KAPF", "KPGD", "KSRQ",
+  "KPIE", "KCHS", "KCAE", "KGSP", "KAGS", "KSAV", "KVPS", "KECP",
+  "KPNS", "KMOB", "KHSV", "KBHM", "KMGM", "KCSG", "KCHA", "KTYS",
+  "KTRI", "KSDF", "KLEX", "KDAY", "KCMH", "KLCK", "KTOL", "KFWA",
+  "KSBN", "KGRR", "KLAN", "KFNT", "KMBS", "KBTL", "KAZL", "KDSM",
+  "KCID", "KALO", "KMLI", "KPIA", "KSPI", "KDEC", "KBMI", "KSTL",
+  "KSGF", "KCOU", "KJLN", "KICT", "KMHK", "KFOE", "KOFF", "KOMA",
+  "KLNK", "KFSD", "KRAP", "KFAR", "KBIS", "KGFK", "KDLH", "KRST",
+  "KEAU", "KATW", "KGRB", "KLSE", "KCWA", "KMSN"
+]);
+
+const INVALID_TOWER_HOURS_TOKEN_PATTERN = /\b(?:APCH(?:\/DEP)?|APP(?:ROACH)?|DEP(?:ARTURE)?|GND|GROUND|DEL|DELIVERY|ATIS|CTAF|UNICOM|FSS)\b/i;
+const TOWER_HOURS_VALUE_PATTERN = /^(?:24\s*(?:HR|HOUR|HRS|HOURS)|CONTINUOUS(?:\s+OPERATION)?|\d{4}\s*(?:LOCAL|LCL|L|UTC|Z)?\s*[-–]\s*\d{4}\s*(?:LOCAL|LCL|L|UTC|Z)?(?:\s*(?:LOCAL|LCL|UTC|Z))?)$/i;
+
 /**
  * Fetch airport tower hours and operational schedule from FAA NASR data.
  * Returns both local and Zulu times, accounting for current DST status.
@@ -248,27 +283,41 @@ const normalizeFieldValue = (value: string | null): string | null => {
   return normalized.length > 0 ? normalized : null;
 };
 
+const normalizeTowerHoursValue = (value: string | null): string | null => {
+  const normalized = normalizeFieldValue(value);
+  if (!normalized || INVALID_TOWER_HOURS_TOKEN_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  return TOWER_HOURS_VALUE_PATTERN.test(normalized) ? normalized : null;
+};
+
 const extractCommunicationsSection = (html: string): string => {
   const match = html.match(/<div\b[^>]*id=["']communications["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*tab-pane|<\/body>)/i);
   return match?.[1] ?? html;
 };
 
 const findTowerHoursText = (html: string, pairs: Array<{ label: string; value: string }>): string | null => {
-  const structuredTowerHours = normalizeFieldValue(
-    findFirstPairValue(pairs, (label) => label === "tower hours" || label.endsWith(" tower hours"))
+  const structuredTowerHours = normalizeTowerHoursValue(
+    findFirstPairValue(
+      pairs,
+      (label) => label === "tower hours" || label === "atct hours" || label.endsWith(" tower hours") || label.endsWith(" atct hours")
+    )
   );
   if (structuredTowerHours) {
     return structuredTowerHours;
   }
 
   const pageText = stripHtmlToText(html);
-  const inlineTowerHours = pageText.match(/\b(?:ATCT|TOWER)\s*(?:HOURS?|HRS?)\b\s*[:\-–]?\s*([A-Z0-9 \-–]+)/i)?.[1];
+  const inlineTowerHours = pageText.match(
+    /\b(?:ATCT|TOWER)\s*(?:HOURS?|HRS?)\b\s*[:\-–]?\s*(24\s*(?:HR|HOUR|HRS|HOURS)|CONTINUOUS(?:\s+OPERATION)?|\d{4}\s*(?:LOCAL|LCL|L|UTC|Z)?\s*[-–]\s*\d{4}\s*(?:LOCAL|LCL|L|UTC|Z)?(?:\s*(?:LOCAL|LCL|UTC|Z))?)/i
+  )?.[1];
   if (inlineTowerHours) {
-    return normalizeFieldValue(inlineTowerHours);
+    return normalizeTowerHoursValue(inlineTowerHours);
   }
 
   const nearbyTowerHours = pageText.match(/\bTOWER\s*HOURS\b[\s\S]{0,40}?(24\s*(?:HR|HOUR|HRS|HOURS)|CONTINUOUS|\d{4}\s*[-–]\s*\d{4}(?:\s*(?:LOCAL|LCL|UTC|Z))?)/i)?.[1];
-  return normalizeFieldValue(nearbyTowerHours ?? null);
+  return normalizeTowerHoursValue(nearbyTowerHours ?? null);
 };
 
 export const parseAirportHoursFromHtml = (
@@ -289,6 +338,7 @@ export const parseAirportHoursFromHtml = (
   const airportUseText = normalizeFieldValue(findFirstPairValue(pairs, (label) => label === "airport use"));
 
   const communicationsSection = extractCommunicationsSection(html);
+  const isKnownToweredAirport = KNOWN_TOWERED_AIRPORTS.has(icaoCode.toUpperCase());
   const hasExplicitNoTower = /no\s+air\s+traffic\s+control\s+tower|no\s+control\s+tower|non-?towered/i.test(controlTowerText ?? "");
   const hasTowerFromHours = rawTowerHours !== null && !/\b(?:none|n\/a|na|unattended)\b/i.test(rawTowerHours);
   const hasTowerFromControlField = !!controlTowerText && !hasExplicitNoTower && /\b(?:ATCT|TRACON|CONTROL\s+TOWER|TOWER)\b/i.test(controlTowerText);
@@ -298,9 +348,9 @@ export const parseAirportHoursFromHtml = (
   const hasTowerFromLabel = /airport\s+traffic\s+control\s+tower|control\s+tower/i.test(controlTowerText ?? "")
     || /airport\s+traffic\s+control\s+tower/i.test(stripHtmlToText(html));
 
-  const isTowered = hasExplicitNoTower
+  const isTowered = hasExplicitNoTower && !isKnownToweredAirport
     ? false
-    : hasTowerFromHours || hasTowerFromControlField || hasTowerFromComms || hasTowerFromLabel
+    : isKnownToweredAirport || hasTowerFromHours || hasTowerFromControlField || hasTowerFromComms || hasTowerFromLabel
       ? true
       : null;
 
@@ -325,39 +375,7 @@ const inferAirportHours = (
   tz: string,
   tzInfo: ReturnType<typeof formatTimezone>
 ): AirportHours => {
-  // Class B airports (24-hour towers)
-  const classB24Hr = [
-    "KATL", "KORD", "KDEN", "KDFW", "KJFK", "KLAX", "KSFO", "KSEA", "KMCO",
-    "KLAS", "KPHX", "KMIA", "KEWR", "KIAH", "KMSP", "KBOS", "KDTW", "KFLL",
-    "KBWI", "KSLC", "KDCA", "KSAN", "KTPA", "KPDX", "KSTL", "KHNL", "KMCI",
-    "KAUS", "KCLT", "KRDU", "KPIT", "KCLE", "KMKE", "KIND", "KCVG", "KSMF",
-    "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI", "KLGA", "KIAD", "KMSP",
-    "KMDW", "KDAL", "KHOU", "KFLL", "KMSY", "KABQ", "KONT", "KBUR", "KSNA"
-  ];
-
-  // Class C and D airports known to be towered (part-time towers included)
-  const knownTowered = [
-    "KPAE", "KBFI", "KRNT", "KOLM", "KTTD", "KHIO", "KVUO", "KTIW",
-    "KGEG", "KSKA", "KBOI", "KSUN", "KTWF", "KMFR", "KRDM", "KEUG",
-    "KFAT", "KSBP", "KSTS", "KCCR", "KHWD", "KSQL", "KPAO", "KNUQ",
-    "KCRQ", "KSEE", "KMYF", "KSDM", "KFUL", "KLGB", "KVNY", "KSMO",
-    "KCMA", "KOXR", "KSBA", "KPSP", "KIFP", "KFFZ", "KIWA", "KCHD",
-    "KDVT", "KGEU", "KTUS", "KFLG", "KPRC", "KELP", "KAMA", "KLBB",
-    "KFTW", "KAFW", "KADS", "KGKY", "KRBD", "KDTO", "KACT", "KCLL",
-    "KCRP", "KLRD", "KMFE", "KGRK", "KABI", "KSPS", "KTUL", "KOKC",
-    "KPWA", "KLIT", "KFSM", "KSHV", "KBTR", "KLFT", "KGPT", "KJAX",
-    "KGNV", "KDAB", "KMLB", "KFMY", "KRSW", "KAPF", "KPGD", "KSRQ",
-    "KPIE", "KCHS", "KCAE", "KGSP", "KAGS", "KSAV", "KVPS", "KECP",
-    "KPNS", "KMOB", "KHSV", "KBHM", "KMGM", "KCSG", "KCHA", "KTYS",
-    "KTRI", "KSDF", "KLEX", "KDAY", "KCMH", "KLCK", "KTOL", "KFWA",
-    "KSBN", "KGRR", "KLAN", "KFNT", "KMBS", "KBTL", "KAZL", "KDSM",
-    "KCID", "KALO", "KMLI", "KPIA", "KSPI", "KDEC", "KBMI", "KSTL",
-    "KSGF", "KCOU", "KJLN", "KICT", "KMHK", "KFOE", "KOFF", "KOMA",
-    "KLNK", "KFSD", "KRAP", "KFAR", "KBIS", "KGFK", "KDLH", "KRST",
-    "KEAU", "KATW", "KGRB", "KLSE", "KCWA", "KMSN"
-  ];
-
-  if (classB24Hr.includes(icaoCode)) {
+  if (TWENTY_FOUR_HOUR_TOWERED_AIRPORTS.has(icaoCode)) {
     return {
       airportIcao: icaoCode,
       airportName,
@@ -377,7 +395,7 @@ const inferAirportHours = (
     };
   }
 
-  if (knownTowered.includes(icaoCode)) {
+  if (KNOWN_TOWERED_AIRPORTS.has(icaoCode)) {
     return {
       airportIcao: icaoCode,
       airportName,

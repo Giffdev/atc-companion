@@ -762,6 +762,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [facilityAirportInfo, setFacilityAirportInfo] = useState<AirportInfoQueryPayload | null>(null);
+  const [supplementaryProcedures, setSupplementaryProcedures] = useState<{
+    sids: ApproachPlate[];
+    stars: ApproachPlate[];
+    odps: ApproachPlate[];
+    approaches: ApproachPlate[];
+  }>({ sids: [], stars: [], odps: [], approaches: [] });
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
 
   // Hydrate facility from localStorage after mount to avoid SSR mismatch
@@ -832,10 +838,25 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       }
     }
 
+    // Merge supplementary procedure data fetched in the background
+    if (!merged.plates.length && supplementaryProcedures.approaches.length) {
+      merged = { ...merged, plates: supplementaryProcedures.approaches };
+    }
+    if (!merged.sids.length && supplementaryProcedures.sids.length) {
+      merged = { ...merged, sids: supplementaryProcedures.sids };
+    }
+    if (!merged.stars.length && supplementaryProcedures.stars.length) {
+      merged = { ...merged, stars: supplementaryProcedures.stars };
+    }
+    if (!merged.odps.length && supplementaryProcedures.odps.length) {
+      merged = { ...merged, odps: supplementaryProcedures.odps };
+    }
+
     return merged;
-  }, [liveResult, facilityResults, facilityAirportInfo]);
+  }, [liveResult, facilityResults, facilityAirportInfo, supplementaryProcedures]);
   const sourceStatuses = useMemo(() => mergeSourceStatuses(EMPTY_DASHBOARD.sourceStatuses, liveResult), [liveResult]);
   const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
+  const selectedProcedureName = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_name : undefined;
   const selectedPlateRunway = liveResult?.intent.type === "plates" ? liveResult.intent.runway : undefined;
 
   const warnings = useMemo(
@@ -892,6 +913,26 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     return (await response.json()) as LiveQueryResult;
   }, [selectedFacilityId]);
 
+  const fetchAllProcedureTypes = useCallback(async (airport: string) => {
+    const queries = [
+      { key: "approaches" as const, query: `approach plates at ${airport}` },
+      { key: "sids" as const, query: `SIDs at ${airport}` },
+      { key: "stars" as const, query: `STARs at ${airport}` },
+      { key: "odps" as const, query: `ODPs at ${airport}` }
+    ];
+    const results = await Promise.allSettled(queries.map(async (q) => {
+      const payload = await fetchLiveQuery(q.query);
+      return { key: q.key, data: payload.response.ok ? (payload.response.data as ApproachPlate[]) : [] };
+    }));
+    const merged = { sids: [] as ApproachPlate[], stars: [] as ApproachPlate[], odps: [] as ApproachPlate[], approaches: [] as ApproachPlate[] };
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value.data.length > 0) {
+        merged[result.value.key] = result.value.data;
+      }
+    }
+    setSupplementaryProcedures(merged);
+  }, [fetchLiveQuery]);
+
   const autoRefreshConfig = useMemo(
     () =>
       liveResult?.intent.type === "traffic"
@@ -942,6 +983,15 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       } else if (returnedCard) {
         setActiveCard(returnedCard);
         setVisiblePanels(new Set([returnedCard]));
+      }
+
+      // When a plates-related query returns for a specific airport,
+      // fetch all other procedure types so every PlateViewer tab is populated
+      const platesAirport = payload.intent.type === "plates" ? payload.intent.airport
+        : payload.intent.type === "airport_info" ? payload.intent.airport
+        : null;
+      if (platesAirport) {
+        fetchAllProcedureTypes(platesAirport);
       }
     } catch {
       const fallbackMessage =
@@ -1116,7 +1166,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">
         <header className="aviation-panel relative overflow-hidden px-5 py-4 md:px-7">
           <div className="absolute inset-y-0 right-[-8rem] hidden w-80 rounded-full bg-cyan-500/10 blur-3xl xl:block" />
-           <div className="flex items-center gap-4">
+           <div className="flex items-center justify-start gap-4">
               <button
                 type="button"
                 onClick={handleHomeClick}
@@ -1423,6 +1473,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                         plates={dashboardData.plates}
                         referenceTime={initialNow}
                         selectedProcedureType={selectedPlateProcedureType}
+                        selectedProcedureName={selectedProcedureName}
                         selectedRunway={selectedPlateRunway}
                         sids={dashboardData.sids}
                         stars={dashboardData.stars}
@@ -1479,7 +1530,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 rawData={facilityAirportInfo}
                 referenceTime={initialNow}
                 source={getDataSource("faaNasr")}
-                subtitle="Tower hours, runway configuration, overlying frequencies, and airport classification from FAA Chart Supplement data."
+                subtitle={[
+                  facilityAirportInfo.hours?.ok ? "Tower hours" : null,
+                  facilityAirportInfo.runwayDetails?.ok && facilityAirportInfo.runwayDetails.data.runways.length > 0 ? "runway configuration" : null,
+                  facilityAirportInfo.frequencies?.ok && facilityAirportInfo.frequencies.data.some(f => f.type === "APP" || f.type === "CENTER") ? "overlying frequencies" : null
+                ].filter(Boolean).join(", ") + " from FAA Chart Supplement data."}
                 title={`${formatAirportTitle(facilityAirportInfo.airport, facilityAirportInfo.airportName)} facility overview`}
               >
                 <div className="space-y-4">

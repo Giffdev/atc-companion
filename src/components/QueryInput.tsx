@@ -17,9 +17,9 @@ type QueryInputProps = {
 
 const SUGGESTIONS = [
   "METAR and TAF for KSEA",
-  "Show TFR and runway NOTAMs for KSEA",
+  "Show the NRVNA departure from KBFI",
   "Traffic near KSEA below 12,000",
-  "Direct heading vector from my airport to KORD"
+  "Direct heading vector from KLAS to KORD"
 ] as const;
 
 const intentTypeLabel = (intent: ParsedIntent): string => intent.type.replaceAll("_", " ").toUpperCase();

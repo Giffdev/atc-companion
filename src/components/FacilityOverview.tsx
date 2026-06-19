@@ -24,6 +24,26 @@ interface AtisResponse {
   airports?: Record<string, AtisEntry | null>;
 }
 
+interface RunwayInfo {
+  designator: string;
+  lengthFeet: number | null;
+  widthFeet: number | null;
+  surface: string | null;
+}
+
+interface RunwayQueryResult {
+  intent: { type: string };
+  response: {
+    ok: boolean;
+    data?: {
+      runwayDetails?: {
+        ok: boolean;
+        data?: { runways: RunwayInfo[] };
+      };
+    };
+  };
+}
+
 const FLIGHT_CATEGORY_TONE: Record<FlightCategory, string> = {
   VFR: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
   MVFR: "border-sky-500/20 bg-sky-500/10 text-sky-200",
@@ -86,10 +106,11 @@ type AirportCardProps = {
   weather: WeatherBundle | null;
   atis: AtisEntry | null;
   atisChecked: boolean;
+  runways: RunwayInfo[];
   onSelectAirport: (icao: string) => void;
 };
 
-const AirportOverviewCard = ({ icao, weather, atis, atisChecked, onSelectAirport }: AirportCardProps) => {
+const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, onSelectAirport }: AirportCardProps) => {
   const flightCategory = weather?.metar?.flightCategory ?? "UNKNOWN";
 
   return (
@@ -130,6 +151,19 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, onSelectAirport
         <p className="mt-4 text-sm text-aviation-muted">Weather data currently unavailable.</p>
       ) : null}
 
+      {runways.length > 0 && (
+        <div className="mt-4">
+          <p className="data-label">Runways</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {runways.map((rwy) => (
+              <span key={rwy.designator} className="rounded-md border border-aviation-border bg-black/20 px-2 py-0.5 font-data text-xs text-aviation-text" title={[rwy.lengthFeet ? `${rwy.lengthFeet.toLocaleString()}ft` : null, rwy.surface].filter(Boolean).join(" · ")}>
+                {rwy.designator}{rwy.lengthFeet ? ` · ${rwy.lengthFeet.toLocaleString()}ft` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <button
         className="mt-auto min-h-[44px] rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-left text-sm font-medium text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/15"
         onClick={() => onSelectAirport(icao)}
@@ -151,6 +185,7 @@ export default function FacilityOverview({
   const requestKey = normalizedAirports.join(",");
   const [weatherByAirport, setWeatherByAirport] = useState<Record<string, WeatherBundle | null>>({});
   const [atisByAirport, setAtisByAirport] = useState<Record<string, AtisEntry | null>>({});
+  const [runwaysByAirport, setRunwaysByAirport] = useState<Record<string, RunwayInfo[]>>({});
   const [loadedKey, setLoadedKey] = useState("");
 
   useEffect(() => {
@@ -167,7 +202,7 @@ export default function FacilityOverview({
           return;
         }
 
-        const [weatherResults, nextAtisByAirport] = await Promise.all([
+        const [weatherResults, nextAtisByAirport, runwayResults] = await Promise.all([
           Promise.allSettled(
             normalizedAirports.map(async (icao) => {
               const response = await fetch(`/api/weather?station=${encodeURIComponent(icao)}`);
@@ -188,7 +223,22 @@ export default function FacilityOverview({
             } catch {
               return {};
             }
-          })()
+          })(),
+          Promise.allSettled(
+            normalizedAirports.map(async (icao) => {
+              const response = await fetch(`/api/query`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: `airport info for ${icao}` })
+              });
+              if (!response.ok) return [] as RunwayInfo[];
+              const payload = (await response.json()) as RunwayQueryResult;
+              if (payload.response?.ok && payload.response.data?.runwayDetails?.ok) {
+                return payload.response.data.runwayDetails.data?.runways ?? [];
+              }
+              return [] as RunwayInfo[];
+            })
+          )
         ]);
 
         const nextWeatherByAirport: Record<string, WeatherBundle | null> = {};
@@ -196,9 +246,15 @@ export default function FacilityOverview({
           nextWeatherByAirport[normalizedAirports[index]] = result.status === "fulfilled" ? result.value : null;
         });
 
+        const nextRunwaysByAirport: Record<string, RunwayInfo[]> = {};
+        runwayResults.forEach((result, index) => {
+          nextRunwaysByAirport[normalizedAirports[index]] = result.status === "fulfilled" ? (result.value ?? []) : [];
+        });
+
         if (!cancelled) {
           setWeatherByAirport(nextWeatherByAirport);
           setAtisByAirport(nextAtisByAirport);
+          setRunwaysByAirport(nextRunwaysByAirport);
           setLoadedKey(requestKey);
         }
       })();
@@ -238,6 +294,7 @@ export default function FacilityOverview({
                   atisChecked={icao in atisByAirport}
                   icao={icao}
                   onSelectAirport={onSelectAirport}
+                  runways={runwaysByAirport[icao] ?? []}
                   weather={weatherByAirport[icao] ?? null}
                 />
               ))}

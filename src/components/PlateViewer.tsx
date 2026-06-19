@@ -16,6 +16,7 @@ type PlateViewerProps = {
   odps?: ApproachPlate[];
   referenceTime?: string;
   selectedProcedureType?: ProcedureType;
+  selectedProcedureName?: string;
   selectedRunway?: string;
   airportCode?: string;
   diagram?: ApproachPlate | null;
@@ -101,14 +102,46 @@ export const pickBestMatchingPlate = (
   return bestPlate;
 };
 
-export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenceTime, selectedProcedureType, selectedRunway, airportCode, diagram, defaultTab }: PlateViewerProps) {
+/** Find the best plate matching a partial/abbreviated procedure name */
+const findPlateByName = (plateList: ApproachPlate[], name: string): ApproachPlate | undefined => {
+  if (!name) return undefined;
+  const norm = name.toUpperCase().replace(/\s+/g, "");
+  // Exact substring match on procedure name
+  let match = plateList.find((p) => p.procedureName.toUpperCase().replace(/\s+/g, "").includes(norm));
+  if (match) return match;
+  // Fuzzy: check if the first N chars match (abbreviated names like NRVNA → NRVANA)
+  match = plateList.find((p) => {
+    const pNorm = p.procedureName.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    // Check if pNorm starts with norm or contains norm as a prefix of a word
+    return pNorm.startsWith(norm) || pNorm.includes(norm);
+  });
+  return match;
+};
+
+export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenceTime, selectedProcedureType, selectedProcedureName, selectedRunway, airportCode, diagram, defaultTab }: PlateViewerProps) {
   const bestMatch = useMemo(
     () => pickBestMatchingPlate(plates, selectedProcedureType, selectedRunway),
     [plates, selectedProcedureType, selectedRunway]
   );
 
+  // If a named procedure was requested, find it across all procedure lists
+  const namedMatch = useMemo(() => {
+    if (!selectedProcedureName) return undefined;
+    return findPlateByName(sids, selectedProcedureName)
+      ?? findPlateByName(stars, selectedProcedureName)
+      ?? findPlateByName(plates, selectedProcedureName)
+      ?? findPlateByName(odps, selectedProcedureName);
+  }, [selectedProcedureName, sids, stars, plates, odps]);
+
   const resolveDefaultTab = (): PlateViewerTab => {
     if (defaultTab) return defaultTab;
+    // If a named procedure was found, go to its tab
+    if (namedMatch) {
+      if (sids.includes(namedMatch)) return "departures";
+      if (stars.includes(namedMatch)) return "arrivals";
+      if (odps.includes(namedMatch)) return "odps";
+      return "approaches";
+    }
     if (selectedProcedureType === "SID" && sids.length > 0) return "departures";
     if (selectedProcedureType === "STAR" && stars.length > 0) return "arrivals";
     if (selectedProcedureType === "ODP" && odps.length > 0) return "odps";
@@ -142,7 +175,8 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
     : activeTab === "odps" ? odps
     : [];
 
-  const activeTabBestMatch = activeTab === "approaches" ? bestMatch
+  const activeTabBestMatch = namedMatch && activeTabPlates.includes(namedMatch) ? namedMatch
+    : activeTab === "approaches" ? bestMatch
     : activeTabPlates.length > 0 ? activeTabPlates[0]
     : undefined;
 

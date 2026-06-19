@@ -115,6 +115,7 @@ const createIntentFromPattern = (
             type: "plates",
             airport: match.airport,
             procedure_type: match.procedure_type,
+            procedure_name: entities.procedureName,
             runway: match.runway
           }
         : createUnknownIntent(rawInput, parsedAt, entities, {

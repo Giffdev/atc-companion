@@ -118,6 +118,7 @@ export interface ExtractedEntities {
   notamTypeFilter?: NotamTypeFilter;
   frequencyType?: FrequencyQueryType;
   procedureType?: ProcedureType;
+  procedureName?: string;
   airportInfoDetail?: AirportInfoDetail;
 }
 
@@ -446,6 +447,24 @@ export const detectNotamTypeFilter = (input: string): NotamTypeFilter | undefine
   return undefined;
 };
 
+export const detectProcedureName = (input: string): string | undefined => {
+  const normalized = normalizeAviationText(input).toUpperCase();
+  // Match "the NRVNA departure", "BANGR ONE arrival", "SUMMA TWO departure"
+  const namedMatch = normalized.match(/\b(?:THE\s+)?([A-Z][A-Z0-9]{2,12}(?:\s+(?:ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|\d{1,2}))?)\s+(?:DEPARTURE|ARRIVAL|SID|STAR|TRANSITION)\b/);
+  if (namedMatch) {
+    return namedMatch[1].trim();
+  }
+  // Match "show me the NRVNA from KBFI" (implicit departure/approach)
+  const implicitMatch = normalized.match(/\b(?:SHOW|DISPLAY|PULL\s+UP|FIND)\s+(?:ME\s+)?(?:THE\s+)?([A-Z][A-Z0-9]{2,12}(?:\s+(?:ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|\d{1,2}))?)\s+(?:FROM|FOR|AT|INTO)\b/);
+  if (implicitMatch) {
+    // Exclude common non-procedure words
+    const candidate = implicitMatch[1].trim();
+    const excluded = new Set(["METAR", "TAF", "WEATHER", "NOTAM", "NOTAMS", "TRAFFIC", "FREQUENCIES", "FREQ", "ATIS", "PLATES", "CHARTS", "DIAGRAM", "INFO", "AIRPORT", "RUNWAY", "RUNWAYS", "STARS", "SIDS", "APPROACHES"]);
+    if (!excluded.has(candidate)) return candidate;
+  }
+  return undefined;
+};
+
 export const detectAirportInfoDetail = (input: string): AirportInfoDetail | undefined => {
   const normalized = normalizeAviationText(input).toLowerCase();
 
@@ -620,6 +639,7 @@ export const extractEntities = (input: string, options: { defaultFromAirport?: s
     notamTypeFilter: detectNotamTypeFilter(input),
     frequencyType: detectFrequencyType(input),
     procedureType: detectProcedureType(input),
+    procedureName: detectProcedureName(input),
     airportInfoDetail: detectAirportInfoDetail(input)
   };
 };

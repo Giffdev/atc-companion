@@ -67,6 +67,7 @@ export interface PlatesIntent extends IntentMetadata {
   type: "plates";
   airport: string;
   procedure_type?: ProcedureType;
+  procedure_name?: string;
   runway?: string;
 }
 
