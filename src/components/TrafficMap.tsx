@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AIRPORT_REFERENCES } from "@/data/airports";
 import type { TrafficTarget } from "@/types/aviation";
 
@@ -29,6 +29,8 @@ const AIRCRAFT_SVG = (trackDeg: number, color: string) =>
 export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRangeNm = 10 }: TrafficMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const leafletRef = useRef<any>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<TrafficTarget | null>(null);
 
@@ -37,6 +39,33 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
     : traffic.length > 0 && traffic[0].position
       ? [traffic[0].position.latitude, traffic[0].position.longitude]
       : [39.8283, -98.5795];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const syncMarkers = useCallback((map: L.Map, Leaflet: any, targets: TrafficTarget[]) => {
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    targets.forEach((target) => {
+      if (!target.position) return;
+      const color = getAltitudeTone(target.altitudeFeet);
+      const icon = Leaflet.divIcon({
+        html: AIRCRAFT_SVG(target.trackDegrees ?? 0, color),
+        className: "",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      const marker = Leaflet.marker([target.position.latitude, target.position.longitude], { icon })
+        .addTo(map)
+        .on("click", () => setSelectedTarget(target));
+
+      const label = target.callsign ?? target.icao24.toUpperCase();
+      marker.bindTooltip(
+        `<strong>${label}</strong><br/>${target.altitudeFeet?.toLocaleString() ?? "UNK"} ft · ${target.groundspeedKnots ?? "--"} kt`,
+        { direction: "top", className: "leaflet-tooltip-traffic" }
+      );
+      markersRef.current.push(marker);
+    });
+  }, []);
 
   // Initialize map once (or when airport changes)
   useEffect(() => {
@@ -47,6 +76,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
     const initMap = async () => {
       const L = (await import("leaflet")).default;
       await import("leaflet/dist/leaflet.css");
+      leafletRef.current = L;
 
       if (cancelled || !mapRef.current) return;
 
@@ -106,6 +136,9 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
       }
 
       leafletMapRef.current = map;
+
+      // Draw initial traffic markers immediately
+      syncMarkers(map, L, traffic);
     };
 
     initMap();
@@ -123,38 +156,10 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
   // Update traffic markers without resetting map view
   useEffect(() => {
     const map = leafletMapRef.current;
-    if (!map) return;
-
-    const updateMarkers = async () => {
-      const L = (await import("leaflet")).default;
-
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-
-      traffic.forEach((target) => {
-        if (!target.position) return;
-        const color = getAltitudeTone(target.altitudeFeet);
-        const icon = L.divIcon({
-          html: AIRCRAFT_SVG(target.trackDegrees ?? 0, color),
-          className: "",
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        });
-        const marker = L.marker([target.position.latitude, target.position.longitude], { icon })
-          .addTo(map)
-          .on("click", () => setSelectedTarget(target));
-
-        const label = target.callsign ?? target.icao24.toUpperCase();
-        marker.bindTooltip(
-          `<strong>${label}</strong><br/>${target.altitudeFeet?.toLocaleString() ?? "UNK"} ft · ${target.groundspeedKnots ?? "--"} kt`,
-          { direction: "top", className: "leaflet-tooltip-traffic" }
-        );
-        markersRef.current.push(marker);
-      });
-    };
-
-    updateMarkers();
-  }, [traffic]);
+    const L = leafletRef.current;
+    if (!map || !L) return;
+    syncMarkers(map, L, traffic);
+  }, [traffic, syncMarkers]);
 
   const centerOnTarget = (target: TrafficTarget) => {
     if (!target.position || !leafletMapRef.current) return;

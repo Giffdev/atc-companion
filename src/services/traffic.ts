@@ -11,7 +11,7 @@ const TRAFFIC_SOURCE = getDataSource("openSkyNetwork");
 const TRAFFIC_FALLBACK_SOURCE = getDataSource("adsbFi");
 const OPEN_SKY_URL = "https://opensky-network.org/api/states/all";
 const ADSB_FI_URL = "https://opendata.adsb.fi/api/v2";
-const TRAFFIC_RADIUS_NM = 35;
+const TRAFFIC_RADIUS_NM = 15;
 
 interface BoundingBox {
   minLat: number;
