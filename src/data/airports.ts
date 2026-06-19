@@ -1203,6 +1203,23 @@ const CITY_ABBREVIATIONS: Record<string, string[]> = {
   "JVILLE": ["JACKSONVILLE"],
 };
 
+/** Full US state names → abbreviations for disambiguation */
+const STATE_NAME_TO_ABBREV: Record<string, string> = {
+  "ALABAMA": "AL", "ALASKA": "AK", "ARIZONA": "AZ", "ARKANSAS": "AR",
+  "CALIFORNIA": "CA", "COLORADO": "CO", "CONNECTICUT": "CT", "DELAWARE": "DE",
+  "FLORIDA": "FL", "GEORGIA": "GA", "HAWAII": "HI", "IDAHO": "ID",
+  "ILLINOIS": "IL", "INDIANA": "IN", "IOWA": "IA", "KANSAS": "KS",
+  "KENTUCKY": "KY", "LOUISIANA": "LA", "MAINE": "ME", "MARYLAND": "MD",
+  "MASSACHUSETTS": "MA", "MICHIGAN": "MI", "MINNESOTA": "MN", "MISSISSIPPI": "MS",
+  "MISSOURI": "MO", "MONTANA": "MT", "NEBRASKA": "NE", "NEVADA": "NV",
+  "NEW HAMPSHIRE": "NH", "NEW JERSEY": "NJ", "NEW MEXICO": "NM", "NEW YORK": "NY",
+  "NORTH CAROLINA": "NC", "NORTH DAKOTA": "ND", "OHIO": "OH", "OKLAHOMA": "OK",
+  "OREGON": "OR", "PENNSYLVANIA": "PA", "RHODE ISLAND": "RI", "SOUTH CAROLINA": "SC",
+  "SOUTH DAKOTA": "SD", "TENNESSEE": "TN", "TEXAS": "TX", "UTAH": "UT",
+  "VERMONT": "VT", "VIRGINIA": "VA", "WASHINGTON": "WA", "WEST VIRGINIA": "WV",
+  "WISCONSIN": "WI", "WYOMING": "WY",
+};
+
 /** Check if the input text contains a city reference matching the airport */
 const hasCityContextMatch = (normalizedInput: string, airport: AirportReference): boolean => {
   const city = normalizeAirportLookupKey(airport.city);
@@ -1225,6 +1242,11 @@ const hasCityContextMatch = (normalizedInput: string, airport: AirportReference)
   // Check state abbreviation context (e.g., "in MO", "in NY")
   const stateMatch = normalizedInput.match(/\bIN\s+([A-Z]{2})\b/);
   if (stateMatch && airport.state === stateMatch[1]) return true;
+
+  // Check full state name anywhere in input (e.g., "portland maine", "springfield illinois")
+  for (const [stateName, stateAbbrev] of Object.entries(STATE_NAME_TO_ABBREV)) {
+    if (normalizedInput.includes(stateName) && airport.state === stateAbbrev) return true;
+  }
 
   return false;
 };
