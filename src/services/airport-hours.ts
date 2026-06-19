@@ -281,8 +281,14 @@ const parseAirportHoursFromHtml = (
   const rawTowerHours = towerHoursMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null;
   const towerSchedule = rawTowerHours ? parseTowerSchedule(rawTowerHours, tz) : null;
 
-  // Detect if airport actually has a tower (not just the label existing in the form)
-  const hasTower = rawTowerHours !== null && !/\bnone\b/i.test(rawTowerHours);
+  // Detect if airport actually has a tower — multiple signals
+  const hasTowerFromHours = rawTowerHours !== null && !/\bnone\b/i.test(rawTowerHours);
+  // Secondary signal: ATCT or TWR frequency in the COMMUNICATIONS section
+  const hasTowerFromComms = /\bATCT\b/i.test(html) || /\bLC\/TWR\b/i.test(html) || /\bTWR\b[\s\S]{0,30}\d{3}\.\d/i.test(html);
+  // Tertiary: "control tower" phrase anywhere
+  const hasTowerFromLabel = /(?:air(?:port)?\s+)?(?:traffic\s+)?control\s+tower/i.test(html);
+
+  const isTowered = hasTowerFromHours || hasTowerFromComms || hasTowerFromLabel;
 
   return {
     airportIcao: icaoCode,
@@ -290,7 +296,7 @@ const parseAirportHoursFromHtml = (
     towerHours: rawTowerHours,
     towerSchedule,
     timezone: { iana: tz, ...tzInfo },
-    isTowered: hasTower,
+    isTowered,
     airportUse: airportUseMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
     attendanceSchedule: attendanceMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
     lightingSchedule: lightingMatch?.[1]?.replace(/&nbsp;/gi, " ").trim() || null,
