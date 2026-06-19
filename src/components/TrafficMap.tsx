@@ -37,6 +37,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
       ? [traffic[0].position.latitude, traffic[0].position.longitude]
       : [39.8283, -98.5795];
 
+  // Initialize map once (or when airport changes)
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -61,13 +62,11 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
 
       L.control.zoom({ position: "topright" }).addTo(map);
 
-      // Dark CartoDB tile layer
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
         maxZoom: 19
       }).addTo(map);
 
-      // Airport marker
       if (airportPosition) {
         const airportIcon = L.divIcon({
           html: `<div style="width:12px;height:12px;border:2px solid #22c55e;border-radius:50%;background:rgba(34,197,94,0.2);"></div>`,
@@ -80,7 +79,29 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
           .bindTooltip(airportIcao ?? "Airport", { permanent: true, direction: "right", className: "leaflet-tooltip-airport" });
       }
 
-      // Traffic markers
+      leafletMapRef.current = map;
+    };
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [airportPosition?.latitude, airportPosition?.longitude]);
+
+  // Update traffic markers without resetting map view
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+
+    const updateMarkers = async () => {
+      const L = (await import("leaflet")).default;
+
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
 
@@ -104,21 +125,10 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
         );
         markersRef.current.push(marker);
       });
-
-      leafletMapRef.current = map;
     };
 
-    initMap();
-
-    return () => {
-      cancelled = true;
-      if (leafletMapRef.current) {
-        leafletMapRef.current.remove();
-        leafletMapRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [traffic, airportPosition?.latitude, airportPosition?.longitude]);
+    updateMarkers();
+  }, [traffic]);
 
   return (
     <div className="space-y-4">
