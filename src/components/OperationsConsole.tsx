@@ -868,18 +868,24 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       }
     }
 
-    // Merge supplementary procedure data fetched in the background
-    if (!merged.plates.length && supplementaryProcedures.approaches.length) {
-      merged = { ...merged, plates: supplementaryProcedures.approaches };
-    }
-    if (!merged.sids.length && supplementaryProcedures.sids.length) {
-      merged = { ...merged, sids: supplementaryProcedures.sids };
-    }
-    if (!merged.stars.length && supplementaryProcedures.stars.length) {
-      merged = { ...merged, stars: supplementaryProcedures.stars };
-    }
-    if (!merged.odps.length && supplementaryProcedures.odps.length) {
-      merged = { ...merged, odps: supplementaryProcedures.odps };
+    // Merge supplementary procedure data only if it matches the live query airport
+    const supplementaryMatchesLive = !liveAirport ||
+      (supplementaryProcedures.approaches[0]?.airportIcao?.toUpperCase() === liveAirport.toUpperCase() ||
+       supplementaryProcedures.sids[0]?.airportIcao?.toUpperCase() === liveAirport.toUpperCase() ||
+       supplementaryProcedures.stars[0]?.airportIcao?.toUpperCase() === liveAirport.toUpperCase());
+    if (supplementaryMatchesLive) {
+      if (!merged.plates.length && supplementaryProcedures.approaches.length) {
+        merged = { ...merged, plates: supplementaryProcedures.approaches };
+      }
+      if (!merged.sids.length && supplementaryProcedures.sids.length) {
+        merged = { ...merged, sids: supplementaryProcedures.sids };
+      }
+      if (!merged.stars.length && supplementaryProcedures.stars.length) {
+        merged = { ...merged, stars: supplementaryProcedures.stars };
+      }
+      if (!merged.odps.length && supplementaryProcedures.odps.length) {
+        merged = { ...merged, odps: supplementaryProcedures.odps };
+      }
     }
 
     return merged;
