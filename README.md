@@ -25,7 +25,7 @@ ATC Assist gives a controller a single dark-theme console for:
 - **Compound query detection** that collapses multi-data airport requests into a single airport overview workflow
 - **Real-time weather** via METAR, TAF, and nearby PIREPs from `aviationweather.gov`
 - **D-ATIS strip** for one or many airports, including facility-wide airport groups
-- **Live traffic map** with zoom, pan, altitude color coding, and callsign labels
+- **Live traffic map** on dark Leaflet/OpenStreetMap tiles with zoom, pan, altitude color coding, nearby airport labels, and click-to-center from target list
 - **FAA approach plates** plus **SIDs**, **STARs**, **ODPs** (obstacle departure procedures), and **airport diagrams**
 - **Inline plate viewer** with best-match selection by procedure type and runway
 - **Airport frequencies** from FAA/NASR-backed seed data, including approach/TRACON sectors for major facilities
@@ -47,6 +47,7 @@ Traffic is currently implemented with **ADSB.fi** as the primary source (fast, f
 - **Next.js 16** (App Router)
 - **TypeScript** with strict typing
 - **Tailwind CSS** for the dark aviation UI
+- **Leaflet** with CartoDB dark tiles for the traffic map
 - **Vitest** for unit tests
 - **Playwright** for end-to-end tests
 - **ESLint** for static analysis

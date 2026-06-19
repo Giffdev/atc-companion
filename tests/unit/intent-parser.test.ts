@@ -90,4 +90,18 @@ describe("parseIntent", () => {
     });
     expect(intent.airport).toBeTruthy();
   });
+
+  it("parses traffic queries with facility names as traffic, not frequency or airport_info", async () => {
+    const [trafficApproach, trafficCenter, approachPlates, approachFreq] = await Promise.all([
+      parseIntent("traffic around portland approach"),
+      parseIntent("traffic near seattle center"),
+      parseIntent("approach plates for KBFI"),
+      parseIntent("approach frequency for KSEA")
+    ]);
+
+    expect(trafficApproach).toMatchObject({ type: "traffic" });
+    expect(trafficCenter).toMatchObject({ type: "traffic" });
+    expect(approachPlates).toMatchObject({ type: "plates" });
+    expect(approachFreq).toMatchObject({ type: "frequency" });
+  });
 });

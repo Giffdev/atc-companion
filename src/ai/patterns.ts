@@ -184,7 +184,7 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
   if (NOTAM_PATTERN.test(input)) {
     candidates.push("notam");
   }
-  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input)) {
+  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input) && !TRAFFIC_PATTERN.test(input)) {
     candidates.push("frequency");
   }
   if (PLATES_PATTERN.test(input)) {
@@ -274,12 +274,13 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
   if (entities.airports.length > 0) {
     const hasPlates = PLATES_PATTERN.test(input);
     const hasApproachProcedureContext = APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input);
+    const hasTraffic = TRAFFIC_PATTERN.test(input);
     const matchCount = [
-      FREQUENCY_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input) && !hasPlates && !hasApproachProcedureContext,
+      FREQUENCY_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input) && !hasPlates && !hasApproachProcedureContext && !hasTraffic,
       hasPlates,
       WEATHER_PATTERN.test(input) && !isWeatherMinimumsQuery,
       NOTAM_PATTERN.test(input),
-      TRAFFIC_PATTERN.test(input)
+      hasTraffic
     ].filter(Boolean).length;
 
     if (matchCount >= 2 || airportInfoDetail === "all") {
@@ -312,7 +313,7 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
     };
   }
 
-  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input)) {
+  if (FREQUENCY_PATTERN.test(input) && !APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input) && !PLATES_PATTERN.test(input) && !HOURS_CONTEXT_PATTERN.test(input) && !TRAFFIC_PATTERN.test(input)) {
     return {
       type: "frequency",
       confidence: entities.airports.length > 0 ? 0.94 : 0.69,

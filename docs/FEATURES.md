@@ -79,30 +79,34 @@ The navigation panel visualizes the route with a schematic and compass rose.
 
 ## Traffic
 
-### Live traffic radar
+### Live traffic map
 
-The traffic feature provides a radar-style display with:
+The traffic feature provides an interactive map with:
 
+- **Leaflet/OpenStreetMap** dark tile map (CartoDB dark basemap)
 - live aircraft targets from **ADSB.fi** (primary) or **OpenSky Network** (fallback)
-- **Directional arrow glyphs** pointing in each aircraft's heading
-- Altitude-based color coding
-- **Range rings** with NM distance labels
-- Airport reference marker at center
-- Target list below the radar display
+- **Directional arrow glyphs** colored by altitude band and pointing in each aircraft's heading
+- Airport reference marker (green circle) at center
+- **Nearby airports** drawn with labeled circles when they fall within the map view
+- Interactive zoom/pan that **preserves user position on data refresh**
+- Target list below the map — click any aircraft to center the map on it
+
+### Click-to-center
+
+Clicking an aircraft callsign in the target list pans the map to that aircraft and shows its detail panel (altitude, speed, heading, vertical rate).
 
 ### Hover/tap tooltips
 
-Mousing over (desktop) or tapping (mobile) a traffic target reveals:
+Hovering (desktop) or tapping (mobile) a traffic target on the map reveals:
 
 - Callsign / flight number
 - Altitude and groundspeed
-- Aircraft type (when available)
 
 ### Adaptive range
 
-- **10 NM** default range for individual airports
-- **30 NM** default range for approach/center facilities
-- Targets outside visible range are filtered out
+- **15 NM** fetch radius for individual airports
+- **30 NM** default map range for approach/center facilities
+- Targets outside the fetch radius are not returned
 
 ### Traffic auto-refresh
 
@@ -149,6 +153,8 @@ The compact facility overview panel displays:
 - **Tower hours** — always shown when available:
   - Structured schedule (open/close in local + Zulu)
   - 24-hour indication
+  - **Static hours database** for ~90 common part-time towered airports as fallback when FAA NFDC is unreachable
+  - NFDC response validation to detect error pages and fall through to inference
   - Non-towered label with Chart Supplement link
 - **Timezone** with UTC offset and DST indicator
 - **Runway configuration** — individual runways with:
@@ -184,9 +190,12 @@ When multiple airports share a name word, the parser uses location hints:
 
 - **City abbreviations**: KC → Kansas City, LA → Los Angeles, SF → San Francisco, PDX → Portland, SEA → Seattle, NYC → New York, etc.
 - **State codes**: "in MO", "in NY", "in WA"
+- **Full state names**: "portland maine" → ME, "springfield illinois" → IL, "columbus ohio" → OH
 - **Full city names**: "in Kansas City"
 
-Example: "wheeler airport in kc" → KMKC (Charles B. Wheeler Downtown Airport, Kansas City MO)
+State context is a **strong signal** — when present, airports in the wrong state are rejected even if their city name matches.
+
+Example: "portland maine" → KPWM (Portland International Jetport, ME) — not KHIO or KPDX in Oregon
 
 ### Ambiguity detection and clarification
 

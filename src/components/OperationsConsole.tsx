@@ -1079,11 +1079,28 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       return;
     }
 
-    // For approach/center facilities, don't auto-fetch single-airport data —
-    // the FacilityOverview component handles the multi-airport view
+    // For approach/center facilities, auto-fetch traffic for the primary airport
+    // but leave the rest to the FacilityOverview multi-airport view
     const isMultiAirport = selectedFacility.type === "approach" || selectedFacility.type === "center";
     if (isMultiAirport) {
-      return;
+      const airport = selectedFacility.primaryAirport;
+      if (!airport) return;
+
+      let cancelled = false;
+      const fetchFacilityTraffic = async () => {
+        setVisiblePanels(new Set(["traffic"]));
+        setLoadingPanels(new Set(["traffic"]));
+        try {
+          const payload = await fetchLiveQuery(`traffic at ${airport}`);
+          if (cancelled) return;
+          setFacilityResults((prev) => new Map(prev).set("traffic", payload));
+        } catch { /* silent */ }
+        if (!cancelled) {
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
+        }
+      };
+      fetchFacilityTraffic();
+      return () => { cancelled = true; };
     }
 
     // Tower facilities: single-airport dashboard
@@ -1297,7 +1314,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         </section>
 
         {/* Multi-airport overview for approach/center facilities */}
-        {selectedFacility && (selectedFacility.type === "approach" || selectedFacility.type === "center") && !visiblePanels.size && (
+        {selectedFacility && (selectedFacility.type === "approach" || selectedFacility.type === "center") && !liveResult && (
           <FacilityOverview
             facilityName={selectedFacility.name}
             facilityType={selectedFacility.type as "approach" | "center"}
