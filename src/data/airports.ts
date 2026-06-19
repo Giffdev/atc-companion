@@ -1056,6 +1056,13 @@ const createAirportSearchKeys = (airport: AirportReference): Array<{ key: string
         }
       }
     }
+
+    // Single distinctive words (≥6 chars, not a generic stopword) as partial keys
+    for (const word of words) {
+      if (word.length >= 6 && !AIRPORT_STOPWORD_KEYS.has(word)) {
+        appendKey(keys, word, true);
+      }
+    }
   }
 
   appendKey(keys, airport.city, true);
