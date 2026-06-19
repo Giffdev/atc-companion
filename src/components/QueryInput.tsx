@@ -256,63 +256,62 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_auto_auto]">
-          <label className="space-y-2">
-            <span className="data-label">Operational Query</span>
-            <input
-              className="h-16 w-full truncate rounded-2xl border border-aviation-border bg-black/30 px-3 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70 sm:px-5 sm:text-base"
-              disabled={isSubmitting}
-              onChange={(event) => updateQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="e.g. METAR KSEA, ILS 14R BFI"
-              type="text"
-              value={query}
-            />
-          </label>
-
-          <button
-            className={[
-              "flex h-16 min-w-40 items-center justify-center gap-3 rounded-2xl border px-5 text-sm font-medium",
-              isListening
-                ? "animate-radar-pulse border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
-                : "border-aviation-border bg-black/25 text-aviation-text hover:border-cyan-400/30 hover:bg-cyan-500/8"
-            ].join(" ")}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <input
+            className="h-16 w-full truncate rounded-2xl border border-aviation-border bg-black/30 px-3 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70 sm:px-5 sm:text-base"
             disabled={isSubmitting}
-            onClick={handleVoiceToggle}
-            type="button"
-          >
-            <span
+            onChange={(event) => updateQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder="e.g. METAR KSEA, ILS 14R BFI"
+            type="text"
+            value={query}
+          />
+
+          <div className="flex shrink-0 gap-3">
+            <button
               className={[
-                "flex h-9 w-9 items-center justify-center rounded-full border",
-                isListening ? "border-emerald-400/50 bg-emerald-500/15" : "border-aviation-border bg-black/20"
+                "flex h-16 items-center justify-center gap-3 rounded-2xl border px-5 text-sm font-medium",
+                isListening
+                  ? "animate-radar-pulse border-emerald-400/40 bg-emerald-500/12 text-emerald-200"
+                  : "border-aviation-border bg-black/25 text-aviation-text hover:border-cyan-400/30 hover:bg-cyan-500/8"
               ].join(" ")}
+              disabled={isSubmitting}
+              onClick={handleVoiceToggle}
+              type="button"
             >
-              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <path
-                  d="M12 15a3 3 0 0 0 3-3V8a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Zm0 0v4m-4-4a4 4 0 1 0 8 0"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="1.5"
-                />
-              </svg>
-            </span>
-            <span>{isListening ? "Listening..." : "Voice Input"}</span>
-          </button>
+              <span
+                className={[
+                  "flex h-9 w-9 items-center justify-center rounded-full border",
+                  isListening ? "border-emerald-400/50 bg-emerald-500/15" : "border-aviation-border bg-black/20"
+                ].join(" ")}
+              >
+                <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <path
+                    d="M12 15a3 3 0 0 0 3-3V8a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Zm0 0v4m-4-4a4 4 0 1 0 8 0"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+              </span>
+              <span className="hidden sm:inline">{isListening ? "Listening..." : "Voice"}</span>
+            </button>
 
-          <button
-            className="h-16 min-h-[44px] rounded-2xl bg-cyan-400 px-6 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={isSubmitting}
-            id="atc-query-submit"
-            onClick={handleSubmit}
-            type="button"
-          >
-            {isSubmitting ? "Dispatching..." : "Submit Query"}
-          </button>
+            <button
+              className="h-16 min-h-[44px] rounded-2xl bg-cyan-400 px-6 text-sm font-semibold text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={isSubmitting}
+              id="atc-query-submit"
+              onClick={handleSubmit}
+              type="button"
+            >
+              {isSubmitting ? "Dispatching..." : "Submit"}
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1fr_auto]">

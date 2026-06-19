@@ -1013,6 +1013,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     setActiveIntent(intent);
     setSubmitError(null);
     setIsSubmitting(true);
+    setLiveResult(null);
 
     const previewCard = mapIntentToDashboardType(intent);
     if (previewCard) {
@@ -1230,7 +1231,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                 className="group flex items-center gap-4 focus:outline-none"
                 title="Return to home"
               >
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25 transition-colors group-hover:border-emerald-400/40">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25 transition-colors group-hover:border-emerald-400/40">
                 <div className="absolute inset-1.5 rounded-full border border-emerald-400/20" />
                 <div className="radar-sweep absolute left-1/2 top-1/2 h-[1px] w-5 origin-left bg-gradient-to-r from-cyan-300 to-transparent" />
                 <div className="h-2 w-2 rounded-full bg-aviation-green shadow-[0_0_18px_rgba(34,197,94,0.75)]" />
