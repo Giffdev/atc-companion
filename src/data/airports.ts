@@ -1295,15 +1295,15 @@ export const findAirportReferencesInText = (input: string): AirportReference[] =
         return Number(left.partial) - Number(right.partial);
       }
 
-      if (left.keyLength !== right.keyLength) {
-        return right.keyLength - left.keyLength;
-      }
-
-      // Tie-break: boost airports whose city name appears elsewhere in the input
+      // State/city context match is a strong signal — prioritize over key length
       const leftCityMatch = hasCityContextMatch(normalizedInput, left.airport);
       const rightCityMatch = hasCityContextMatch(normalizedInput, right.airport);
       if (leftCityMatch !== rightCityMatch) {
         return leftCityMatch ? -1 : 1;
+      }
+
+      if (left.keyLength !== right.keyLength) {
+        return right.keyLength - left.keyLength;
       }
 
       return 0;
