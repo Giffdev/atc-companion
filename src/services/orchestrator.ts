@@ -225,8 +225,7 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
       }
 
       return getPlates({
-        airport: intent.airport,
-        type: intent.procedure_type
+        airport: intent.airport
       });
     case "traffic": {
       const trafficResponse = await getTraffic({
