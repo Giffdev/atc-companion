@@ -541,10 +541,10 @@ const renderQuerySummary = (
             <div className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
               {hours?.towerSchedule ? (
                 <div>
-                  <p className="text-xs text-aviation-muted">Tower</p>
+                  <p className="text-xs text-aviation-muted">Tower Hours</p>
                   <p className="font-data text-aviation-text">
                     {hours.towerSchedule.is24Hour
-                      ? "24hr"
+                      ? "24-hour operation"
                       : `${hours.towerSchedule.openLocal}–${hours.towerSchedule.closeLocal} ${hours.timezone?.abbreviation ?? "LCL"}`}
                   </p>
                   {!hours.towerSchedule.is24Hour && (
@@ -555,7 +555,7 @@ const renderQuerySummary = (
                 </div>
               ) : hours?.towerHours ? (
                 <div>
-                  <p className="text-xs text-aviation-muted">Tower</p>
+                  <p className="text-xs text-aviation-muted">Tower Hours</p>
                   <p className="font-data text-aviation-text">{hours.towerHours}</p>
                   {hours.timezone && (() => {
                     const zuluMatch = hours.towerHours!.match(/(\d{4})Z?\s*[-–]\s*(\d{4})Z?/);
