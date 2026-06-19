@@ -765,6 +765,17 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     [selectedFacilityId]
   );
 
+  const handleHomeClick = () => {
+    setActiveIntent(null);
+    setSubmittedQuery("Awaiting query");
+    setLiveResult(null);
+    setVisiblePanels(new Set());
+    setLoadingPanels(new Set());
+    setSubmitError(null);
+    setFacilityResults(new Map());
+    setFacilityAirportInfo(null);
+  };
+
   const dashboardData = useMemo(() => {
     // Start from empty base — no hardcoded demo data
     let merged = { ...EMPTY_DASHBOARD };
@@ -1067,16 +1078,23 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         <header className="aviation-panel relative overflow-hidden px-5 py-4 md:px-7">
           <div className="absolute inset-y-0 right-[-8rem] hidden w-80 rounded-full bg-cyan-500/10 blur-3xl xl:block" />
            <div className="flex items-center gap-4">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25">
+              <button
+                type="button"
+                onClick={handleHomeClick}
+                className="group flex items-center gap-4 focus:outline-none"
+                title="Return to home"
+              >
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/20 bg-black/25 transition-colors group-hover:border-emerald-400/40">
                 <div className="absolute inset-1.5 rounded-full border border-emerald-400/20" />
                 <div className="radar-sweep absolute left-1/2 top-1/2 h-[1px] w-5 origin-left bg-gradient-to-r from-cyan-300 to-transparent" />
                 <div className="h-2 w-2 rounded-full bg-aviation-green shadow-[0_0_18px_rgba(34,197,94,0.75)]" />
               </div>
 
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-aviation-text md:text-2xl">ATC Assist</h1>
+                <h1 className="text-xl font-semibold tracking-tight text-aviation-text transition-colors group-hover:text-aviation-green md:text-2xl">ATC Assist</h1>
                 <p className="text-xs text-aviation-muted md:text-sm">Voice &amp; text-powered reference tool for controllers — official FAA data on demand.</p>
               </div>
+              </button>
           </div>
         </header>
 
@@ -1203,7 +1221,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                         <NotamList notams={dashboardData.notams} />
                       ) : (
                         <div className="space-y-3 text-sm text-aviation-muted">
-                          <p>No programmatic NOTAM feed is currently available (FAA API requires registration).</p>
+                          <p>View NOTAMs via the official FAA portal:</p>
                           <a
                             className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
                             href={`https://notams.aim.faa.gov/notamSearch/${activeIntent?.type === "notam" && activeIntent.airport ? `?designatorsForLocation=${activeIntent.airport.replace(/^K/, "")}` : ""}`}

@@ -126,7 +126,7 @@ export const getAirportHours = async (airportCodeInput: string): Promise<ApiResp
   const faaCode = toFaaCode(airportCodeInput);
   const icaoCode = airportCodeInput.toUpperCase();
   const airportRef = findAirportReference(airportCodeInput) ?? await fetchAirportFromNfdc(airportCodeInput);
-  const cacheKey = createCacheKey("airport-hours", { airport: icaoCode });
+  const cacheKey = createCacheKey("airport-hours-v2", { airport: icaoCode });
 
   if (!airportRef) {
     return createApiErrorResponse(

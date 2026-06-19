@@ -195,6 +195,8 @@ export function PlateViewer({ plates, referenceTime, selectedProcedureType, sele
 function ReferenceIframe({ src, title, rawUrl, label, isLoading, onLoad }: {
   src: string; title: string; rawUrl: string; label: string; isLoading: boolean; onLoad: () => void;
 }) {
+  const isPdf = rawUrl.toLowerCase().endsWith(".pdf") || src.includes("plate-proxy");
+
   return (
     <>
       {/* Mobile: link out */}
@@ -208,7 +210,7 @@ function ReferenceIframe({ src, title, rawUrl, label, isLoading, onLoad }: {
           Open {title} ↗
         </a>
       </div>
-      {/* Desktop: inline iframe */}
+      {/* Desktop: inline viewer */}
       <div className="hidden sm:block overflow-hidden rounded-2xl border border-aviation-border bg-black/20">
         <div className="relative min-h-[500px]">
           {isLoading && (
@@ -218,13 +220,47 @@ function ReferenceIframe({ src, title, rawUrl, label, isLoading, onLoad }: {
               </div>
             </div>
           )}
-          <iframe
-            className="h-[min(75vh,900px)] min-h-[500px] w-full bg-slate-950"
-            onError={onLoad}
-            onLoad={onLoad}
-            src={src}
-            title={title}
-          />
+          {isPdf ? (
+            <object
+              className="h-[min(75vh,900px)] min-h-[500px] w-full bg-slate-950"
+              data={src}
+              onLoad={onLoad}
+              title={title}
+              type="application/pdf"
+            >
+              {/* Fallback if browser can't render PDF inline */}
+              <div className="flex h-[400px] flex-col items-center justify-center gap-4 text-center">
+                <p className="text-sm text-aviation-muted">PDF viewer unavailable in this browser.</p>
+                <a
+                  className="rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 font-data text-sm text-cyan-100 hover:bg-cyan-500/20 transition-colors"
+                  href={rawUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Open {title} in new tab ↗
+                </a>
+              </div>
+            </object>
+          ) : (
+            <iframe
+              className="h-[min(75vh,900px)] min-h-[500px] w-full bg-slate-950"
+              onError={onLoad}
+              onLoad={onLoad}
+              src={src}
+              title={title}
+            />
+          )}
+        </div>
+        {/* Always show direct link as escape hatch */}
+        <div className="border-t border-aviation-border bg-black/30 px-3 py-2">
+          <a
+            className="text-xs text-cyan-400 hover:text-cyan-300 hover:underline"
+            href={rawUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open in new tab ↗
+          </a>
         </div>
       </div>
     </>
