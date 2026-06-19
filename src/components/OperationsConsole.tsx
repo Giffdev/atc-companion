@@ -447,11 +447,13 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                 {/* Tower status and schedule */}
                 <div className="flex flex-wrap items-start gap-3">
                   <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    hours.isTowered
+                    hours.isTowered === true
                       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                      : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                      : hours.isTowered === false
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                        : "border-slate-500/30 bg-slate-500/10 text-slate-300"
                   }`}>
-                    {hours.isTowered ? "✦ Towered" : "Non-Towered"}
+                    {hours.isTowered === true ? "✦ Towered" : hours.isTowered === false ? "Non-Towered" : "⟳ Tower status loading…"}
                   </span>
                   {hours.timezone && (
                     <span className="mt-0.5 rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">
@@ -532,7 +534,7 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                   )}
                 </div>
 
-                {!hours.towerHours && !hours.isTowered && !hours.attendanceSchedule && (
+                {!hours.towerHours && hours.isTowered === false && !hours.attendanceSchedule && (
                   <p className="text-sm text-aviation-muted">
                     Non-towered airport.{" "}
                     <a
@@ -542,6 +544,19 @@ const renderQuerySummary = (liveResult: LiveQueryResult | null, isSubmitting: bo
                       target="_blank"
                     >
                       View Chart Supplement ↗
+                    </a>
+                  </p>
+                )}
+                {hours.isTowered === null && (
+                  <p className="text-sm text-slate-400">
+                    Tower status could not be confirmed — FAA source temporarily unavailable.{" "}
+                    <a
+                      className="text-cyan-400 hover:text-cyan-300 underline"
+                      href={`https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${hours.airportIcao.replace(/^K/, "")}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Check Chart Supplement ↗
                     </a>
                   </p>
                 )}
@@ -784,7 +799,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const fallbackSource = PLACEHOLDER_SOURCE;
   const fallbackFetchedAt = initialNow;
 
-  const trafficAirportIcao = selectedFacility?.primaryAirport ?? undefined;
+  const trafficAirportIcao = useMemo(() => {
+    if (activeIntent?.type === "traffic" && activeIntent.airport) return activeIntent.airport;
+    return selectedFacility?.primaryAirport ?? undefined;
+  }, [activeIntent, selectedFacility]);
   const trafficAirportRef = trafficAirportIcao ? findAirportReference(trafficAirportIcao) : null;
   const trafficAirportPosition = trafficAirportRef
     ? { latitude: trafficAirportRef.latitude, longitude: trafficAirportRef.longitude }
@@ -1160,9 +1178,24 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       ) : dashboardData.notams.length ? (
                         <NotamList notams={dashboardData.notams} />
                       ) : (
-                        <div className="space-y-2 text-sm text-aviation-muted">
-                          <p>NOTAMs require an FAA API key.</p>
-                          <p className="break-words text-xs">Register free at <a href="https://api.faa.gov" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">api.faa.gov</a>, then add <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-xs">FAA_NOTAM_API_KEY=your-key</code> to <code className="rounded bg-black/30 px-1.5 py-0.5 font-data text-xs">.env.local</code></p>
+                        <div className="space-y-3 text-sm text-aviation-muted">
+                          <p>No programmatic NOTAM feed is currently available (FAA API requires registration).</p>
+                          <a
+                            className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
+                            href={`https://notams.aim.faa.gov/notamSearch/${activeIntent?.type === "notam" && activeIntent.airport ? `?designatorsForLocation=${activeIntent.airport.replace(/^K/, "")}` : ""}`}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Open FAA NOTAM Search ↗
+                          </a>
+                          <a
+                            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/15 ml-2"
+                            href="https://tfr.faa.gov/tfr2/list.html"
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            View Active TFRs ↗
+                          </a>
                         </div>
                       )}
                     </ResultCard>
@@ -1366,11 +1399,13 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       <div className="rounded-xl border border-aviation-border bg-black/10 p-3">
                         <div className="mb-3 flex flex-wrap items-start gap-3">
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                            hours.isTowered
+                            hours.isTowered === true
                               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                              : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                              : hours.isTowered === false
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                                : "border-slate-500/30 bg-slate-500/10 text-slate-300"
                           }`}>
-                            {hours.isTowered ? "✦ Towered" : "Non-Towered"}
+                            {hours.isTowered === true ? "✦ Towered" : hours.isTowered === false ? "Non-Towered" : "⟳ Tower status loading…"}
                           </span>
                           {hours.timezone && (
                             <span className="rounded-full border border-aviation-border bg-black/20 px-2.5 py-1 font-data text-xs text-aviation-muted">

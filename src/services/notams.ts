@@ -126,24 +126,27 @@ const parseNotam = (raw: RawNotam, sourceBase: DataSource, sourceUrl: string, fe
   };
 };
 
-const createHelpfulNotamError = (airport?: string): ApiResponse<Notam[]> =>
-  createApiErrorResponse(
+const createHelpfulNotamError = (airport?: string): ApiResponse<Notam[]> => {
+  const faaCode = airport?.replace(/^K/, "") ?? "";
+  const searchUrl = `${FAA_NOTAM_SEARCH_URL}${faaCode ? `?designatorsForLocation=${faaCode}` : ""}`;
+
+  return createApiErrorResponse(
     {
-      code: "MISSING_API_KEY",
-      message: `NOTAMs need FAA API access or a working fallback feed. Get a free key at https://api.faa.gov, then check ${airport ?? "the airport"} manually at ${FAA_NOTAM_SEARCH_URL} or TFRs at ${FAA_TFR_SEARCH_URL}.`,
-      details: airport
-        ? `Search ${airport} in the FAA NOTAM portal: ${FAA_NOTAM_SEARCH_URL}. TFR map/search: ${FAA_TFR_SEARCH_URL}.`
-        : `FAA NOTAM portal: ${FAA_NOTAM_SEARCH_URL}. TFR map/search: ${FAA_TFR_SEARCH_URL}.`,
+      code: "NOTAM_EMBEDDED_SEARCH",
+      message: airport
+        ? `View live NOTAMs for ${airport} at the FAA NOTAM Search portal.`
+        : "Use the FAA NOTAM Search portal to look up NOTAMs by location.",
+      details: searchUrl,
       retryable: false,
-      status: 503
+      status: 200
     },
     {
       source: NOTAM_SOURCE,
       fetchedAt: toIsoNow(),
-      stalenessCategory: "notam",
-      supportingSources: [AVIATION_API_SOURCE]
+      stalenessCategory: "notam"
     }
   );
+};
 
 const fetchNotamsFromAviationApi = async (
   airport: string,

@@ -110,7 +110,7 @@ export interface AirportHours {
     utcOffset: string;
     isDst: boolean;
   } | null;
-  isTowered: boolean;
+  isTowered: boolean | null; // null = couldn't determine (NFDC unavailable)
   airportUse: string | null;
   attendanceSchedule: string | null;
   lightingSchedule: string | null;
@@ -305,15 +305,39 @@ const inferAirportHours = (
   tz: string,
   tzInfo: ReturnType<typeof formatTimezone>
 ): AirportHours => {
-  const majorAirports = [
+  // Class B airports (24-hour towers)
+  const classB24Hr = [
     "KATL", "KORD", "KDEN", "KDFW", "KJFK", "KLAX", "KSFO", "KSEA", "KMCO",
     "KLAS", "KPHX", "KMIA", "KEWR", "KIAH", "KMSP", "KBOS", "KDTW", "KFLL",
     "KBWI", "KSLC", "KDCA", "KSAN", "KTPA", "KPDX", "KSTL", "KHNL", "KMCI",
     "KAUS", "KCLT", "KRDU", "KPIT", "KCLE", "KMKE", "KIND", "KCVG", "KSMF",
-    "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI"
+    "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI", "KLGA", "KIAD", "KMSP",
+    "KMDW", "KDAL", "KHOU", "KFLL", "KMSY", "KABQ", "KONT", "KBUR", "KSNA"
   ];
 
-  if (majorAirports.includes(icaoCode)) {
+  // Class C and D airports known to be towered (part-time towers included)
+  const knownTowered = [
+    "KPAE", "KBFI", "KRNT", "KOLM", "KTTD", "KHIO", "KVUO", "KTIW",
+    "KGEG", "KSKA", "KBOI", "KSUN", "KTWF", "KMFR", "KRDM", "KEUG",
+    "KFAT", "KSBP", "KSTS", "KCCR", "KHWD", "KSQL", "KPAO", "KNUQ",
+    "KCRQ", "KSEE", "KMYF", "KSDM", "KFUL", "KLGB", "KVNY", "KSMO",
+    "KCMA", "KOXR", "KSBA", "KPSP", "KIFP", "KFFZ", "KIWA", "KCHD",
+    "KDVT", "KGEU", "KTUS", "KFLG", "KPRC", "KELP", "KAMA", "KLBB",
+    "KFTW", "KAFW", "KADS", "KGKY", "KRBD", "KDTO", "KACT", "KCLL",
+    "KCRP", "KLRD", "KMFE", "KGRK", "KABI", "KSPS", "KTUL", "KOKC",
+    "KPWA", "KLIT", "KFSM", "KSHV", "KBTR", "KLFT", "KGPT", "KJAX",
+    "KGNV", "KDAB", "KMLB", "KFMY", "KRSW", "KAPF", "KPGD", "KSRQ",
+    "KPIE", "KCHS", "KCAE", "KGSP", "KAGS", "KSAV", "KVPS", "KECP",
+    "KPNS", "KMOB", "KHSV", "KBHM", "KMGM", "KCSG", "KCHA", "KTYS",
+    "KTRI", "KSDF", "KLEX", "KDAY", "KCMH", "KLCK", "KTOL", "KFWA",
+    "KSBN", "KGRR", "KLAN", "KFNT", "KMBS", "KBTL", "KAZL", "KDSM",
+    "KCID", "KALO", "KMLI", "KPIA", "KSPI", "KDEC", "KBMI", "KSTL",
+    "KSGF", "KCOU", "KJLN", "KICT", "KMHK", "KFOE", "KOFF", "KOMA",
+    "KLNK", "KFSD", "KRAP", "KFAR", "KBIS", "KGFK", "KDLH", "KRST",
+    "KEAU", "KATW", "KGRB", "KLSE", "KCWA", "KMSN"
+  ];
+
+  if (classB24Hr.includes(icaoCode)) {
     return {
       airportIcao: icaoCode,
       airportName,
@@ -329,22 +353,38 @@ const inferAirportHours = (
       attendanceSchedule: "24 hours",
       lightingSchedule: "24 hours",
       rawChartSupplement: null,
-      source: "Inferred from Class B/C airport status"
+      source: "Inferred from Class B airport status"
     };
   }
 
-  // Don't claim untowered — we simply couldn't reach the FAA source
+  if (knownTowered.includes(icaoCode)) {
+    return {
+      airportIcao: icaoCode,
+      airportName,
+      towerHours: "Part-time (see Chart Supplement for hours)",
+      towerSchedule: null,
+      timezone: { iana: tz, ...tzInfo },
+      isTowered: true,
+      airportUse: "Public",
+      attendanceSchedule: null,
+      lightingSchedule: null,
+      rawChartSupplement: null,
+      source: "Inferred from Class C/D airport status (NFDC temporarily unavailable)"
+    };
+  }
+
+  // Can't determine — don't guess
   return {
     airportIcao: icaoCode,
     airportName,
     towerHours: null,
     towerSchedule: null,
     timezone: { iana: tz, ...tzInfo },
-    isTowered: null as unknown as boolean,
+    isTowered: null,
     airportUse: null,
     attendanceSchedule: null,
     lightingSchedule: null,
     rawChartSupplement: null,
-    source: "FAA NFDC (unavailable — data may load on retry)"
+    source: "FAA NFDC (temporarily unavailable — tower status unconfirmed)"
   };
 };

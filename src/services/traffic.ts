@@ -171,7 +171,7 @@ export const getTraffic = async (params: {
         status: 400
       },
       {
-        source: TRAFFIC_SOURCE,
+        source: TRAFFIC_FALLBACK_SOURCE,
         fetchedAt: toIsoNow(),
         stalenessCategory: "trafficTarget"
       }
@@ -181,65 +181,65 @@ export const getTraffic = async (params: {
   const centerLat = (bounds.minLat + bounds.maxLat) / 2;
   const centerLon = (bounds.minLon + bounds.maxLon) / 2;
 
-  const authHeader =
-    process.env.OPENSKY_USERNAME && process.env.OPENSKY_PASSWORD
-      ? {
-          Authorization: `Basic ${Buffer.from(`${process.env.OPENSKY_USERNAME}:${process.env.OPENSKY_PASSWORD}`).toString("base64")}`
-        }
-      : undefined;
-
+  // ADSB.fi is primary — free, fast, no auth required
   try {
-    const result = await fetchWithRetry<OpenSkyResponse>(OPEN_SKY_URL, {
-      source: TRAFFIC_SOURCE,
-      headers: authHeader,
-      query: {
-        lamin: bounds.minLat.toFixed(4),
-        lomin: bounds.minLon.toFixed(4),
-        lamax: bounds.maxLat.toFixed(4),
-        lomax: bounds.maxLon.toFixed(4)
-      },
+    const result = await fetchWithRetry<AdsbFiResponse>(`${ADSB_FI_URL}/lat/${centerLat.toFixed(4)}/lon/${centerLon.toFixed(4)}/dist/${TRAFFIC_RADIUS_NM}`, {
+      source: TRAFFIC_FALLBACK_SOURCE,
       ttlMs: getCacheTtlMs("trafficTarget"),
       cacheNamespace: "traffic-search",
       cacheKey: createCacheKey("traffic-search", {
         airport: params.airport ? toIcaoCode(params.airport) : null,
-        bounds
+        bounds,
+        provider: "adsb-fi"
       }),
       bypassCache: params.bypassCache
     });
 
-    const traffic = mapOpenSkyTraffic(result.data, result.fetchedAt, result.source);
-
-    return createApiResponse(traffic, result.source, {
+    return createApiResponse(mapAdsbFiTraffic(result.data, result.fetchedAt, result.source), result.source, {
       fetchedAt: result.fetchedAt,
       stalenessCategory: "trafficTarget",
       cache: result.cache
     });
-  } catch (openSkyError) {
+  } catch (adsbError) {
+    // Fall back to OpenSky if ADSB.fi fails and credentials are configured
+    const authHeader =
+      process.env.OPENSKY_USERNAME && process.env.OPENSKY_PASSWORD
+        ? {
+            Authorization: `Basic ${Buffer.from(`${process.env.OPENSKY_USERNAME}:${process.env.OPENSKY_PASSWORD}`).toString("base64")}`
+          }
+        : undefined;
+
     try {
-      const result = await fetchWithRetry<AdsbFiResponse>(`${ADSB_FI_URL}/lat/${centerLat.toFixed(4)}/lon/${centerLon.toFixed(4)}/dist/${TRAFFIC_RADIUS_NM}`, {
-        source: TRAFFIC_FALLBACK_SOURCE,
+      const result = await fetchWithRetry<OpenSkyResponse>(OPEN_SKY_URL, {
+        source: TRAFFIC_SOURCE,
+        headers: authHeader,
+        query: {
+          lamin: bounds.minLat.toFixed(4),
+          lomin: bounds.minLon.toFixed(4),
+          lamax: bounds.maxLat.toFixed(4),
+          lomax: bounds.maxLon.toFixed(4)
+        },
         ttlMs: getCacheTtlMs("trafficTarget"),
         cacheNamespace: "traffic-search",
         cacheKey: createCacheKey("traffic-search", {
           airport: params.airport ? toIcaoCode(params.airport) : null,
-          bounds,
-          provider: "adsb-fi"
+          bounds
         }),
         bypassCache: params.bypassCache
       });
 
-      return createApiResponse(mapAdsbFiTraffic(result.data, result.fetchedAt, result.source), result.source, {
+      return createApiResponse(mapOpenSkyTraffic(result.data, result.fetchedAt, result.source), result.source, {
         fetchedAt: result.fetchedAt,
         stalenessCategory: "trafficTarget",
         cache: result.cache,
-        supportingSources: [TRAFFIC_SOURCE]
+        supportingSources: [TRAFFIC_FALLBACK_SOURCE]
       });
-    } catch (adsbError) {
+    } catch (openSkyError) {
       return createApiErrorResponse(
         {
           code: "UPSTREAM_UNAVAILABLE",
-          message: "OpenSky Network and ADSB.fi are currently unavailable for traffic data.",
-          details: `${formatTrafficError("OpenSky", openSkyError)} | ${formatTrafficError("ADSB.fi", adsbError)}`,
+          message: "ADSB.fi and OpenSky Network are currently unavailable for traffic data.",
+          details: `${formatTrafficError("ADSB.fi", adsbError)} | ${formatTrafficError("OpenSky", openSkyError)}`,
           retryable: true,
           status: 503
         },
