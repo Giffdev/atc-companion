@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AIRPORT_REFERENCES } from "@/data/airports";
 import type { TrafficTarget } from "@/types/aviation";
 
 type TrafficMapProps = {
@@ -77,6 +78,31 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
         L.marker([airportPosition.latitude, airportPosition.longitude], { icon: airportIcon })
           .addTo(map)
           .bindTooltip(airportIcao ?? "Airport", { permanent: true, direction: "right", className: "leaflet-tooltip-airport" });
+
+        // Show other airports within the visible range
+        const rangeDegreesLat = (defaultRangeNm * 1.15) / 60;
+        const cosLat = Math.cos((airportPosition.latitude * Math.PI) / 180);
+        const rangeDegreesLon = rangeDegreesLat / (cosLat || 1);
+
+        const nearbyAirports = AIRPORT_REFERENCES.filter((apt) => {
+          if (apt.icao === airportIcao) return false;
+          const dLat = Math.abs(apt.latitude - airportPosition.latitude);
+          const dLon = Math.abs(apt.longitude - airportPosition.longitude);
+          return dLat <= rangeDegreesLat && dLon <= rangeDegreesLon;
+        });
+
+        const nearbyIcon = L.divIcon({
+          html: `<div style="width:8px;height:8px;border:1.5px solid #94a3b8;border-radius:50%;background:rgba(148,163,184,0.15);"></div>`,
+          className: "",
+          iconSize: [8, 8],
+          iconAnchor: [4, 4]
+        });
+
+        nearbyAirports.forEach((apt) => {
+          L.marker([apt.latitude, apt.longitude], { icon: nearbyIcon })
+            .addTo(map)
+            .bindTooltip(apt.icao, { permanent: true, direction: "right", className: "leaflet-tooltip-nearby", offset: [4, 0] });
+        });
       }
 
       leafletMapRef.current = map;
@@ -129,6 +155,12 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
 
     updateMarkers();
   }, [traffic]);
+
+  const centerOnTarget = (target: TrafficTarget) => {
+    if (!target.position || !leafletMapRef.current) return;
+    leafletMapRef.current.panTo([target.position.latitude, target.position.longitude], { animate: true });
+    setSelectedTarget(target);
+  };
 
   return (
     <div className="space-y-4">
@@ -183,7 +215,12 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
       {traffic.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[...traffic].sort((a, b) => (a.altitudeFeet ?? -1) - (b.altitudeFeet ?? -1)).map((target) => (
-            <div key={`${target.icao24}-legend`} className="rounded-2xl border border-aviation-border bg-black/15 p-3">
+            <button
+              key={`${target.icao24}-legend`}
+              className="rounded-2xl border border-aviation-border bg-black/15 p-3 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
+              onClick={() => centerOnTarget(target)}
+              type="button"
+            >
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <p className="truncate font-data text-sm text-aviation-text">{target.callsign ?? target.icao24.toUpperCase()}</p>
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getAltitudeTone(target.altitudeFeet) }} />
@@ -192,7 +229,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
                 {target.altitudeFeet?.toLocaleString() ?? "Unknown"} ft • {target.groundspeedKnots ?? "--"} kt
                 {target.onGround ? " • GND" : ""}
               </p>
-            </div>
+            </button>
           ))}
         </div>
       )}
