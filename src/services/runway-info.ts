@@ -62,6 +62,13 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
         }
       );
 
+      // Validate real airport page (not error/redirect)
+      const hasAirportContent = result.data.includes(faaCode) || result.data.includes(icaoCode)
+        || /airport\s+(?:name|information)/i.test(result.data);
+      if (!hasAirportContent) {
+        throw new Error("NFDC returned non-airport page");
+      }
+
       const runways = parseRunwaysFromHtml(result.data);
 
       if (runways.length > 0) {

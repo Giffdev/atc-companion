@@ -125,7 +125,8 @@ const TWENTY_FOUR_HOUR_TOWERED_AIRPORTS = new Set([
   "KBWI", "KSLC", "KDCA", "KSAN", "KTPA", "KPDX", "KSTL", "KHNL", "KMCI",
   "KAUS", "KCLT", "KRDU", "KPIT", "KCLE", "KMKE", "KIND", "KCVG", "KSMF",
   "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI", "KLGA", "KIAD", "KMSP",
-  "KMDW", "KDAL", "KHOU", "KFLL", "KMSY", "KABQ", "KONT", "KBUR", "KSNA"
+  "KMDW", "KDAL", "KHOU", "KFLL", "KMSY", "KABQ", "KONT", "KBUR", "KSNA",
+  "KMKC", "KGSO"
 ]);
 
 const KNOWN_TOWERED_AIRPORTS = new Set([
@@ -202,7 +203,21 @@ export const getAirportHours = async (airportCodeInput: string): Promise<ApiResp
         }
       );
 
+      // Validate that we got a real airport page, not an error/redirect page
+      const hasAirportContent = result.data.includes(faaCode) || result.data.includes(icaoCode)
+        || /airport\s+(?:name|information)/i.test(result.data);
+      if (!hasAirportContent) {
+        // NFDC returned a non-airport page (error/redirect) — fall through to inference
+        throw new Error("NFDC returned non-airport page");
+      }
+
       const hours = parseAirportHoursFromHtml(result.data, icaoCode, airportRef.name, tz, tzInfo);
+
+      // If parsing returned no useful data but we know it's towered, prefer inference
+      if (!hours.towerHours && !hours.towerSchedule && hours.isTowered === null && KNOWN_TOWERED_AIRPORTS.has(icaoCode)) {
+        throw new Error("Parsed hours empty for known-towered airport");
+      }
+
       return createApiResponse(hours, source, { fetchedAt });
     } catch {
       // Fall through to inference
