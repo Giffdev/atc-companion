@@ -41,8 +41,9 @@ describe("traffic service", () => {
   });
 
   it("maps upstream 404, 500, and timeout failures into explicit error codes", async () => {
+    // 404 from ADSB.fi (primary) — non-retryable, T2c guard surfaces it directly without OpenSky fallback
     installAviationApiMock({
-      opensky: new Response("not found", { status: 404 })
+      "adsb-fi": new Response("not found", { status: 404 })
     });
 
     await expect(getTraffic({ airport: "KBFI" })).resolves.toMatchObject({
@@ -50,7 +51,9 @@ describe("traffic service", () => {
       error: expect.objectContaining({ code: "UPSTREAM_NOT_FOUND", status: 404 })
     });
 
+    // 500 from ADSB.fi — retryable, falls through to OpenSky; OpenSky also 500s
     installAviationApiMock({
+      "adsb-fi": new Response("server down", { status: 500 }),
       opensky: new Response("server down", { status: 500 })
     });
 
@@ -59,12 +62,16 @@ describe("traffic service", () => {
       error: expect.objectContaining({ code: "UPSTREAM_SERVER_ERROR", status: 500 })
     });
 
+    const timeoutFn = (() => {
+      const error = new Error("timed out");
+      error.name = "AbortError";
+      throw error;
+    }) as () => Response;
+
+    // Timeout from ADSB.fi — retryable, falls through to OpenSky; OpenSky also times out
     installAviationApiMock({
-      opensky: (() => {
-        const error = new Error("timed out");
-        error.name = "AbortError";
-        throw error;
-      }) as () => Response
+      "adsb-fi": timeoutFn,
+      opensky: timeoutFn
     });
 
     await expect(getTraffic({ airport: "KBFI" })).resolves.toMatchObject({

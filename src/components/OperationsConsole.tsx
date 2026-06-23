@@ -38,7 +38,6 @@ type LiveQueryResult = {
 };
 
 import type { AirportInfoQueryPayload } from "@/services/orchestrator";
-import type { AirportHours } from "@/services/airport-hours";
 import type { Notam } from "@/types/aviation";
 
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
@@ -384,6 +383,7 @@ const renderQuerySummary = (
   isSubmitting: boolean,
   submittedQuery: string,
   referenceTime: string,
+  notams: Notam[],
   facilityAirportInfo?: AirportInfoQueryPayload | null,
   onFollowUp?: (query: string) => void
 ) => {
@@ -705,7 +705,7 @@ const renderQuerySummary = (
         return (
           <div className="space-y-3">
             <p className="data-label">{facilityName} — {airports.length} airports</p>
-            <FacilityOverview facilityName={facilityName} facilityType={facilityType} airports={airports} onSelectAirport={(icao) => {
+            <FacilityOverview facilityName={facilityName} facilityType={facilityType} airports={airports} notams={notams} onSelectAirport={(icao) => {
               onFollowUp?.(`show me everything for ${icao}`);
             }} />
           </div>
@@ -804,6 +804,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   useEffect(() => {
     const storedFacilityId = window.localStorage.getItem(FACILITY_STORAGE_KEY);
     if (storedFacilityId && getFacilityById(storedFacilityId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedFacilityId(storedFacilityId);
     }
 
@@ -1049,7 +1050,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         : payload.intent.type === "airport_info" ? payload.intent.airport
         : null;
       if (platesAirport) {
-        fetchAllProcedureTypes(platesAirport);
+        void fetchAllProcedureTypes(platesAirport);
       }
     } catch {
       const fallbackMessage =
@@ -1067,6 +1068,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   // Auto-fetch relevant data for the selected facility whenever it changes
   useEffect(() => {
     // Always clear stale data from previous facility
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFacilityResults(new Map());
     setLiveResult(null);
     setActiveIntent(null);
@@ -1099,7 +1101,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
         }
       };
-      fetchFacilityTraffic();
+      void fetchFacilityTraffic();
       return () => { cancelled = true; };
     }
 
@@ -1183,9 +1185,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
       } catch { /* silent */ }
     };
 
-    fetchFacilityDashboard();
+    void fetchFacilityDashboard();
 
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFacility?.id, selectedFacility?.type, fetchLiveQuery]);
 
   useEffect(() => {
@@ -1299,8 +1302,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
           {liveResult ? (
             <div className="mt-4 space-y-4">
-              {renderQuerySummary(liveResult, isSubmitting, submittedQuery, initialNow, facilityAirportInfo, (followUpQuery) => {
-                handleSubmit(followUpQuery, null);
+              {renderQuerySummary(liveResult, isSubmitting, submittedQuery, initialNow, dashboardData.notams, facilityAirportInfo, (followUpQuery) => {
+                void handleSubmit(followUpQuery, null);
               })}
 
               <details className="rounded-2xl border border-aviation-border bg-black/20">
@@ -1319,8 +1322,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
             facilityName={selectedFacility.name}
             facilityType={selectedFacility.type as "approach" | "center"}
             airports={getFacilityAirports(selectedFacility.id)}
+            notams={dashboardData.notams}
             onSelectAirport={(icao) => {
-              handleSubmit(`airport info for ${icao}`, null);
+              void handleSubmit(`airport info for ${icao}`, null);
             }}
           />
         )}

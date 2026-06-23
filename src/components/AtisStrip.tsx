@@ -19,7 +19,7 @@ type AtisStripProps = {
 
 /** Convert a full ISO timestamp (or legacy HHMMZ string) to a `HHMMZ` display token.
  *  Returns null when the input is null/undefined or not a valid date. */
-const toHHMMZ = (iso: string | null | undefined): string | null => {
+export const toHHMMZ = (iso: string | null | undefined): string | null => {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
@@ -34,24 +34,32 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
   const [atisData, setAtisData] = useState<Record<string, AtisEntry | null>>({});
   const [expandedAirport, setExpandedAirport] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   const fetchAtis = useCallback(async () => {
     if (airports.length === 0) return;
 
     try {
       const response = await fetch(`/api/atis?airports=${airports.join(",")}`);
-      if (!response.ok) return;
+      if (!response.ok) {
+        setFetchError(true);
+        setLastFetch(new Date().toISOString());
+        return;
+      }
       const data = await response.json();
+      setFetchError(false);
       setAtisData(data.airports ?? {});
       setLastFetch(data.fetchedAt ?? new Date().toISOString());
     } catch {
-      // Silent failure — ATIS is supplemental info
+      setFetchError(true);
+      setLastFetch(new Date().toISOString());
     }
   }, [airports]);
 
   useEffect(() => {
-    fetchAtis();
-    const interval = setInterval(fetchAtis, refreshIntervalMs);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAtis();
+    const interval = setInterval(() => { void fetchAtis(); }, refreshIntervalMs);
     return () => clearInterval(interval);
   }, [fetchAtis, refreshIntervalMs]);
 
@@ -61,6 +69,13 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
     .filter((entry): entry is { icao: string; atis: AtisEntry } => entry.atis !== null && entry.atis !== undefined);
 
   if (activeEntries.length === 0 && lastFetch) {
+    if (fetchError) {
+      return (
+        <div className="flex min-h-[44px] items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2" role="alert">
+          <span className="text-xs text-amber-300">⚠ ATIS unavailable — could not fetch</span>
+        </div>
+      );
+    }
     return null; // No D-ATIS available for these airports — hide the strip entirely
   }
 

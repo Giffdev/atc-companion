@@ -58,6 +58,10 @@ export interface Metar extends SourceTracked {
   stationIcao: string;
   rawText: string;
   observedAt: IsoTimestamp;
+  /** Minutes since the METAR was observed (rounded). Computed at parse time. */
+  ageMinutes: number;
+  /** True when ageMinutes > 45 — mirrors the ATIS staleness contract. */
+  stale: boolean;
   wind: WindCondition | null;
   visibility: VisibilityCondition | null;
   ceiling: CeilingCondition | null;
@@ -145,6 +149,19 @@ export interface Pirep extends SourceTracked {
 /** FAA NOTAM class. D = distant, FDC = regulatory, TFR = temporary flight restriction. */
 export type NotamType = "D" | "FDC" | "TFR";
 
+/**
+ * Operational category derived from NOTAM type and text.
+ * Single source of truth consumed by both card badges and the NOTAMs panel.
+ */
+export type NotamCategory =
+  | "AIRPORT_CLOSURE"
+  | "RUNWAY_CLOSURE"
+  | "TFR"
+  | "FDC"
+  | "OBSTACLE"
+  | "NAV_OUTAGE"
+  | "OTHER";
+
 /** Shared NOTAM fields. */
 export interface BaseNotam extends SourceTracked {
   notamId: string;
@@ -153,6 +170,12 @@ export interface BaseNotam extends SourceTracked {
   effectiveAt: IsoTimestamp;
   expiresAt?: IsoTimestamp;
   text: string;
+  /** Derived operational category — set by classifyNotam at parse time. */
+  category: NotamCategory;
+  /** True for AIRPORT_CLOSURE, RUNWAY_CLOSURE, or TFR — drives card badge. */
+  isCritical: boolean;
+  /** Short human-readable label, e.g. "RWY 16C/34C CLOSED" or "TFR — VIP MOVEMENT". */
+  summary?: string;
 }
 
 /** D NOTAMs describe operational conditions like runway closures or navaid outages. */

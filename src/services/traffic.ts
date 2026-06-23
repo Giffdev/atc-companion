@@ -5,7 +5,7 @@ import { FetcherError, fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
 import type { TrafficTarget } from "@/types/aviation";
-import { metersPerSecondToFpm, metersPerSecondToKnots, metersToFeet } from "@/services/_shared";
+import { metersPerSecondToFpm, metersPerSecondToKnots, metersToFeet, toServiceErrorResponse } from "@/services/_shared";
 
 const TRAFFIC_SOURCE = getDataSource("openSkyNetwork");
 const TRAFFIC_FALLBACK_SOURCE = getDataSource("adsbFi");
@@ -201,7 +201,13 @@ export const getTraffic = async (params: {
       cache: result.cache
     });
   } catch (adsbError) {
-    // Fall back to OpenSky if ADSB.fi fails and credentials are configured
+    // T2c: non-retryable 4xx from ADSB.fi (e.g. 400, 404) should NOT fall through to
+    // OpenSky. Only retryable errors (429, 5xx, timeout, network) fall back.
+    if (adsbError instanceof FetcherError && !adsbError.options.retryable) {
+      return toServiceErrorResponse(adsbError, TRAFFIC_FALLBACK_SOURCE, "trafficTarget");
+    }
+
+    // Fall back to OpenSky for retryable errors (5xx, timeout, network)
     const authHeader =
       process.env.OPENSKY_USERNAME && process.env.OPENSKY_PASSWORD
         ? {
@@ -235,6 +241,10 @@ export const getTraffic = async (params: {
         supportingSources: [TRAFFIC_FALLBACK_SOURCE]
       });
     } catch (openSkyError) {
+      if (openSkyError instanceof FetcherError) {
+        return toServiceErrorResponse(openSkyError, TRAFFIC_SOURCE, "trafficTarget");
+      }
+
       return createApiErrorResponse(
         {
           code: "UPSTREAM_UNAVAILABLE",

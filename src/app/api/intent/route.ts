@@ -1,4 +1,4 @@
-import { createMissingParamResponse, jsonWithStandardHeaders, readRequiredSearchParam } from "@/app/api/route-utils";
+import { createMissingParamResponse, jsonWithStandardHeaders, readOptionalSearchParam, readRequiredSearchParam } from "@/app/api/route-utils";
 import { parseIntent } from "@/ai/intent-parser";
 import { createApiResponse } from "@/lib/utils";
 import type { DataSource } from "@/types/api";
@@ -13,10 +13,9 @@ const INTENT_ROUTE_SOURCE: DataSource = {
 
 const readQuery = async (request: Request): Promise<{ query: string; facility?: string }> => {
   if (request.method === "GET") {
-    const url = new URL(request.url);
     return {
       query: readRequiredSearchParam(request, "q") ?? "",
-      facility: url.searchParams.get("facility")?.trim() || undefined
+      facility: readOptionalSearchParam(request, "facility") ?? undefined
     };
   }
 

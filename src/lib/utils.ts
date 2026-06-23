@@ -99,6 +99,7 @@ export const formatTimestamp = (timestamp: string): string => {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
     timeZoneName: "short"
   }).format(date);
 };

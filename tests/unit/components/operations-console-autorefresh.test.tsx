@@ -177,11 +177,17 @@ describe("OperationsConsole auto-refresh", () => {
     vi.useFakeTimers();
     const fetchMock = vi
       .fn()
+      // First call is the warmup fetch that fires on mount (ignored by the component)
+      .mockImplementationOnce(() => jsonResponse({}))
       .mockImplementationOnce(() => jsonResponse(createTrafficResult("2026-06-18T05:00:00.000Z")))
       .mockImplementationOnce(() => jsonResponse(createTrafficResult("2026-06-18T05:00:15.000Z")));
     vi.stubGlobal("fetch", fetchMock);
 
     const { unmount } = render(<OperationsConsole initialNow="2026-06-18T05:00:00.000Z" />);
+
+    // Flush the warmup fetch that fires on mount, then clear so call counts start from 0
+    await flushUpdates();
+    fetchMock.mockClear();
 
     fireEvent.click(screen.getByRole("button", { name: "Submit traffic query" }));
 
@@ -218,11 +224,17 @@ describe("OperationsConsole auto-refresh", () => {
     vi.useFakeTimers();
     const fetchMock = vi
       .fn()
+      // First call is the warmup fetch that fires on mount (ignored by the component)
+      .mockImplementationOnce(() => jsonResponse({}))
       .mockImplementationOnce(() => jsonResponse(createWeatherResult("2026-06-18T05:00:00.000Z")))
       .mockImplementationOnce(() => jsonResponse(createWeatherResult("2026-06-18T05:01:00.000Z")));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<OperationsConsole initialNow="2026-06-18T05:00:00.000Z" />);
+
+    // Flush the warmup fetch that fires on mount, then clear so call counts start from 0
+    await flushUpdates();
+    fetchMock.mockClear();
 
     fireEvent.click(screen.getByRole("button", { name: "Submit weather query" }));
 

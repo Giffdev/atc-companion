@@ -1,8 +1,16 @@
 import { formatTimestamp } from "@/lib/utils";
+import { toHHMMZ } from "@/components/AtisStrip";
 import type { FlightCategory, TafForecastGroup, WeatherBundle } from "@/types/aviation";
 
+/** Extended type to accept Aaron's upcoming weather staleness contract fields gracefully. */
+type WeatherBundleWithStaleness = WeatherBundle & {
+  observedAt?: string;
+  ageMinutes?: number;
+  stale?: boolean;
+};
+
 type WeatherDisplayProps = {
-  weather: WeatherBundle;
+  weather: WeatherBundleWithStaleness;
 };
 
 const FLIGHT_CATEGORY_TONE: Record<FlightCategory, string> = {
@@ -62,6 +70,8 @@ const ForecastBlock = ({ group }: { group: TafForecastGroup }) => (
 export function WeatherDisplay({ weather }: WeatherDisplayProps) {
   const metar = weather.metar;
   const taf = weather.taf;
+  const staleWeather = weather.stale === true;
+  const observedHHMM = toHHMMZ(metar?.observedAt ?? null);
 
   if (!metar) {
     return <div className="text-sm text-aviation-muted">No METAR staged for this preview.</div>;
@@ -105,14 +115,27 @@ export function WeatherDisplay({ weather }: WeatherDisplayProps) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-aviation-border bg-black/15 p-4">
+      <div className={`rounded-2xl border p-4 ${staleWeather ? "border-amber-400/30 bg-amber-500/5 ring-2 ring-amber-400/70" : "border-aviation-border bg-black/15"}`}>
+        {staleWeather && (
+          <p className="mb-2 text-xs font-semibold text-amber-300" role="alert">
+            ⚠ METAR observation{weather.ageMinutes != null ? ` ${weather.ageMinutes} min old` : ""} — verify against live source.{" "}
+            <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300" aria-label="Stale METAR">
+              STALE
+            </span>
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="data-label">Latest METAR</p>
             <p className="mt-2 break-words font-data text-sm leading-7 text-aviation-text">{metar.rawText}</p>
           </div>
-          <div className="shrink-0 rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-xs text-aviation-muted">
-            Obs {formatTimestamp(metar.observedAt)}
+          <div className="flex flex-col items-end gap-1">
+            <div className={`shrink-0 rounded-full border px-3 py-1 font-data text-xs ${staleWeather ? "border-amber-400/30 bg-amber-500/10 text-amber-300" : "border-aviation-border bg-black/20 text-aviation-muted"}`}>
+              Observed {observedHHMM ?? formatTimestamp(metar.observedAt)}
+            </div>
+            <div className="shrink-0 rounded-full border border-aviation-border bg-black/20 px-3 py-1 font-data text-xs text-aviation-muted">
+              Checked {new Date(weather.fetchedAt).toISOString().slice(11, 16)}Z
+            </div>
           </div>
         </div>
       </div>

@@ -18,6 +18,9 @@ export const SAMPLE_NOTAMS: Notam[] = [
     text: "RWY 04L/22R CLSD",
     effectiveAt: "2026-06-17T19:00:00.000Z",
     expiresAt: "2026-06-18T05:00:00.000Z",
+    category: "RUNWAY_CLOSURE",
+    isCritical: true,
+    summary: "RWY 04L/22R CLSD",
     source: FAA_NOTAM_SOURCE,
     fetchedAt: "2026-06-17T19:05:00.000Z",
     isStale: false
@@ -29,6 +32,8 @@ export const SAMPLE_NOTAMS: Notam[] = [
     reference: "IAP",
     text: "ILS RWY 04R AMDT 5A",
     effectiveAt: "2026-06-17T18:00:00.000Z",
+    category: "FDC",
+    isCritical: false,
     source: FAA_NOTAM_SOURCE,
     fetchedAt: "2026-06-17T18:05:00.000Z",
     isStale: false

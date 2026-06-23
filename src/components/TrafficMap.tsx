@@ -141,7 +141,7 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
       syncMarkers(map, L, traffic);
     };
 
-    initMap();
+    void initMap();
 
     return () => {
       cancelled = true;
@@ -241,4 +241,3 @@ export function TrafficMap({ traffic, airportIcao, airportPosition, defaultRange
     </div>
   );
 }
-

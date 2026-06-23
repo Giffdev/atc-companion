@@ -48,7 +48,7 @@ const TOWERED_AIRPORTS = new Set([
   "KSJC", "KOAK", "KSAT", "KBNA", "KMEM", "KPBI", "KLGA", "KIAD", "KMDW",
   "KDAL", "KHOU", "KMSY", "KABQ", "KONT", "KBUR", "KSNA",
   // Class C & D with towers
-  "KPAE", "KBFI", "KRNT", "KOLM", "KTTD", "KHIO", "KVUO", "KTIW",
+  "KPAE", "KBFI", "KRNT", "KOLM", "KTTD", "KHIO", "KVUO", "KTIW", "KTCM",
   "KGEG", "KBOI", "KSUN", "KMFR", "KRDM", "KEUG", "KFAT", "KSBP",
   "KSTS", "KCCR", "KSQL", "KPAO", "KCRQ", "KSEE", "KMYF", "KFUL",
   "KLGB", "KVNY", "KSMO", "KCMA", "KOXR", "KSBA", "KPSP", "KIFP",

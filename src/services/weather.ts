@@ -160,11 +160,15 @@ const parseAltimeterInHg = (altim: number | undefined): number | null =>
 const parseMetar = (payload: AviationWeatherMetarPayload, sourceUrl: string, fetchedAt: string): Metar => {
   const source = { ...WEATHER_SOURCE, url: sourceUrl };
   const skyConditions = parseSkyConditions(payload.clouds);
+  const observedAt = toIsoTimestamp(payload.reportTime ?? payload.obsTime, fetchedAt);
+  const ageMinutes = Math.round((Date.now() - new Date(observedAt).getTime()) / 60000);
 
   return {
     stationIcao: payload.icaoId ?? "UNKNOWN",
     rawText: payload.rawOb ?? "",
-    observedAt: toIsoTimestamp(payload.reportTime ?? payload.obsTime, fetchedAt),
+    observedAt,
+    ageMinutes,
+    stale: ageMinutes > 45,
     wind:
       typeof payload.wspd === "number"
         ? {
@@ -414,8 +418,10 @@ export const getMetar = async (station: string, options: WeatherRequestOptions =
       );
     }
 
-    return createApiResponse(parseMetar(payload, result.url, result.fetchedAt), result.source, {
-      fetchedAt: result.fetchedAt,
+    const metar = parseMetar(payload, result.url, result.fetchedAt);
+    // Use observedAt (not fetchedAt) so cached responses don't mask stale observations.
+    return createApiResponse(metar, result.source, {
+      fetchedAt: metar.observedAt,
       stalenessCategory: "metar",
       cache: result.cache
     });

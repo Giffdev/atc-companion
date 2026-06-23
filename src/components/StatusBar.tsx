@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import { formatRelativeTime, formatTimestamp } from "@/lib/utils";
 import type { SourceStatusItem } from "@/data/demo-results";
 
@@ -15,6 +19,21 @@ const STATUS_DOT: Record<SourceStatusItem["status"], string> = {
 };
 
 export function StatusBar({ sources, warnings, referenceTime, liveStatus }: StatusBarProps) {
+  const [now, setNow] = useState(referenceTime);
+
+  useEffect(() => {
+    const updateNow = () => setNow(new Date().toISOString());
+    // Seed on the next task to correct SSR freeze without synchronous effect state.
+    const seedId = window.setTimeout(updateNow, 0);
+    const intervalId = window.setInterval(() => {
+      setNow(new Date().toISOString());
+    }, 30_000);
+    return () => {
+      window.clearTimeout(seedId);
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   return (
     <footer className="sticky bottom-0 z-30 mt-auto border-t border-aviation-border/80 bg-[#08101d]/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 lg:px-8">
@@ -35,7 +54,7 @@ export function StatusBar({ sources, warnings, referenceTime, liveStatus }: Stat
                 <span className={`h-2 w-2 rounded-full ${STATUS_DOT[source.status]}`} />
                 <span className="truncate text-aviation-text">{source.label}</span>
                 <span className="hidden text-slate-600 md:inline">/</span>
-                <span className="font-data hidden md:inline">{formatRelativeTime(source.fetchedAt, referenceTime)}</span>
+                <span className="font-data hidden md:inline">{formatRelativeTime(source.fetchedAt, now)}</span>
               </div>
             ))}
           </div>

@@ -13,6 +13,7 @@ export const AUTHORITATIVE_DOMAIN_ALLOWLIST = [
   "aviationweather.gov",
   "faa.gov",
   "opensky-network.org",
+  "opendata.adsb.fi",
   "ecfr.gov"
 ] as const;
 

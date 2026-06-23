@@ -3,10 +3,10 @@ export const DEFAULT_STALENESS_THRESHOLD_MS = 10 * 60 * 1000;
 
 /** Source-specific freshness windows based on operational publication cadence. */
 export const STALENESS_THRESHOLDS_MS = {
-  metar: 60 * 60 * 1000,
+  metar: 45 * 60 * 1000,
   taf: 6 * 60 * 60 * 1000,
   pirep: 2 * 60 * 60 * 1000,
-  notam: 12 * 60 * 60 * 1000,
+  notam: 2 * 60 * 60 * 1000,
   approachPlate: 28 * 24 * 60 * 60 * 1000,
   sid: 28 * 24 * 60 * 60 * 1000,
   star: 28 * 24 * 60 * 60 * 1000,

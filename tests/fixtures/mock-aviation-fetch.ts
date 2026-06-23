@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-type MockKey = "metar" | "taf" | "pirep" | "notams" | "dtpp" | "opensky" | "ecfr";
+type MockKey = "metar" | "taf" | "pirep" | "notams" | "dtpp" | "opensky" | "ecfr" | "adsb-fi";
 type MockOverride = Response | Error | (() => Response | Promise<Response>);
 
 const jsonResponse = (payload: unknown, init?: ResponseInit) =>
@@ -111,6 +111,13 @@ export const SAMPLE_OPENSKY_PAYLOAD = {
   ]
 };
 
+export const SAMPLE_ADSB_FI_PAYLOAD = {
+  ac: [
+    { hex: "a4b294", flight: "ASA123 ", lat: 47.533, lon: -122.302, alt_baro: 3000, gs: 120, track: 141, baro_rate: 0 },
+    { hex: "a80811", flight: "DAL456 ", lat: 47.518, lon: -122.295, alt_baro: "ground", gs: 8, track: 321, baro_rate: 0 }
+  ]
+};
+
 export const SAMPLE_NOTAMS_PAYLOAD = {
   items: [
     {
@@ -148,6 +155,8 @@ const buildDefaultResponse = (key: MockKey): Response => {
       return jsonResponse(SAMPLE_NOTAMS_PAYLOAD);
     case "dtpp":
       return xmlResponse(SAMPLE_DTPP_XML);
+    case "adsb-fi":
+      return jsonResponse(SAMPLE_ADSB_FI_PAYLOAD);
     case "opensky":
       return jsonResponse(SAMPLE_OPENSKY_PAYLOAD);
     case "ecfr":
@@ -206,6 +215,7 @@ const KEY_BY_URL: Array<[MockKey, string]> = [
   ["pirep", "/api/data/pirep"],
   ["notams", "external-api.faa.gov/notamapi/v1/notams"],
   ["dtpp", "nfdc.faa.gov/webContent/dtpp/current.xml"],
+  ["adsb-fi", "opendata.adsb.fi/api/v2"],
   ["opensky", "opensky-network.org/api/states/all"],
   ["ecfr", "ecfr.gov/api/search/v1/results"]
 ];

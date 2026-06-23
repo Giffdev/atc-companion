@@ -17,6 +17,12 @@ const EXTRA_TTLS_MS: Record<Exclude<CacheNamespace, StalenessCategory>, number> 
   airportReference: 28 * 24 * 60 * 60 * 1000
 };
 
+// Cache TTL overrides — decouple re-fetch interval from the staleness-warn threshold
+// for feeds where new data can arrive much more frequently than the warn window.
+const CACHE_TTL_OVERRIDES_MS: Partial<Record<StalenessCategory, number>> = {
+  notam: 15 * 60 * 1000 // 15 min re-fetch; keep 2h/6h warn threshold in staleness.ts
+};
+
 const DEFAULT_MAX_ENTRIES = 250;
 
 const stableStringify = (value: unknown): string => {
@@ -32,10 +38,14 @@ const stableStringify = (value: unknown): string => {
   return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(",")}}`;
 };
 
-export const getCacheTtlMs = (namespace: CacheNamespace): number =>
-  namespace in STALENESS_THRESHOLDS_MS
+export const getCacheTtlMs = (namespace: CacheNamespace): number => {
+  if (namespace in CACHE_TTL_OVERRIDES_MS) {
+    return CACHE_TTL_OVERRIDES_MS[namespace as StalenessCategory]!;
+  }
+  return namespace in STALENESS_THRESHOLDS_MS
     ? STALENESS_THRESHOLDS_MS[namespace as StalenessCategory]
     : EXTRA_TTLS_MS[namespace as Exclude<CacheNamespace, StalenessCategory>];
+};
 
 export const createCacheKey = (namespace: string, params: unknown): string => `${namespace}:${stableStringify(params)}`;
 

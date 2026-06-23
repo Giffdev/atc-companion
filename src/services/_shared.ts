@@ -46,7 +46,12 @@ export const toIsoTimestamp = (value: string | number | null | undefined, fallba
   }
 
   if (typeof value === "string" && value.trim()) {
-    const parsed = Date.parse(value);
+    const trimmed = value.trim();
+    // Append "Z" to strings that have no timezone designator so they are
+    // treated as UTC rather than local time on non-UTC runtimes.
+    const hasTz = /[Zz]$/.test(trimmed) || /[+-]\d{2}:?\d{2}$/.test(trimmed);
+    const normalized = hasTz ? trimmed : `${trimmed}Z`;
+    const parsed = Date.parse(normalized);
     if (!Number.isNaN(parsed)) {
       return new Date(parsed).toISOString();
     }

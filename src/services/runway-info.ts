@@ -4,7 +4,7 @@ import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
-import { collapseWhitespace, extractTableCellPairs, stripHtmlToText } from "@/services/nfdc-html";
+import { collapseWhitespace, extractTableCellPairs, findFirstPairValue, stripHtmlToText } from "@/services/nfdc-html";
 
 const NASR_SOURCE = getDataSource("faaNasr");
 
@@ -180,14 +180,6 @@ const extractLightingType = (value: string | null): string | null => {
 type RunwaySection = {
   designatorHint: string;
   sectionHtml: string;
-};
-
-const findFirstPairValue = (
-  pairs: Array<{ label: string; value: string }>,
-  predicate: (label: string) => boolean
-): string | null => {
-  const match = pairs.find(({ label, value }) => predicate(label) && value.length > 0);
-  return match?.value ?? null;
 };
 
 const extractDesignatorFromSectionText = (value: string): string => {

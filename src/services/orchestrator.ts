@@ -7,7 +7,7 @@ import { getFrequencies } from "@/services/frequencies";
 import { getNavigationBetween } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
 import { getAirportDiagram, getOdps, getPlates, getSids, getStars } from "@/services/plates";
-import { searchFars } from "@/services/regulatory";
+import { searchAllRegulatory } from "@/services/regulatory";
 import { getAirportRunways, inferRunwaysFromPlates, type AirportRunways } from "@/services/runway-info";
 import { getTraffic } from "@/services/traffic";
 import { getMetar, getPireps, getTaf, getWeather } from "@/services/weather";
@@ -298,7 +298,7 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
         type_filter: intent.type_filter
       });
     case "regulatory":
-      return searchFars(intent.query, intent.part);
+      return searchAllRegulatory(intent.query, intent.part);
     case "airport_info":
       return executeAirportInfo(intent, options);
     case "facility_info": {
@@ -322,6 +322,17 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
             { facility: { id: facility?.id ?? facilityId, name: resolvedName, type: resolvedType }, airports, query_type: "airports" as const },
             ORCHESTRATOR_SOURCE,
             { fetchedAt: toIsoNow() }
+          );
+        }
+        if (intent.query_type === "overlying" || intent.query_type === "underlying" || intent.query_type === "general") {
+          return createApiErrorResponse(
+            {
+              code: "NOT_IMPLEMENTED",
+              message: `Facility query_type "${intent.query_type}" is not yet supported.`,
+              retryable: false,
+              status: 501
+            },
+            { source: ORCHESTRATOR_SOURCE, fetchedAt: toIsoNow() }
           );
         }
         const { getAdjacentFacilities } = await import("@/data/facility-adjacency");

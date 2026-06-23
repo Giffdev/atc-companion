@@ -258,6 +258,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <input
+            aria-label="ATC query"
             className="h-16 w-full truncate rounded-2xl border border-aviation-border bg-black/30 px-3 font-data text-sm text-aviation-text placeholder:text-aviation-muted/70 sm:px-5 sm:text-base"
             disabled={isSubmitting}
             onChange={(event) => updateQuery(event.target.value)}
@@ -274,6 +275,7 @@ export function QueryInput({ initialQuery = "", facilityId = null, onPreviewChan
 
           <div className="flex shrink-0 gap-3">
             <button
+              aria-label={isListening ? "Stop voice input" : "Start voice input"}
               className={[
                 "flex h-16 items-center justify-center gap-3 rounded-2xl border px-5 text-sm font-medium",
                 isListening

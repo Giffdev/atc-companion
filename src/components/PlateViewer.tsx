@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { SourceBadge } from "@/components/SourceBadge";
 import { toFaaCode } from "@/data/airports";
@@ -133,7 +133,7 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
       ?? findPlateByName(odps, selectedProcedureName);
   }, [selectedProcedureName, sids, stars, plates, odps]);
 
-  const resolveDefaultTab = (): PlateViewerTab => {
+  const resolveDefaultTab = useCallback((): PlateViewerTab => {
     if (defaultTab) return defaultTab;
     // If a named procedure was found, go to its tab
     if (namedMatch) {
@@ -149,7 +149,7 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
     if (sids.length > 0) return "departures";
     if (stars.length > 0) return "arrivals";
     return "approaches";
-  };
+  }, [defaultTab, namedMatch, odps, plates.length, selectedProcedureType, sids, stars]);
 
   const [activeTab, setActiveTab] = useState<PlateViewerTab>(resolveDefaultTab);
   const [refLoading, setRefLoading] = useState(true);
@@ -158,13 +158,18 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
   // but only if the current tab is no longer valid
   useEffect(() => {
     const newDefault = resolveDefaultTab();
+    // Intentional prop-to-state sync: a new query/default tab must move the selected tab
+    // while preserving manual tab clicks between query changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab((prev) => {
       // If default changed (user made a new query), switch to it
       if (newDefault !== prev) return newDefault;
       return prev;
     });
+    // Intentional reset: external plate context changes should show the reference iframe
+    // loader again until the newly selected document reports onLoad.
     setRefLoading(true);
-  }, [selectedProcedureName, selectedProcedureType, defaultTab, airportCode]);
+  }, [airportCode, defaultTab, resolveDefaultTab, selectedProcedureName, selectedProcedureType]);
 
   const faaCode = airportCode ? toFaaCode(airportCode) : null;
   const supplementUrl = faaCode ? `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}` : null;

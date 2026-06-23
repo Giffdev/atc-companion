@@ -3,21 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { findAirportReference } from "@/data/airports";
+import type { AtisEntry } from "@/components/AtisStrip";
+import { toHHMMZ } from "@/components/AtisStrip";
 import type { ApiResponse } from "@/types/api";
-import type { FlightCategory, WeatherBundle, WindCondition } from "@/types/aviation";
+import type { FlightCategory, Notam, NotamCategory, WeatherBundle, WindCondition } from "@/types/aviation";
+import { isNotamActive } from "@/services/notams";
 
 interface FacilityOverviewProps {
   facilityName: string;
   facilityType: "approach" | "center";
   airports: string[];
   onSelectAirport: (icao: string) => void;
-}
-
-interface AtisEntry {
-  letter: string;
-  type: string;
-  fullText: string;
-  fetchedAt: string;
+  notams?: Notam[];
 }
 
 interface AtisResponse {
@@ -107,11 +104,74 @@ type AirportCardProps = {
   atis: AtisEntry | null;
   atisChecked: boolean;
   runways: RunwayInfo[];
+  notams: Notam[] | undefined;
   onSelectAirport: (icao: string) => void;
 };
 
-const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, onSelectAirport }: AirportCardProps) => {
+/** Per-category badge palette — red for closures, amber for TFR. */
+const CRITICAL_BADGE_TONE: Partial<Record<NotamCategory, string>> = {
+  AIRPORT_CLOSURE: "border-red-500/50 bg-red-500/20 text-red-200 ring-2 ring-red-500/40",
+  RUNWAY_CLOSURE: "border-orange-500/40 bg-orange-500/15 text-orange-200 ring-2 ring-orange-400/30",
+  TFR: "border-amber-500/40 bg-amber-500/15 text-amber-200 ring-2 ring-amber-400/30"
+};
+
+const CRITICAL_BADGE_ARIA: Partial<Record<NotamCategory, string>> = {
+  AIRPORT_CLOSURE: "airport closure",
+  RUNWAY_CLOSURE: "runway closure",
+  TFR: "temporary flight restriction"
+};
+
+const CATEGORY_WEIGHT: Partial<Record<NotamCategory, number>> = {
+  AIRPORT_CLOSURE: 0,
+  RUNWAY_CLOSURE: 1,
+  TFR: 2
+};
+
+const INITIAL_NOTAM_EVALUATION_TIME_MS = Date.now();
+
+const useNotamEvaluationTime = (): number => {
+  const [nowMs, setNowMs] = useState(INITIAL_NOTAM_EVALUATION_TIME_MS);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setNowMs(Date.now());
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  return nowMs;
+};
+
+const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, notams, onSelectAirport }: AirportCardProps) => {
   const flightCategory = weather?.metar?.flightCategory ?? "UNKNOWN";
+  const notamEvaluationTimeMs = useNotamEvaluationTime();
+
+  // Compute active critical NOTAMs only when we have data (undefined = not yet loaded)
+  const activeCritical = useMemo(() => {
+    if (!notams) return undefined;
+    return notams.filter((n) => n.isCritical && isNotamActive(n, notamEvaluationTimeMs));
+  }, [notams, notamEvaluationTimeMs]);
+
+  const badgeCategory: NotamCategory | null = useMemo(() => {
+    if (!activeCritical || activeCritical.length === 0) return null;
+    return activeCritical.reduce((prev, curr) => {
+      const pw = CATEGORY_WEIGHT[prev.category] ?? 99;
+      const cw = CATEGORY_WEIGHT[curr.category] ?? 99;
+      return cw < pw ? curr : prev;
+    }).category;
+  }, [activeCritical]);
+
+  const badgeTone = badgeCategory ? (CRITICAL_BADGE_TONE[badgeCategory] ?? null) : null;
+
+  const badgeLabel = useMemo(() => {
+    if (!activeCritical || activeCritical.length === 0 || !badgeCategory) return null;
+    if (activeCritical.length === 1) {
+      const n = activeCritical[0];
+      return n.summary ?? `Critical NOTAM: ${CRITICAL_BADGE_ARIA[badgeCategory] ?? badgeCategory}`;
+    }
+    return `${activeCritical.length} critical NOTAMs`;
+  }, [activeCritical, badgeCategory]);
 
   return (
     <article className="flex h-full flex-col rounded-2xl border border-aviation-border bg-black/15 p-4">
@@ -121,9 +181,23 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, onSele
           <p className="mt-1 break-words text-sm text-aviation-muted">{getAirportName(icao)}</p>
         </div>
         {atis ? (
-          <div className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-center">
+          <div className={`rounded-full border px-3 py-1 text-center ${atis.stale ? "border-amber-400/40 bg-amber-500/10 ring-2 ring-amber-400/70" : "border-amber-500/20 bg-amber-500/10"}`}>
             <p className="data-label text-xs text-amber-300">ATIS</p>
             <p className="font-data text-sm font-semibold text-amber-200">{atis.letter}</p>
+            {toHHMMZ(atis.issuedAt) && (
+              <p className={`text-[10px] tabular-nums ${atis.stale ? "text-amber-300" : "text-aviation-muted"}`}>
+                Issued {toHHMMZ(atis.issuedAt)}
+              </p>
+            )}
+            {atis.stale && (
+              <span
+                className="mt-0.5 block rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300"
+                aria-label="Stale ATIS"
+                role="alert"
+              >
+                STALE
+              </span>
+            )}
           </div>
         ) : atisChecked ? (
           <div className="rounded-full border border-slate-600/30 bg-slate-700/20 px-2.5 py-1 text-center" title="D-ATIS not available — voice ATIS only">
@@ -131,6 +205,18 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, onSele
           </div>
         ) : null}
       </div>
+
+      {/* Critical NOTAM badge — only rendered when NOTAM data is loaded and a critical NOTAM is active */}
+      {badgeTone && badgeLabel && (
+        <div
+          className={`mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
+          role="alert"
+          aria-label={`Critical NOTAM: ${CRITICAL_BADGE_ARIA[badgeCategory!] ?? badgeCategory}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" aria-hidden="true" />
+          {badgeLabel}
+        </div>
+      )}
 
       <div className={`mt-4 inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold ${FLIGHT_CATEGORY_TONE[flightCategory]}`}>
         {flightCategory}
@@ -179,7 +265,8 @@ export default function FacilityOverview({
   facilityName,
   facilityType,
   airports,
-  onSelectAirport
+  onSelectAirport,
+  notams
 }: FacilityOverviewProps) {
   const normalizedAirports = useMemo(() => airports.map((airport) => airport.trim().toUpperCase()).filter(Boolean), [airports]);
   const requestKey = normalizedAirports.join(",");
@@ -293,6 +380,7 @@ export default function FacilityOverview({
                   atis={atisByAirport[icao] ?? null}
                   atisChecked={icao in atisByAirport}
                   icao={icao}
+                  notams={notams?.filter((n) => n.affectedFacility === icao)}
                   onSelectAirport={onSelectAirport}
                   runways={runwaysByAirport[icao] ?? []}
                   weather={weatherByAirport[icao] ?? null}
