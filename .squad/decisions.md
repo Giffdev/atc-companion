@@ -252,3 +252,20 @@
 **What:** Added real NFDC parser Vitest coverage
 **References:** src/services/__tests__/nfdc-parser.test.ts, src/services/airport-hours.ts, src/services/runway-info.ts
 **Why:** Replaced the unfinished NFDC parser test harness with 4 Vitest tests in src/services/__tests__/nfdc-parser.test.ts. Coverage added: parseRunwaysFromHtml happy path for NFDC-style runway sections including designator, dimensions, surface, and lighting normalization; parseRunwaysFromHtml empty/no-runway fallback; parseAirportHoursFromHtml happy path for tower hours, schedule, timezone, and airport fields; parseAirportHoursFromHtml empty/unstructured HTML fallback with null parser fields. Validation results: npx vitest run src/services/__tests__/nfdc-parser.test.ts passed (4 tests); npx vitest run passed with exit code 0; npm run lint passed with exit code 0; npm run build passed with exit code 0.
+
+
+### 2026-06-23T23-27-48: Clarified NOTAM failure messaging so unavailable feed is not presented as zero NOTAMs
+**By:** Swigert
+**What:** Clarified NOTAM failure messaging so unavailable feed is not presented as zero NOTAMs
+**References:** src/components/OperationsConsole.tsx, tests/unit/components/operations-console-autorefresh.test.tsx
+**Why:** Decision: The NOTAM panel now uses a three-state presentation: (1) feed unavailable/error/not-configured renders an amber warning headed "⚠️ NOTAMs could not be loaded" and explicitly says this is NOT confirmation of zero active NOTAMs; (2) successful live response with an empty array renders "No active NOTAMs" only after response.ok with zero records; (3) successful non-empty response renders the NOTAM list.
+
+Changed files: src/components/OperationsConsole.tsx and tests/unit/components/operations-console-autorefresh.test.tsx.
+
+Before: facility dashboard NOTAM errors in facilityResults were not used by the panel, so an unconfigured/error response could fall through to "No active NOTAMs were returned by the live feed for this query." The query summary also treated NOTAM feed fallback with a cyan informational block.
+
+After: the panel derives notamPanelResult from the active NOTAM query or the facility NOTAM fetch, branches on response.ok vs known NOTAM feed-unavailable error codes, preserves FAA NOTAM Search and TFR links, and uses amber warning/ring treatment for unavailable feed states. The query summary now uses the same warning model for NOTAM_FEED_NOT_CONFIGURED / NOTAM_EMBEDDED_SEARCH.
+
+API route touched: no.
+
+Validation: npm run lint passed; npm run build passed; npx vitest run passed (30 files, 205 tests). Focused component tests added for unavailable vs successful-empty NOTAM states.

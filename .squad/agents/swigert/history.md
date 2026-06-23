@@ -40,3 +40,8 @@
 - `AtisStrip.tsx` and `FacilityOverview.tsx` now unwrap the ATIS `ApiResponse` envelope; `PlateViewer` and `DiagramPanel` stayed untouched.
 - `OperationsConsole.tsx` now leads with selected tower airport facility overview and suppresses the duplicate lower summary; center/approach/default remain unchanged.
 - Shipped live in commit `b967317`; build/lint/test validation passed except one pre-existing zero-test NFDC parser suite.
+
+## 2026-06-23: NOTAM failure messaging safety pattern
+- Operations Console NOTAM UI now uses a three-state pattern: feed unavailable, loaded-empty, and populated list.
+- Feed-unavailable states must use explicit text plus amber warning treatment; never rely on color alone.
+- Never conflate "NOTAM feed failed/unavailable" with "zero active NOTAMs"; only show a no-NOTAMs empty state after a successful live response with zero records.
