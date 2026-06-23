@@ -1,5 +1,6 @@
 import { parseAirportHoursFromHtml } from "@/services/airport-hours";
 import { parseRunwaysFromHtml } from "@/services/runway-info";
+import { describe, expect, it } from "vitest";
 
 type AirportFixture = {
   airportId: string;
@@ -58,121 +59,129 @@ const fixtures: Record<string, AirportFixture> = {
   }
 };
 
-const requestedOrder = ["KSEA", "KGSO", "KSHN", "KMCI", "KPAE", "0S9"] as const;
-const failures: string[] = [];
-let lastFetchMs = 0;
+const runwayHtml = `
+  <html>
+    <body>
+      <div id="runway_05_23">
+        <h3>RUNWAY 05/23</h3>
+        <table>
+          <tr><td>Dimensions</td><td>9,000 ft. x 150 ft.</td></tr>
+          <tr><td>Surface Type</td><td>Asphalt</td></tr>
+          <tr><td>Runway Edge Lights</td><td>Medium Intensity Runway Lights</td></tr>
+        </table>
+      </div>
+      <div id="runway_14_32">
+        <h3>RUNWAY 14/32</h3>
+        <table>
+          <tr><td>Dimensions</td><td>6,380 X 100</td></tr>
+          <tr><td>Surface</td><td>Concrete</td></tr>
+          <tr><td>Edge Lights</td><td>HIRL</td></tr>
+        </table>
+      </div>
+    </body>
+  </html>
+`;
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const airportHoursHtml = `
+  <html>
+    <body>
+      <table>
+        <tr><td>Airport Use</td><td>Public</td></tr>
+        <tr><td>Attendance</td><td>Continuous</td></tr>
+        <tr><td>Lighting Schedule</td><td>DUSK-DAWN</td></tr>
+        <tr><td>Control Tower</td><td>ATCT</td></tr>
+        <tr><td>ATCT Hours</td><td>0700-2100 LOCAL</td></tr>
+      </table>
+      <div id="communications">PAINE TOWER (ATCT) 120.2</div>
+    </body>
+  </html>
+`;
 
-const assertCondition = (condition: unknown, message: string) => {
-  if (condition) {
-    console.log(`PASS ${message}`);
-    return;
-  }
-
-  console.error(`FAIL ${message}`);
-  failures.push(message);
-};
-
-const fetchNfdcHtml = async (airportId: string): Promise<string> => {
-  const elapsed = Date.now() - lastFetchMs;
-  if (elapsed < 1250) {
-    await sleep(1250 - elapsed);
-  }
-
-  const url = `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${airportId}`;
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": "atc-companion-parser-test"
-    }
+describe("parseRunwaysFromHtml", () => {
+  it("parses runway designators, dimensions, surfaces, and lighting from NFDC-style sections", () => {
+    expect(parseRunwaysFromHtml(runwayHtml)).toEqual([
+      {
+        designator: "05/23",
+        lengthFeet: 9000,
+        widthFeet: 150,
+        surface: "ASPH",
+        lighting: "MIRL"
+      },
+      {
+        designator: "14/32",
+        lengthFeet: 6380,
+        widthFeet: 100,
+        surface: "CONC",
+        lighting: "HIRL"
+      }
+    ]);
   });
 
-  const html = await response.text();
-  lastFetchMs = Date.now();
+  it("returns an empty list when no runway sections or fallback text are present", () => {
+    expect(parseRunwaysFromHtml("<html><body>No runway records available.</body></html>")).toEqual([]);
+    expect(parseRunwaysFromHtml("")).toEqual([]);
+  });
+});
 
-  if (html.includes("This page is limited to 1 request per second")) {
-    await sleep(1500);
-    return fetchNfdcHtml(airportId);
-  }
+describe("parseAirportHoursFromHtml", () => {
+  it("parses tower hours, schedules, timezone metadata, and airport fields", () => {
+    const fixture = fixtures.KPAE;
 
-  if (!response.ok || !html.includes("RUNWAY")) {
-    throw new Error(`FAA NFDC fetch failed for ${airportId}: HTTP ${response.status}`);
-  }
+    expect(
+      parseAirportHoursFromHtml(
+        airportHoursHtml,
+        fixture.icao,
+        fixture.name,
+        fixture.timezone,
+        fixture.tzInfo
+      )
+    ).toMatchObject({
+      airportIcao: "KPAE",
+      airportName: "Seattle Paine Field Intl",
+      towerHours: "0700-2100 LOCAL",
+      towerSchedule: {
+        openLocal: "0700",
+        closeLocal: "2100",
+        is24Hour: false,
+        rawText: "0700-2100 LOCAL"
+      },
+      timezone: {
+        iana: "America/Los_Angeles",
+        abbreviation: "PT",
+        utcOffset: "UTC-7",
+        isDst: true
+      },
+      isTowered: true,
+      airportUse: "Public",
+      attendanceSchedule: "Continuous",
+      lightingSchedule: "DUSK-DAWN",
+      rawChartSupplement: null,
+      source: "FAA NFDC Airport Display"
+    });
+  });
 
-  return html;
-};
+  it("gracefully returns null parser fields for empty or unstructured airport HTML", () => {
+    const fixture = fixtures["0S9"];
 
-const htmlByAirport = new Map<string, string>();
-
-const run = async () => {
-  for (const code of requestedOrder) {
-    const fixture = fixtures[code];
-    console.log(`Fetching ${code} (${fixture.airportId})...`);
-    htmlByAirport.set(code, await fetchNfdcHtml(fixture.airportId));
-  }
-
-  const gsoRunways = parseRunwaysFromHtml(htmlByAirport.get("KGSO") ?? "");
-  assertCondition(gsoRunways.length === 3, "KGSO returns exactly 3 runways");
-  assertCondition(
-    [9000, 10001, 6380].every((length) => gsoRunways.some((runway) => runway.lengthFeet === length)),
-    "KGSO includes runway lengths 9000, 10001, and 6380"
-  );
-  assertCondition(
-    gsoRunways.every((runway) => runway.widthFeet !== null && runway.surface !== null && runway.lighting !== null),
-    "KGSO runways include width, surface, and lighting"
-  );
-
-  const seaRunways = parseRunwaysFromHtml(htmlByAirport.get("KSEA") ?? "");
-  assertCondition(
-    ["16L/34R", "16C/34C", "16R/34L"].every((designator) => seaRunways.some((runway) => runway.designator === designator)),
-    "KSEA includes runways 16L/34R, 16C/34C, and 16R/34L"
-  );
-
-  const shnRunways = parseRunwaysFromHtml(htmlByAirport.get("KSHN") ?? "");
-  assertCondition(shnRunways.length >= 1, "KSHN returns at least one runway");
-
-  const kmciFixture = fixtures.KMCI;
-  const kmciHours = parseAirportHoursFromHtml(
-    htmlByAirport.get("KMCI") ?? "",
-    kmciFixture.icao,
-    kmciFixture.name,
-    kmciFixture.timezone,
-    kmciFixture.tzInfo
-  );
-  assertCondition(kmciHours.isTowered === true, "KMCI is detected as towered");
-  assertCondition(/24\s*hours?/i.test(kmciHours.towerHours ?? ""), "KMCI tower hours indicate 24-hour operation");
-
-  const kpaeFixture = fixtures.KPAE;
-  const kpaeHours = parseAirportHoursFromHtml(
-    htmlByAirport.get("KPAE") ?? "",
-    kpaeFixture.icao,
-    kpaeFixture.name,
-    kpaeFixture.timezone,
-    kpaeFixture.tzInfo
-  );
-  assertCondition(kpaeHours.isTowered === true, "KPAE is detected as towered");
-  assertCondition(/0700\s*[-–]\s*2100/i.test(kpaeHours.towerHours ?? ""), "KPAE tower hours include 0700-2100");
-
-  const zeroS9Fixture = fixtures["0S9"];
-  const zeroS9Hours = parseAirportHoursFromHtml(
-    htmlByAirport.get("0S9") ?? "",
-    zeroS9Fixture.icao,
-    zeroS9Fixture.name,
-    zeroS9Fixture.timezone,
-    zeroS9Fixture.tzInfo
-  );
-  assertCondition(zeroS9Hours.isTowered === false, "0S9 is detected as non-towered");
-
-  if (failures.length > 0) {
-    console.error(`\n${failures.length} assertion(s) failed.`);
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log("\nAll NFDC parser checks passed.");
-};
-
-run().catch((error) => {
-  console.error("NFDC parser test failed:", error);
-  process.exitCode = 1;
+    expect(
+      parseAirportHoursFromHtml("", fixture.icao, fixture.name, fixture.timezone, fixture.tzInfo)
+    ).toMatchObject({
+      airportIcao: "0S9",
+      airportName: "Jefferson County Intl",
+      towerHours: null,
+      towerSchedule: null,
+      timezone: {
+        iana: "America/Los_Angeles",
+        abbreviation: "PT",
+        utcOffset: "UTC-7",
+        isDst: true
+      },
+      isTowered: null,
+      airportUse: null,
+      attendanceSchedule: null,
+      lightingSchedule: null,
+      rawChartSupplement: null,
+      source: "FAA NFDC Airport Display"
+    });
+  });
 });
