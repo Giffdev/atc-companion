@@ -400,7 +400,9 @@ const renderQuerySummary = (
   }
 
   if (!liveResult.response.ok) {
-    const isNotamSearch = liveResult.response.error.code === "NOTAM_EMBEDDED_SEARCH";
+    const isNotamSearch =
+      liveResult.response.error.code === "NOTAM_FEED_NOT_CONFIGURED" ||
+      liveResult.response.error.code === "NOTAM_EMBEDDED_SEARCH";
     if (isNotamSearch) {
       const searchUrl = liveResult.response.error.details ?? "https://notams.aim.faa.gov/notamSearch/";
       return (
@@ -1365,7 +1367,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                     </ResultCard>
                   </div>
                 );
-              case "notam":
+              case "notam": {
+                const notamError = liveResult?.intent.type === "notam" && !liveResult.response.ok ? liveResult.response.error : null;
+                const notamSearchUrl = notamError?.details ?? `https://notams.aim.faa.gov/notamSearch/${activeIntent?.type === "notam" && activeIntent.airport ? `?designatorsForLocation=${activeIntent.airport.replace(/^K/, "")}` : ""}`;
+
                 return (
                   <div key="notam" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-5"}`}>
                     <ResultCard
@@ -1390,14 +1395,17 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                         <NotamList notams={dashboardData.notams} />
                       ) : (
                         <div className="space-y-3 text-sm text-aviation-muted">
-                          <p>View NOTAMs via the official FAA portal:</p>
+                          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 text-amber-100">
+                            <p className="font-medium">{notamError?.message ?? "No active NOTAMs were returned by the live feed for this query."}</p>
+                            <p className="mt-2 text-xs text-amber-200/80">Always confirm operational NOTAMs in the official FAA NOTAM Search before flight.</p>
+                          </div>
                           <a
                             className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
-                            href={`https://notams.aim.faa.gov/notamSearch/${activeIntent?.type === "notam" && activeIntent.airport ? `?designatorsForLocation=${activeIntent.airport.replace(/^K/, "")}` : ""}`}
+                            href={notamSearchUrl}
                             rel="noreferrer"
                             target="_blank"
                           >
-                            Open FAA NOTAM Search ↗
+                            Search FAA NOTAMs directly ↗
                           </a>
                           <a
                             className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/15 ml-2"
@@ -1412,6 +1420,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                     </ResultCard>
                   </div>
                 );
+              }
               case "traffic":
                 return (
                   <div key="traffic" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-7"}`}>

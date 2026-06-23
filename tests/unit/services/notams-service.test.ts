@@ -108,40 +108,77 @@ describe("getNotams — classification fields wiring", () => {
     expect(tfr.summary).toMatch(/VIP MOVEMENT/i);
   });
 
-  it("applies type_filter via client-side filtering in the AviationAPI fallback path", async () => {
-    // The AviationAPI fallback path (no FAA API key) applies the type filter
-    // client-side: items.filter((item) => item.type === typeFilter).
-    // Do NOT call installAviationApiMock here — that sets FAA_NOTAM_API_KEY
-    // which routes to the FAA API key path that delegates filtering to the
-    // upstream query param instead.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        if (String(url).includes("api.aviationapi.com")) {
-          return new Response(
-            JSON.stringify([
-              {
-                notamNumber: "BFI 06/001",
-                icaoId: "KBFI",
-                notamClass: "D",
-                effectiveDate: "2026-06-18T00:00:00Z",
-                text: "TAXIWAY B LIGHTS U/S."
-              },
-              {
-                notamNumber: "FDC 6/001",
-                icaoId: "KBFI",
-                notamClass: "FDC",
-                effectiveDate: "2026-06-18T00:00:00Z",
-                text: "ILS RWY 14R MINIMA AMENDED."
-              }
-            ]),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          );
-        }
+  it("returns a configuration-specific FAA portal fallback when API credentials are absent", async () => {
+    delete process.env.FAA_NOTAM_CLIENT_ID;
+    delete process.env.FAA_NOTAM_CLIENT_SECRET;
+    delete process.env.FAA_NMS_CLIENT_ID;
+    delete process.env.FAA_NMS_CLIENT_SECRET;
 
-        throw new Error(`Unexpected fetch URL in test: ${url}`);
-      })
-    );
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await getNotams({ airport: "KSEA" });
+
+    expect(response.ok).toBe(false);
+    if (response.ok) return;
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.error.code).toBe("NOTAM_FEED_NOT_CONFIGURED");
+    expect(response.error.message).toContain("require FAA NOTAM API credentials");
+    expect(response.error.details).toBe("https://notams.aim.faa.gov/notamSearch/?designatorsForLocation=SEA");
+  });
+
+  it("parses the FAA NOTAM API GeoJSON-ish response shape and applies client-side type filtering", async () => {
+    process.env.FAA_NOTAM_CLIENT_ID = "test-client-id";
+    process.env.FAA_NOTAM_CLIENT_SECRET = "test-client-secret";
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const parsedUrl = new URL(String(url));
+      expect(parsedUrl.hostname).toBe("external-api.faa.gov");
+      expect(parsedUrl.searchParams.get("icaoLocation")).toBe("KBFI");
+      expect(parsedUrl.searchParams.get("responseFormat")).toBe("geoJson");
+      expect(init?.headers).toMatchObject({
+        client_id: "test-client-id",
+        client_secret: "test-client-secret",
+        Accept: "application/json"
+      });
+
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              properties: {
+                coreNOTAMData: {
+                  notam: {
+                    number: "BFI 06/001",
+                    icaoLocation: "KBFI",
+                    type: "D",
+                    effectiveStart: "2026-06-18T00:00:00Z",
+                    effectiveEnd: "2026-06-20T00:00:00Z",
+                    text: "RWY 14R/32L CLSD FOR MAINTENANCE."
+                  }
+                }
+              }
+            },
+            {
+              properties: {
+                coreNOTAMData: {
+                  notam: {
+                    number: "FDC 6/001",
+                    icaoLocation: "KBFI",
+                    type: "FDC",
+                    effectiveStart: "2026-06-18T00:00:00Z",
+                    text: "ILS RWY 14R MINIMA AMENDED."
+                  }
+                }
+              }
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const response = await getNotams({ airport: "KBFI", type_filter: "FDC" });
 
@@ -149,9 +186,14 @@ describe("getNotams — classification fields wiring", () => {
     if (!response.ok) return;
 
     expect(response.data).toHaveLength(1);
-    expect(response.data[0].type).toBe("FDC");
-    expect(response.data[0].category).toBe("FDC");
-    expect(response.data[0].isCritical).toBe(false);
+    expect(response.data[0]).toMatchObject({
+      notamId: "FDC 6/001",
+      type: "FDC",
+      affectedFacility: "KBFI",
+      category: "FDC",
+      isCritical: false,
+      text: "ILS RWY 14R MINIMA AMENDED."
+    });
   });
 });
 

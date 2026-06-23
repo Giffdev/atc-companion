@@ -13,7 +13,8 @@ import { beforeEach, vi } from "vitest";
 const parseJson = async (response: Response) => (await response.json()) as Record<string, unknown>;
 
 const mockExternalFetch = () => {
-  process.env.FAA_NOTAM_API_KEY = "test-notam-key";
+  process.env.FAA_NOTAM_CLIENT_ID = "test-notam-client-id";
+  process.env.FAA_NOTAM_CLIENT_SECRET = "test-notam-client-secret";
 
   vi.stubGlobal(
     "fetch",

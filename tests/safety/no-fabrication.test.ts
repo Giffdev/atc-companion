@@ -28,7 +28,8 @@ const isAllowedAuthoritativeHost = (url: string): boolean => {
 };
 
 beforeEach(() => {
-  process.env.FAA_NOTAM_API_KEY = "test-notam-key";
+  process.env.FAA_NOTAM_CLIENT_ID = "test-notam-client-id";
+  process.env.FAA_NOTAM_CLIENT_SECRET = "test-notam-client-secret";
 
   vi.stubGlobal(
     "fetch",

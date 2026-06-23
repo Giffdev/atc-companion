@@ -9,15 +9,7 @@ import { toIsoTimestamp, toServiceErrorResponse } from "@/services/_shared";
 
 const NOTAM_SOURCE = getDataSource("faaNotams");
 const NOTAM_API_URL = "https://external-api.faa.gov/notamapi/v1/notams";
-const AVIATION_API_NOTAM_URL = "https://api.aviationapi.com/v1/notams";
 const FAA_NOTAM_SEARCH_URL = "https://notams.aim.faa.gov/notamSearch/";
-const AVIATION_API_SOURCE: DataSource = {
-  id: "aviationapi-notams",
-  name: "AviationAPI NOTAMs",
-  url: "https://api.aviationapi.com",
-  reliability: "medium",
-  refresh_interval: "Near real time"
-};
 
 // ---------------------------------------------------------------------------
 // NOTAM classification — single source of truth for category, isCritical, summary
@@ -114,22 +106,65 @@ export const isNotamUpcoming = (notam: Pick<Notam, "effectiveAt">, nowMs = Date.
 
 type RawNotam = Record<string, unknown>;
 
-const resolveNotamItems = (payload: unknown): RawNotam[] => {
-  if (Array.isArray(payload)) {
-    return payload.filter((item): item is RawNotam => !!item && typeof item === "object");
+type FaaNotamCredentials = {
+  clientId: string;
+  clientSecret: string;
+};
+
+const isRecord = (value: unknown): value is RawNotam => !!value && typeof value === "object" && !Array.isArray(value);
+
+const compactRecords = (...values: unknown[]): RawNotam[] => values.filter(isRecord);
+
+const mergeRecordLayers = (...layers: unknown[]): RawNotam => Object.assign({}, ...compactRecords(...layers));
+
+const getPath = (record: RawNotam, path: string[]): unknown => {
+  let current: unknown = record;
+
+  for (const segment of path) {
+    if (!isRecord(current)) return undefined;
+    current = current[segment];
   }
 
-  if (payload && typeof payload === "object") {
-    const record = payload as Record<string, unknown>;
-    for (const key of ["items", "notams", "results", "data"]) {
-      if (Array.isArray(record[key])) {
-        return record[key].filter((item): item is RawNotam => !!item && typeof item === "object");
+  return current;
+};
+
+const firstString = (record: RawNotam, paths: string[][]): string | undefined => {
+  for (const path of paths) {
+    const value = getPath(record, path);
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+
+  return undefined;
+};
+
+const normalizeFaaNotamItem = (raw: RawNotam): RawNotam => {
+  const properties = isRecord(raw.properties) ? raw.properties : undefined;
+  const coreData = isRecord(properties?.coreNOTAMData) ? properties.coreNOTAMData : undefined;
+  const notam = isRecord(coreData?.notam) ? coreData.notam : undefined;
+
+  return mergeRecordLayers(raw, properties, coreData, notam, {
+    properties,
+    coreNOTAMData: coreData,
+    notam
+  });
+};
+
+const resolveNotamItems = (payload: unknown): RawNotam[] => {
+  if (Array.isArray(payload)) {
+    return payload.filter(isRecord).map(normalizeFaaNotamItem);
+  }
+
+  if (isRecord(payload)) {
+    for (const key of ["items", "notams", "results", "data", "features"]) {
+      if (Array.isArray(payload[key])) {
+        return payload[key].filter(isRecord).map(normalizeFaaNotamItem);
       }
     }
 
-    const nestedArray = Object.values(record).find(Array.isArray);
+    const nestedArray = Object.values(payload).find(Array.isArray);
     if (nestedArray) {
-      return nestedArray.filter((item): item is RawNotam => !!item && typeof item === "object");
+      return nestedArray.filter(isRecord).map(normalizeFaaNotamItem);
     }
   }
 
@@ -137,7 +172,19 @@ const resolveNotamItems = (payload: unknown): RawNotam[] => {
 };
 
 const inferNotamType = (raw: RawNotam): Notam["type"] => {
-  const composite = [raw.notamClass, raw.class, raw.type, raw.notamType, raw.notamNumber]
+  const composite = [
+    raw.notamClass,
+    raw.class,
+    raw.type,
+    raw.notamType,
+    raw.notamNumber,
+    raw.number,
+    raw.id,
+    raw.keyword,
+    raw.code,
+    getPath(raw, ["notam", "classification"]),
+    getPath(raw, ["notam", "type"])
+  ]
     .map((value) => String(value ?? "").toUpperCase())
     .join(" ");
 
@@ -152,29 +199,75 @@ const inferNotamType = (raw: RawNotam): Notam["type"] => {
   return "D";
 };
 
-const parseNotam = (raw: RawNotam, sourceBase: DataSource, sourceUrl: string, fetchedAt: string, airport?: string): Notam => {
+const parseNotam = (rawItem: RawNotam, sourceBase: DataSource, sourceUrl: string, fetchedAt: string, airport?: string): Notam => {
+  const raw = normalizeFaaNotamItem(rawItem);
   const type = inferNotamType(raw);
-  const notamId = String(raw.notamNumber ?? raw.notamId ?? raw.id ?? raw.number ?? `${airport ?? "NOTAM"}-UNKNOWN`);
-  const affectedFacility = toIcaoCode(String(raw.icaoId ?? raw.airport ?? raw.location ?? airport ?? "UNKNOWN").toUpperCase());
+  const notamId = firstString(raw, [
+    ["notamNumber"],
+    ["notamId"],
+    ["id"],
+    ["number"],
+    ["notam", "id"],
+    ["notam", "number"]
+  ]) ?? `${airport ?? "NOTAM"}-UNKNOWN`;
+  const facility = firstString(raw, [
+    ["icaoLocation"],
+    ["icaoId"],
+    ["airport"],
+    ["affectedFacility"],
+    ["location"],
+    ["affectedLocation"],
+    ["locationDesignator"],
+    ["aerodrome"],
+    ["notam", "icaoLocation"],
+    ["notam", "location"]
+  ]);
+  const affectedFacility = toIcaoCode(String(facility ?? airport ?? "UNKNOWN").toUpperCase());
   const effectiveAt = toIsoTimestamp(
-    (raw.effectiveDate as string | undefined) ??
-      (raw.startDate as string | undefined) ??
-      (raw.start_time as string | undefined) ??
-      (raw.issued as string | undefined) ??
-      (raw.issueDate as string | undefined) ??
-      (raw.created as string | undefined),
+    firstString(raw, [
+      ["effectiveDate"],
+      ["startDate"],
+      ["startDateTime"],
+      ["effectiveStart"],
+      ["start_time"],
+      ["issued"],
+      ["issueDate"],
+      ["created"],
+      ["notam", "effectiveStart"],
+      ["notam", "startDate"]
+    ]),
     fetchedAt
   );
-  const expiresAtCandidate =
-    (raw.endDate as string | undefined) ??
-    (raw.expirationDate as string | undefined) ??
-    (raw.end_time as string | undefined) ??
-    (raw.expires as string | undefined);
-  const text = String(raw.text ?? raw.notam ?? raw.notam_text ?? raw.body ?? raw.remarks ?? raw.description ?? raw.message ?? "");
+  const expiresAtCandidate = firstString(raw, [
+    ["endDate"],
+    ["endDateTime"],
+    ["expirationDate"],
+    ["expiration"],
+    ["effectiveEnd"],
+    ["end_time"],
+    ["expires"],
+    ["notam", "effectiveEnd"],
+    ["notam", "endDate"]
+  ]);
+  const text = firstString(raw, [
+    ["text"],
+    ["notamText"],
+    ["traditionalMessage"],
+    ["rawText"],
+    ["notam"],
+    ["body"],
+    ["remarks"],
+    ["description"],
+    ["message"],
+    ["notam", "text"],
+    ["notam", "notamText"],
+    ["notam", "traditionalMessage"],
+    ["notam", "rawText"]
+  ]) ?? "";
   const source = { ...sourceBase, url: sourceUrl };
 
   if (type === "TFR") {
-    const purpose = raw.purpose ? String(raw.purpose) : undefined;
+    const purpose = firstString(raw, [["purpose"], ["notam", "purpose"]]);
     const classification = classifyNotam({ type, text, purpose });
     return {
       notamId,
@@ -183,7 +276,7 @@ const parseNotam = (raw: RawNotam, sourceBase: DataSource, sourceUrl: string, fe
       effectiveAt,
       expiresAt: expiresAtCandidate ? toIsoTimestamp(expiresAtCandidate, fetchedAt) : undefined,
       text,
-      tfrNumber: String(raw.tfrNumber ?? raw.notamNumber ?? notamId),
+      tfrNumber: firstString(raw, [["tfrNumber"], ["notamNumber"], ["number"]]) ?? notamId,
       purpose,
       source,
       fetchedAt,
@@ -201,7 +294,7 @@ const parseNotam = (raw: RawNotam, sourceBase: DataSource, sourceUrl: string, fe
       effectiveAt,
       expiresAt: expiresAtCandidate ? toIsoTimestamp(expiresAtCandidate, fetchedAt) : undefined,
       text,
-      reference: raw.reference ? String(raw.reference) : raw.entity ? String(raw.entity) : undefined,
+      reference: firstString(raw, [["reference"], ["entity"], ["keyword"], ["notam", "keyword"]]),
       source,
       fetchedAt,
       isStale: false,
@@ -217,7 +310,7 @@ const parseNotam = (raw: RawNotam, sourceBase: DataSource, sourceUrl: string, fe
     effectiveAt,
     expiresAt: expiresAtCandidate ? toIsoTimestamp(expiresAtCandidate, fetchedAt) : undefined,
     text,
-    keyword: raw.entity ? String(raw.entity) : raw.area ? String(raw.area) : undefined,
+    keyword: firstString(raw, [["entity"], ["area"], ["keyword"], ["notam", "keyword"]]),
     source,
     fetchedAt,
     isStale: false,
@@ -225,113 +318,82 @@ const parseNotam = (raw: RawNotam, sourceBase: DataSource, sourceUrl: string, fe
   };
 };
 
-const createHelpfulNotamError = (airport?: string): ApiResponse<Notam[]> => {
+const createNotamSearchUrl = (airport?: string): string => {
   const faaCode = airport?.replace(/^K/, "") ?? "";
-  const searchUrl = `${FAA_NOTAM_SEARCH_URL}${faaCode ? `?designatorsForLocation=${faaCode}` : ""}`;
+  return `${FAA_NOTAM_SEARCH_URL}${faaCode ? `?designatorsForLocation=${faaCode}` : ""}`;
+};
+
+const createNotamFeedUnavailableResponse = (airport?: string): ApiResponse<Notam[]> => {
+  const searchUrl = createNotamSearchUrl(airport);
 
   return createApiErrorResponse(
     {
-      code: "NOTAM_EMBEDDED_SEARCH",
+      code: "NOTAM_FEED_NOT_CONFIGURED",
       message: airport
-        ? `View live NOTAMs for ${airport} at the FAA NOTAM Search portal.`
-        : "Use the FAA NOTAM Search portal to look up NOTAMs by location.",
+        ? `Live inline NOTAMs for ${airport} require FAA NOTAM API credentials. Use FAA NOTAM Search for the authoritative briefing.`
+        : "Live inline NOTAMs require FAA NOTAM API credentials. Use FAA NOTAM Search for the authoritative briefing.",
       details: searchUrl,
       retryable: false,
       status: 200
     },
     {
-      source: NOTAM_SOURCE,
+      source: { ...NOTAM_SOURCE, url: searchUrl },
       fetchedAt: toIsoNow(),
       stalenessCategory: "notam"
     }
   );
 };
 
-const fetchNotamsFromAviationApi = async (
-  airport: string,
-  typeFilter?: string
-): Promise<ApiResponse<Notam[]>> => {
-  const result = await fetchWithRetry<unknown>(AVIATION_API_NOTAM_URL, {
-    source: AVIATION_API_SOURCE,
-    headers: {
-      Accept: "application/json"
-    },
-    query: {
-      apt: airport
-    },
-    ttlMs: getCacheTtlMs("notam"),
-    cacheNamespace: "notam-search",
-    cacheKey: createCacheKey("notam-search", { airport, typeFilter, provider: "aviationapi" })
-  });
+const getFaaNotamCredentials = (): FaaNotamCredentials | null => {
+  const clientId = process.env.FAA_NOTAM_CLIENT_ID ?? process.env.FAA_NMS_CLIENT_ID;
+  const clientSecret = process.env.FAA_NOTAM_CLIENT_SECRET ?? process.env.FAA_NMS_CLIENT_SECRET;
 
-  const items = resolveNotamItems(result.data);
-  const notams = items
-    .map((item) => parseNotam(item, AVIATION_API_SOURCE, result.url, result.fetchedAt, airport))
-    .filter((item) => (typeFilter ? item.type === typeFilter : true));
+  if (!clientId || !clientSecret) {
+    return null;
+  }
 
-  return createApiResponse(notams, result.source, {
-    fetchedAt: result.fetchedAt,
-    stalenessCategory: "notam",
-    cache: result.cache,
-    supportingSources: [NOTAM_SOURCE]
-  });
+  return { clientId, clientSecret };
 };
 
 export const getNotams = async (params: { airport?: string; type_filter?: string }): Promise<ApiResponse<Notam[]>> => {
-  const apiKey = process.env.FAA_NOTAM_API_KEY ?? process.env.FAA_NMS_API_KEY;
+  const credentials = getFaaNotamCredentials();
   const airport = params.airport ? toFaaCode(params.airport) : undefined;
   const icao = params.airport ? toIcaoCode(params.airport) : undefined;
   const typeFilter = params.type_filter?.toUpperCase();
   const notamLookupCode = icao ?? airport;
 
-  if (!apiKey) {
-    if (notamLookupCode) {
-      try {
-        return await fetchNotamsFromAviationApi(notamLookupCode, typeFilter);
-      } catch {
-        return createHelpfulNotamError(notamLookupCode);
-      }
-    }
-
-    return createHelpfulNotamError();
+  if (!credentials) {
+    return createNotamFeedUnavailableResponse(notamLookupCode);
   }
 
   try {
     const result = await fetchWithRetry<unknown>(NOTAM_API_URL, {
       source: NOTAM_SOURCE,
       headers: {
-        "x-apikey": apiKey,
-        "Ocp-Apim-Subscription-Key": apiKey,
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
         Accept: "application/json"
       },
       query: {
-        icaoId: notamLookupCode,
-        type: typeFilter
+        icaoLocation: notamLookupCode,
+        responseFormat: "geoJson"
       },
       ttlMs: getCacheTtlMs("notam"),
       cacheNamespace: "notam-search",
-      cacheKey: createCacheKey("notam-search", { airport: notamLookupCode, typeFilter })
+      cacheKey: createCacheKey("notam-search", { airport: notamLookupCode, typeFilter, provider: "faa-notamapi-v1" })
     });
 
-    const items = resolveNotamItems(result.data);
-    return createApiResponse(
-      items.map((item) => parseNotam(item, NOTAM_SOURCE, result.url, result.fetchedAt, airport)),
-      result.source,
-      {
-        fetchedAt: result.fetchedAt,
-        stalenessCategory: "notam",
-        cache: result.cache
-      }
-    );
-  } catch (error) {
-    if (notamLookupCode) {
-      try {
-        return await fetchNotamsFromAviationApi(notamLookupCode, typeFilter);
-      } catch {
-        return createHelpfulNotamError(notamLookupCode);
-      }
-    }
+    const notams = resolveNotamItems(result.data)
+      .map((item) => parseNotam(item, NOTAM_SOURCE, result.url, result.fetchedAt, notamLookupCode))
+      .filter((item) => (typeFilter ? item.type === typeFilter : true));
 
+    return createApiResponse(notams, result.source, {
+      fetchedAt: result.fetchedAt,
+      stalenessCategory: "notam",
+      cache: result.cache
+    });
+  } catch (error) {
     return toServiceErrorResponse(error, NOTAM_SOURCE, "notam");
   }
 };
+

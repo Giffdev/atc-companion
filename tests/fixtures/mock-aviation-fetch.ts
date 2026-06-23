@@ -198,7 +198,7 @@ const withRequestedPirepStation = (url: string, payload: typeof SAMPLE_PIREP_PAY
 };
 
 const withRequestedNotamStation = (url: string) => {
-  const requestedStation = new URL(url).searchParams.get("icaoId")?.toUpperCase() ?? "KBFI";
+  const requestedStation = new URL(url).searchParams.get("icaoLocation")?.toUpperCase() ?? "KBFI";
   return {
     items: SAMPLE_NOTAMS_PAYLOAD.items.map((item) => ({
       ...item,
@@ -221,7 +221,8 @@ const KEY_BY_URL: Array<[MockKey, string]> = [
 ];
 
 export const installAviationApiMock = (overrides: Partial<Record<MockKey, MockOverride>> = {}) => {
-  process.env.FAA_NOTAM_API_KEY = process.env.FAA_NOTAM_API_KEY ?? "test-notam-key";
+  process.env.FAA_NOTAM_CLIENT_ID = process.env.FAA_NOTAM_CLIENT_ID ?? "test-notam-client-id";
+  process.env.FAA_NOTAM_CLIENT_SECRET = process.env.FAA_NOTAM_CLIENT_SECRET ?? "test-notam-client-secret";
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
