@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseAtisIssuanceTime, ATIS_STALE_THRESHOLD_MIN } from "@/services/datis";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
@@ -16,7 +17,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   // Limit to 10 airports per request
   const limited = icaoList.slice(0, 10);
 
-  const results: Record<string, { letter: string; type: string; fullText: string; fetchedAt: string } | null> = {};
+  const results: Record<string, { letter: string; type: string; fullText: string; fetchedAt: string; issuedAt: string | null; ageMinutes: number | null; stale: boolean } | null> = {};
 
   await Promise.allSettled(
     limited.map(async (icao) => {
@@ -40,11 +41,18 @@ export async function GET(request: Request): Promise<NextResponse> {
 
         // Prefer "combined" type, fall back to first entry
         const combined = data.find((d: { type: string }) => d.type === "combined") ?? data[0];
+        const issuedAt = parseAtisIssuanceTime(combined.datis);
+        const ageMinutes = issuedAt != null
+          ? Math.round((Date.now() - new Date(issuedAt).getTime()) / 60_000)
+          : null;
         results[icao] = {
           letter: combined.code,
           type: combined.type,
           fullText: combined.datis,
-          fetchedAt: new Date().toISOString()
+          fetchedAt: new Date().toISOString(),
+          issuedAt,
+          ageMinutes,
+          stale: ageMinutes != null && ageMinutes > ATIS_STALE_THRESHOLD_MIN
         };
       } catch {
         results[icao] = null;

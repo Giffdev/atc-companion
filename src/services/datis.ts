@@ -12,6 +12,12 @@ const DATIS_SOURCE: DataSource = {
 
 const DATIS_TTL_MS = 90_000; // 90 seconds — ATIS updates roughly hourly but we check frequently
 
+// Aaron (Data) owns this threshold. D-ATIS is event-driven and clowd.io lags the authoritative
+// FAA feed by one+ letters, so 30 min gives an earlier "verify this letter" signal.
+// (Confirmed by live KSEA case: a 54-min-old INFO J was already behind the real D-ATIS at M —
+// at 60 it wouldn't have warned; at 30 it correctly flags.) Full rationale: docs/data-sources/datis.md
+export const ATIS_STALE_THRESHOLD_MIN = 30;
+
 export interface DatisEntry {
   airport: string;
   type: "combined" | "departure" | "arrival";
@@ -25,6 +31,42 @@ export interface AtisInfo {
   type: "combined" | "departure" | "arrival";
   fullText: string;
   fetchedAt: string;
+  issuedAt: string | null;
+  ageMinutes: number | null;
+  stale: boolean;
+}
+
+/**
+ * Extracts the ATIS issuance time from a D-ATIS text string.
+ * Matches the HHMMZ UTC time token (e.g. "INFO J 1853Z" → ISO timestamp).
+ * Handles day-rollover: if the parsed time is more than 5 minutes in the future
+ * relative to now-UTC, it belongs to the previous UTC day.
+ * Returns an ISO timestamp string, or null if no time token is found.
+ */
+export function parseAtisIssuanceTime(datis: string, nowMs: number = Date.now()): string | null {
+  const match = datis.match(/\b(\d{2})(\d{2})Z\b/);
+  if (!match) return null;
+
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+
+  const now = new Date(nowMs);
+  const candidate = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    hours,
+    minutes,
+    0,
+    0
+  ));
+
+  // If the candidate is more than 5 minutes in the future, it belongs to the previous UTC day
+  if (candidate.getTime() > nowMs + 5 * 60 * 1000) {
+    candidate.setUTCDate(candidate.getUTCDate() - 1);
+  }
+
+  return candidate.toISOString();
 }
 
 /**
@@ -72,13 +114,22 @@ export const getAtis = async (airportIcao: string): Promise<ApiResponse<AtisInfo
         );
       }
 
-      const entries: AtisInfo[] = data.map((entry) => ({
-        airportIcao: entry.airport,
-        letter: entry.code,
-        type: entry.type,
-        fullText: entry.datis,
-        fetchedAt
-      }));
+      const entries: AtisInfo[] = data.map((entry) => {
+        const issuedAt = parseAtisIssuanceTime(entry.datis);
+        const ageMinutes = issuedAt != null
+          ? Math.round((Date.now() - new Date(issuedAt).getTime()) / 60_000)
+          : null;
+        return {
+          airportIcao: entry.airport,
+          letter: entry.code,
+          type: entry.type,
+          fullText: entry.datis,
+          fetchedAt,
+          issuedAt,
+          ageMinutes,
+          stale: ageMinutes != null && ageMinutes > ATIS_STALE_THRESHOLD_MIN
+        };
+      });
 
       return createApiResponse(entries, source, { fetchedAt });
     } catch (err) {
