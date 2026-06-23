@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
     const contentType = response.headers.get("content-type") ?? "application/pdf";
     const body = await response.arrayBuffer();
 
+    // Binary passthrough exemption: this route is consumed as an iframe/src URL, so the 200 response must remain raw bytes and must not be wrapped in ApiResponse<T>. Only JSON error paths may use the envelope.
     return new NextResponse(body, {
       status: 200,
       headers: {

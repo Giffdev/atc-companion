@@ -17,9 +17,7 @@ interface FacilityOverviewProps {
   notams?: Notam[];
 }
 
-interface AtisResponse {
-  airports?: Record<string, AtisEntry | null>;
-}
+type AtisBatchResponse = ApiResponse<Record<string, AtisEntry | null>>;
 
 interface RunwayInfo {
   designator: string;
@@ -303,10 +301,8 @@ export default function FacilityOverview({
           (async (): Promise<Record<string, AtisEntry | null>> => {
             try {
               const atisResponse = await fetch(`/api/atis?airports=${normalizedAirports.join(",")}`);
-              if (!atisResponse.ok) return {};
-
-              const atisPayload = (await atisResponse.json()) as AtisResponse;
-              return atisPayload.airports ?? {};
+              const atisPayload = (await atisResponse.json()) as AtisBatchResponse;
+              return atisPayload.ok ? atisPayload.data : {};
             } catch {
               return {};
             }

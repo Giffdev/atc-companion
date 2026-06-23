@@ -204,13 +204,17 @@ describe("API route integration", () => {
     ]);
 
     expect(centerResponse.status).toBe(200);
-    await expect(parseJson(centerResponse)).resolves.toMatchObject({
+    const centerPayload = await parseJson(centerResponse);
+    expect(centerPayload.ok).toBe(true);
+    expect(centerPayload.data).toMatchObject({
       facility: { id: "ZSE", type: "center" },
       adjacentCenters: expect.arrayContaining([expect.objectContaining({ id: "ZOA" })])
     });
 
     expect(approachResponse.status).toBe(200);
-    await expect(parseJson(approachResponse)).resolves.toMatchObject({
+    const approachPayload = await parseJson(approachResponse);
+    expect(approachPayload.ok).toBe(true);
+    expect(approachPayload.data).toMatchObject({
       facility: { id: "S46", type: "approach" },
       overlying: { id: "ZSE", type: "center" },
       adjacentApproach: expect.arrayContaining([expect.objectContaining({ id: "P80" })]),
@@ -218,11 +222,24 @@ describe("API route integration", () => {
     });
 
     expect(towerResponse.status).toBe(200);
-    await expect(parseJson(towerResponse)).resolves.toMatchObject({
+    const towerPayload = await parseJson(towerResponse);
+    expect(towerPayload.ok).toBe(true);
+    expect(towerPayload.data).toMatchObject({
       facility: { id: "KSEA-TWR", type: "tower" },
       overlying: { id: "S46", type: "approach" },
       adjacentCenters: expect.arrayContaining([expect.objectContaining({ id: "ZSE" })]),
       adjacentApproach: [{ id: "S46", name: "Seattle Approach" }]
+    });
+  });
+
+  it("returns a 404 envelope for unknown adjacent facilities", async () => {
+    const response = await getAdjacentRoute(new Request("http://localhost/api/adjacent?facility=NOPE"));
+
+    expect(response.status).toBe(404);
+    await expect(parseJson(response)).resolves.toMatchObject({
+      ok: false,
+      data: null,
+      error: expect.objectContaining({ code: "NOT_FOUND" })
     });
   });
 
@@ -256,7 +273,9 @@ describe("API route integration", () => {
 
     expect(adjacent.status).toBe(400);
     await expect(parseJson(adjacent)).resolves.toMatchObject({
-      error: "Missing 'facility' query parameter"
+      ok: false,
+      data: null,
+      error: expect.objectContaining({ code: "MISSING_REQUIRED_PARAMETER" })
     });
 
     for (const response of [weather, notams, frequencies, plates, traffic, search, regulatory, intentGet, intentPost]) {

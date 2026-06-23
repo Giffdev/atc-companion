@@ -37,6 +37,10 @@ type LiveQueryResult = {
   timestamp: string;
 };
 
+type AirportInfoLiveQueryResult = LiveQueryResult & {
+  intent: Extract<ParsedIntent, { type: "airport_info" }>;
+};
+
 import type { AirportInfoQueryPayload } from "@/services/orchestrator";
 import type { Notam } from "@/types/aviation";
 
@@ -793,6 +797,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [facilityAirportInfo, setFacilityAirportInfo] = useState<AirportInfoQueryPayload | null>(null);
+  const [facilityAirportInfoResult, setFacilityAirportInfoResult] = useState<LiveQueryResult | null>(null);
   const [supplementaryProcedures, setSupplementaryProcedures] = useState<{
     sids: ApproachPlate[];
     stars: ApproachPlate[];
@@ -837,6 +842,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     setSubmitError(null);
     setFacilityResults(new Map());
     setFacilityAirportInfo(null);
+    setFacilityAirportInfoResult(null);
   };
 
   const dashboardData = useMemo(() => {
@@ -1076,6 +1082,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     setActiveIntent(null);
     setSubmittedQuery("");
     setFacilityAirportInfo(null);
+    setFacilityAirportInfoResult(null);
     setLoadingPanels(new Set());
     setVisiblePanels(new Set());
 
@@ -1183,6 +1190,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         if (cancelled) return;
         if (payload.intent.type === "airport_info" && payload.response.ok) {
           setFacilityAirportInfo(payload.response.data as AirportInfoQueryPayload);
+          setFacilityAirportInfoResult(payload);
         }
       } catch { /* silent */ }
     };
@@ -1241,6 +1249,18 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     };
   }, [autoRefreshConfig, fetchLiveQuery, submittedQuery]);
 
+  const selectedAirportSummaryResult: AirportInfoLiveQueryResult | null =
+    selectedFacility?.type === "tower" &&
+    facilityAirportInfoResult?.intent.type === "airport_info" &&
+    facilityAirportInfoResult.response.ok
+      ? (facilityAirportInfoResult as AirportInfoLiveQueryResult)
+      : null;
+
+  const liveResultDuplicatesSelectedAirportSummary =
+    Boolean(selectedAirportSummaryResult) &&
+    liveResult?.intent.type === "airport_info" &&
+    selectedAirportSummaryResult?.intent.airport.toUpperCase() === liveResult.intent.airport.toUpperCase();
+
   return (
     <main className="flex min-h-screen flex-col overflow-x-hidden">
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 lg:px-8 lg:py-8">
@@ -1279,6 +1299,14 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
           onSubmit={handleSubmit}
         />
 
+        {selectedAirportSummaryResult ? (
+          <section className="aviation-panel px-5 py-4 md:px-6">
+            {renderQuerySummary(selectedAirportSummaryResult, false, `airport info for ${selectedAirportSummaryResult.intent.airport}`, initialNow, dashboardData.notams, facilityAirportInfo, (followUpQuery) => {
+              void handleSubmit(followUpQuery, null);
+            })}
+          </section>
+        ) : null}
+
         <section className="aviation-panel px-5 py-4 md:px-6">
           <div className="flex items-center justify-between gap-4">
             {liveResult ? (
@@ -1304,9 +1332,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
           {liveResult ? (
             <div className="mt-4 space-y-4">
-              {renderQuerySummary(liveResult, isSubmitting, submittedQuery, initialNow, dashboardData.notams, facilityAirportInfo, (followUpQuery) => {
-                void handleSubmit(followUpQuery, null);
-              })}
+              {liveResultDuplicatesSelectedAirportSummary
+                ? null
+                : renderQuerySummary(liveResult, isSubmitting, submittedQuery, initialNow, dashboardData.notams, facilityAirportInfo, (followUpQuery) => {
+                    void handleSubmit(followUpQuery, null);
+                  })}
 
               <details className="rounded-2xl border border-aviation-border bg-black/20">
                 <summary className="min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-medium text-aviation-muted">Reveal query envelope</summary>

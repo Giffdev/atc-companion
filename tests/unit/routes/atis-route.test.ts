@@ -2,25 +2,14 @@
  * Route-level unit tests for /api/atis (GET).
  *
  * The route handler is imported directly and called with a synthetic Request
- * object — no HTTP server required.  Global fetch is stubbed per-test to
+ * object — no HTTP server required. Global fetch is stubbed per-test to
  * control the upstream datis.clowd.io responses.
- *
- * Covers:
- *   - Missing / empty airports query parameter → 400
- *   - Single-airport happy path: correct response shape + field types
- *   - "combined" type is preferred over other ATIS types
- *   - Upstream fetch failure → airport entry is null (not a crash)
- *   - Upstream non-OK response → airport entry is null
- *   - Upstream returns empty array → airport entry is null
- *   - Up to 10 airports are processed; 11th is silently dropped
  */
 
 import { GET } from "@/app/api/atis/route";
 import { describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const DATIS_SOURCE_ID = "datis-clowd";
 
 const makeDatisResponse = (entries: { type: string; code: string; datis: string }[]) =>
   new Response(JSON.stringify(entries), {
@@ -30,34 +19,59 @@ const makeDatisResponse = (entries: { type: string; code: string; datis: string 
 
 const req = (url: string) => new Request(url);
 
-// ---------------------------------------------------------------------------
-// 400 — missing / empty airports parameter
-// ---------------------------------------------------------------------------
+const expectAtisEnvelope = (body: Record<string, unknown>) => {
+  expect(body).toMatchObject({
+    ok: true,
+    data: expect.any(Object),
+    source: expect.objectContaining({ id: DATIS_SOURCE_ID }),
+    attribution: {
+      primary: expect.objectContaining({ id: DATIS_SOURCE_ID })
+    },
+    fetchedAt: expect.any(String),
+    isStale: false
+  });
+  expect(body).not.toHaveProperty("airports");
+  expect(body.data).not.toHaveProperty("airports");
+};
 
 describe("/api/atis — parameter validation", () => {
-  it("returns 400 when the airports query param is absent", async () => {
+  it("returns a 400 envelope when the airports query param is absent", async () => {
     const res = await GET(req("http://localhost/api/atis"));
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/airports/i);
+    expect(body).toMatchObject({
+      ok: false,
+      data: null,
+      error: expect.objectContaining({
+        code: "MISSING_REQUIRED_PARAMETER",
+        status: 400
+      }),
+      source: expect.objectContaining({ id: DATIS_SOURCE_ID }),
+      attribution: {
+        primary: expect.objectContaining({ id: DATIS_SOURCE_ID })
+      }
+    });
   });
 
-  it("returns 400 when airports is an empty string after trimming", async () => {
-    const res = await GET(req("http://localhost/api/atis?airports="));
+  it("returns a 400 envelope when airports is empty after trimming", async () => {
+    const res = await GET(req("http://localhost/api/atis?airports=%20,%20"));
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toBeDefined();
+    expect(body).toMatchObject({
+      ok: false,
+      data: null,
+      error: expect.objectContaining({
+        code: "INVALID_PARAMETER",
+        status: 400
+      })
+    });
   });
 });
 
-// ---------------------------------------------------------------------------
-// 200 — successful ATIS fetch
-// ---------------------------------------------------------------------------
-
 describe("/api/atis — happy path", () => {
-  it("returns 200 with the correct response shape for a single airport", async () => {
+  it("returns an ApiResponse envelope with single-airport ATIS data", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -75,22 +89,17 @@ describe("/api/atis — happy path", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-
-    expect(body).toMatchObject({
-      airports: {
-        KSEA: expect.objectContaining({
-          letter: "J",
-          type: "combined",
-          fullText: expect.stringContaining("INFO J"),
-          fetchedAt: expect.any(String),
-          stale: expect.any(Boolean)
-        })
-      },
-      fetchedAt: expect.any(String)
+    expectAtisEnvelope(body);
+    expect(body.data.KSEA).toMatchObject({
+      letter: "J",
+      type: "combined",
+      fullText: expect.stringContaining("INFO J"),
+      fetchedAt: body.fetchedAt,
+      stale: expect.any(Boolean)
     });
   });
 
-  it("ICAO codes are upper-cased in the response keys", async () => {
+  it("ICAO codes are upper-cased in the data keys", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -101,9 +110,9 @@ describe("/api/atis — happy path", () => {
     const res = await GET(req("http://localhost/api/atis?airports=kbfi"));
     const body = await res.json();
 
-    // Key should be upper-cased even if the query param was lower-case
-    expect(body.airports).toHaveProperty("KBFI");
-    expect(body.airports).not.toHaveProperty("kbfi");
+    expectAtisEnvelope(body);
+    expect(body.data).toHaveProperty("KBFI");
+    expect(body.data).not.toHaveProperty("kbfi");
   });
 
   it("prefers 'combined' type over other ATIS types in the same payload", async () => {
@@ -121,8 +130,8 @@ describe("/api/atis — happy path", () => {
     const res = await GET(req("http://localhost/api/atis?airports=KSEA"));
     const body = await res.json();
 
-    expect(body.airports.KSEA?.type).toBe("combined");
-    expect(body.airports.KSEA?.letter).toBe("J");
+    expect(body.data.KSEA?.type).toBe("combined");
+    expect(body.data.KSEA?.letter).toBe("J");
   });
 
   it("issuedAt is a valid ISO string when a HHMMZ token is present", async () => {
@@ -137,7 +146,7 @@ describe("/api/atis — happy path", () => {
 
     const res = await GET(req("http://localhost/api/atis?airports=KSEA"));
     const body = await res.json();
-    const issuedAt = body.airports.KSEA?.issuedAt;
+    const issuedAt = body.data.KSEA?.issuedAt;
 
     expect(issuedAt).not.toBeNull();
     expect(typeof issuedAt).toBe("string");
@@ -157,14 +166,10 @@ describe("/api/atis — happy path", () => {
     const res = await GET(req("http://localhost/api/atis?airports=KBFI"));
     const body = await res.json();
 
-    expect(body.airports.KBFI?.issuedAt).toBeNull();
-    expect(body.airports.KBFI?.ageMinutes).toBeNull();
+    expect(body.data.KBFI?.issuedAt).toBeNull();
+    expect(body.data.KBFI?.ageMinutes).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Error / fallback handling
-// ---------------------------------------------------------------------------
 
 describe("/api/atis — error handling", () => {
   it("sets the airport entry to null when the upstream fetch throws", async () => {
@@ -179,7 +184,8 @@ describe("/api/atis — error handling", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.airports.KBFI).toBeNull();
+    expectAtisEnvelope(body);
+    expect(body.data.KBFI).toBeNull();
   });
 
   it("sets the airport entry to null when upstream returns a non-2xx status", async () => {
@@ -191,7 +197,7 @@ describe("/api/atis — error handling", () => {
     const res = await GET(req("http://localhost/api/atis?airports=KBFI"));
     const body = await res.json();
 
-    expect(body.airports.KBFI).toBeNull();
+    expect(body.data.KBFI).toBeNull();
   });
 
   it("sets the airport entry to null when upstream returns an empty array", async () => {
@@ -203,7 +209,19 @@ describe("/api/atis — error handling", () => {
     const res = await GET(req("http://localhost/api/atis?airports=KBFI"));
     const body = await res.json();
 
-    expect(body.airports.KBFI).toBeNull();
+    expect(body.data.KBFI).toBeNull();
+  });
+
+  it("sets the airport entry to null when upstream returns malformed data", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => makeDatisResponse([{ type: "combined", code: "", datis: "KBFI ATIS INFO A 1200Z." }]))
+    );
+
+    const res = await GET(req("http://localhost/api/atis?airports=KBFI"));
+    const body = await res.json();
+
+    expect(body.data.KBFI).toBeNull();
   });
 
   it("handles multiple airports where one succeeds and one fails", async () => {
@@ -223,8 +241,8 @@ describe("/api/atis — error handling", () => {
     const res = await GET(req("http://localhost/api/atis?airports=KSEA,KBFI"));
     const body = await res.json();
 
-    expect(body.airports.KSEA).not.toBeNull();
-    expect(body.airports.KBFI).toBeNull();
+    expect(body.data.KSEA).not.toBeNull();
+    expect(body.data.KBFI).toBeNull();
   });
 
   it("silently drops airports beyond the 10-airport limit", async () => {
@@ -237,6 +255,7 @@ describe("/api/atis — error handling", () => {
     const res = await GET(req(`http://localhost/api/atis?airports=${manyAirports}`));
     const body = await res.json();
 
-    expect(Object.keys(body.airports)).toHaveLength(10);
+    expect(Object.keys(body.data)).toHaveLength(10);
+    expect(body.data).not.toHaveProperty("K010");
   });
 });

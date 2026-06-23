@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import type { ApiResponse } from "@/types/api";
+
 export interface AtisEntry {
   letter: string;
   type: string;
@@ -41,15 +43,23 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
 
     try {
       const response = await fetch(`/api/atis?airports=${airports.join(",")}`);
-      if (!response.ok) {
+      const payload = (await response.json()) as ApiResponse<Record<string, AtisEntry | null>>;
+      if (!response.ok && payload.ok !== false) {
         setFetchError(true);
         setLastFetch(new Date().toISOString());
         return;
       }
-      const data = await response.json();
+
+      if (!payload.ok) {
+        setFetchError(true);
+        setAtisData({});
+        setLastFetch(payload.fetchedAt);
+        return;
+      }
+
       setFetchError(false);
-      setAtisData(data.airports ?? {});
-      setLastFetch(data.fetchedAt ?? new Date().toISOString());
+      setAtisData(payload.data);
+      setLastFetch(payload.fetchedAt);
     } catch {
       setFetchError(true);
       setLastFetch(new Date().toISOString());
