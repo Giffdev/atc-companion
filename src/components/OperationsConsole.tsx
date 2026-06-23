@@ -46,6 +46,7 @@ import type { Notam } from "@/types/aviation";
 
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
 const RESULT_ORDER: DashboardResultType[] = ["weather", "frequency", "traffic", "notam", "plates", "navigation", "regulatory"];
+const NOTAM_FEED_UNAVAILABLE_CODES = new Set(["NOTAM_FEED_NOT_CONFIGURED", "NOTAM_EMBEDDED_SEARCH"]);
 
 /** Format a rich airport label like "KSEA — Seattle-Tacoma Intl, WA" */
 const formatAirportLabel = (icao: string, name?: string | null, city?: string | null, state?: string | null): string => {
@@ -138,6 +139,9 @@ const createDetailText = (response: ApiResponse<unknown>): string => {
 
   return `${response.source.name} • ${formatTimestamp(response.fetchedAt)}`;
 };
+
+const isNotamFeedUnavailableError = (error: ApiResponse<unknown>["error"]): boolean =>
+  Boolean(error && NOTAM_FEED_UNAVAILABLE_CODES.has(error.code));
 
 const applyResponseStatus = (items: SourceStatusItem[], id: SourceStatusItem["id"], response: ApiResponse<unknown>): SourceStatusItem[] =>
   items.map((item) =>
@@ -404,14 +408,13 @@ const renderQuerySummary = (
   }
 
   if (!liveResult.response.ok) {
-    const isNotamSearch =
-      liveResult.response.error.code === "NOTAM_FEED_NOT_CONFIGURED" ||
-      liveResult.response.error.code === "NOTAM_EMBEDDED_SEARCH";
-    if (isNotamSearch) {
+    if (isNotamFeedUnavailableError(liveResult.response.error)) {
       const searchUrl = liveResult.response.error.details ?? "https://notams.aim.faa.gov/notamSearch/";
       return (
-        <div className="space-y-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100">
-          <p>{liveResult.response.error.message}</p>
+        <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100 ring-2 ring-amber-400/40">
+          <p className="font-semibold">⚠️ NOTAMs could not be loaded</p>
+          <p>This is NOT confirmation that there are zero active NOTAMs. Check the official FAA NOTAM Search before flight.</p>
+          <p className="text-xs text-amber-200/80">{liveResult.response.error.message}</p>
           <a
             className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/20"
             href={searchUrl}
@@ -456,7 +459,7 @@ const renderQuerySummary = (
             {(liveResult.response.data as DashboardData["notams"])
               .slice(0, 3)
               .map((notam) => notam.notamId)
-              .join(" • ") || "No NOTAMs returned"}
+              .join(" • ") || "No active NOTAMs"}
           </p>
         </div>
       );
@@ -1398,8 +1401,12 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                   </div>
                 );
               case "notam": {
-                const notamError = liveResult?.intent.type === "notam" && !liveResult.response.ok ? liveResult.response.error : null;
-                const notamSearchUrl = notamError?.details ?? `https://notams.aim.faa.gov/notamSearch/${activeIntent?.type === "notam" && activeIntent.airport ? `?designatorsForLocation=${activeIntent.airport.replace(/^K/, "")}` : ""}`;
+                const notamPanelResult = liveResult?.intent.type === "notam" ? liveResult : facilityResults.get("notam") ?? null;
+                const notamError = notamPanelResult?.intent.type === "notam" && !notamPanelResult.response.ok ? notamPanelResult.response.error : null;
+                const notamFeedUnavailable = notamError ? isNotamFeedUnavailableError(notamError) : false;
+                const notamLoadedEmpty = notamPanelResult?.intent.type === "notam" && notamPanelResult.response.ok && dashboardData.notams.length === 0;
+                const notamAirport = notamPanelResult?.intent.type === "notam" ? notamPanelResult.intent.airport : undefined;
+                const notamSearchUrl = notamError?.details ?? `https://notams.aim.faa.gov/notamSearch/${notamAirport ? `?designatorsForLocation=${notamAirport.replace(/^K/, "")}` : ""}`;
 
                 return (
                   <div key="notam" className={`min-w-0 ${isSinglePanel ? "xl:col-span-12" : "xl:col-span-5"}`}>
@@ -1423,11 +1430,58 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                         </div>
                       ) : dashboardData.notams.length ? (
                         <NotamList notams={dashboardData.notams} />
+                      ) : notamFeedUnavailable ? (
+                        <div className="space-y-3 text-sm">
+                          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100 ring-2 ring-amber-400/40">
+                            <p className="font-semibold">⚠️ NOTAMs could not be loaded</p>
+                            <p className="mt-2 text-sm">The live NOTAM feed is unavailable. This is NOT confirmation that there are zero active NOTAMs.</p>
+                            <p className="mt-2 text-xs text-amber-200/80">Check the official FAA NOTAM Search before flight. {notamError?.message}</p>
+                          </div>
+                          <a
+                            className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
+                            href={notamSearchUrl}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Search FAA NOTAMs directly ↗
+                          </a>
+                          <a
+                            className="ml-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/15"
+                            href="https://tfr.faa.gov/tfr2/list.html"
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            View Active TFRs ↗
+                          </a>
+                        </div>
+                      ) : notamLoadedEmpty ? (
+                        <div className="space-y-3 text-sm text-aviation-muted">
+                          <div className="rounded-2xl border border-aviation-border bg-black/20 p-4">
+                            <p className="font-medium text-aviation-text">No active NOTAMs</p>
+                            <p className="mt-2 text-xs">The live NOTAM feed loaded successfully and returned zero notices for this query. Always confirm operational NOTAMs in the official FAA NOTAM Search before flight.</p>
+                          </div>
+                          <a
+                            className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
+                            href={notamSearchUrl}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Search FAA NOTAMs directly ↗
+                          </a>
+                          <a
+                            className="ml-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200 transition hover:border-amber-400/50 hover:bg-amber-500/15"
+                            href="https://tfr.faa.gov/tfr2/list.html"
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            View Active TFRs ↗
+                          </a>
+                        </div>
                       ) : (
                         <div className="space-y-3 text-sm text-aviation-muted">
                           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 text-amber-100">
-                            <p className="font-medium">{notamError?.message ?? "No active NOTAMs were returned by the live feed for this query."}</p>
-                            <p className="mt-2 text-xs text-amber-200/80">Always confirm operational NOTAMs in the official FAA NOTAM Search before flight.</p>
+                            <p className="font-medium">NOTAM status unavailable</p>
+                            <p className="mt-2 text-xs text-amber-200/80">{notamError?.message ?? "The NOTAM panel has not received a successful live feed response. Check the official FAA NOTAM Search before flight."}</p>
                           </div>
                           <a
                             className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/15"
