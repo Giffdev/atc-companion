@@ -28,3 +28,9 @@
 - Updated ATIS route and API integration tests for enveloped responses, including adjacent 404 coverage.
 - Added `tests/unit/components/atis-strip.test.tsx` for envelope unwrap, `ok:false` error state, and per-airport null hiding.
 - FacilityOverview dedicated component test deferred; full validation passed except one pre-existing zero-test NFDC parser suite.
+
+
+## 2026-06-23: NFDC parser test hygiene shipped
+- Added executable NFDC parser coverage for runway parsing and airport-hours parsing, including empty/fallback cases.
+- Scoped suite passed with 4 tests; full repo suite is now green at 203 tests.
+- Shipped live in commit `67676b8` and deployed to atc-companion.vercel.app.

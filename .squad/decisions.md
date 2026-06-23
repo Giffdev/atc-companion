@@ -245,3 +245,10 @@
 **By:** Lovell
 **What:** FacilityOverview dedicated component coverage is deferred for T2a.
 **Why:** The final gate coverage focused on required AtisStrip envelope consumer cases plus route/integration envelope assertions; FacilityOverview remains covered by build/type checks and existing integration paths for this pass.
+
+
+### 2026-06-23T23-01-07: Added real NFDC parser Vitest coverage
+**By:** Lovell
+**What:** Added real NFDC parser Vitest coverage
+**References:** src/services/__tests__/nfdc-parser.test.ts, src/services/airport-hours.ts, src/services/runway-info.ts
+**Why:** Replaced the unfinished NFDC parser test harness with 4 Vitest tests in src/services/__tests__/nfdc-parser.test.ts. Coverage added: parseRunwaysFromHtml happy path for NFDC-style runway sections including designator, dimensions, surface, and lighting normalization; parseRunwaysFromHtml empty/no-runway fallback; parseAirportHoursFromHtml happy path for tower hours, schedule, timezone, and airport fields; parseAirportHoursFromHtml empty/unstructured HTML fallback with null parser fields. Validation results: npx vitest run src/services/__tests__/nfdc-parser.test.ts passed (4 tests); npx vitest run passed with exit code 0; npm run lint passed with exit code 0; npm run build passed with exit code 0.
