@@ -30,3 +30,13 @@
 - OperationsConsole now threads `dashboardData.notams` into overview cards and summaries; demo data includes a runway-closure NOTAM.
 - Wave 3 a11y/promise hygiene added QueryInput aria-labels and made async fire-and-forget explicit in AtisStrip/OperationsConsole.
 - Frontend lint cleanup completed: render-time Date.now refactors, stable memoization, StatusBar live clock, PlateViewer targeted deps handling, TrafficMap `void initMap()`; repo-wide lint exit 0.
+
+## 2026-06-23: NOTAM degraded-state UI lockstep
+- Updated the secondary Operations Console NOTAM summary/error render path to recognize the new `NOTAM_FEED_NOT_CONFIGURED` code as well as legacy `NOTAM_EMBEDDED_SEARCH`.
+- Preserved the dedicated FAA NOTAM Search link when inline NOTAMs are unavailable because FAA credentials are not configured.
+- Cross-agent finding to carry forward: no viable keyless live NOTAM source exists; UI should present missing FAA credentials as an intentional degraded state, not an empty or generic failure.
+
+## 2026-06-23: T2a consumers + facility-summary order shipped
+- `AtisStrip.tsx` and `FacilityOverview.tsx` now unwrap the ATIS `ApiResponse` envelope; `PlateViewer` and `DiagramPanel` stayed untouched.
+- `OperationsConsole.tsx` now leads with selected tower airport facility overview and suppresses the duplicate lower summary; center/approach/default remain unchanged.
+- Shipped live in commit `b967317`; build/lint/test validation passed except one pre-existing zero-test NFDC parser suite.

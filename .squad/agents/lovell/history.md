@@ -23,3 +23,8 @@
 - Added coverage for NOTAM service, orchestrator regulatory/facility paths, frequencies service, and ATIS route behavior.
 - Final Wave 3 report: 152 tests passed, 0 failed; no new source bugs found.
 - AtisStrip component follow-up remains owned by Swigert if additional UI-specific tests are needed.
+
+## 2026-06-23: T2a envelope test gate shipped
+- Updated ATIS route and API integration tests for enveloped responses, including adjacent 404 coverage.
+- Added `tests/unit/components/atis-strip.test.tsx` for envelope unwrap, `ok:false` error state, and per-airport null hiding.
+- FacilityOverview dedicated component test deferred; full validation passed except one pre-existing zero-test NFDC parser suite.

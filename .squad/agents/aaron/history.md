@@ -32,3 +32,9 @@
 - Critical NOTAM categories are airport closure, runway closure, and TFR; unparseable effective time is fail-safe active.
 - Added classifier coverage (19 tests) and later removed dead `FAA_TFR_SEARCH_URL`; service lint/test state reported clean.
 - Swigert consumes this contract directly; UI must not re-classify NOTAM criticality.
+
+## 2026-06-23: NOTAM keyless outage resolved
+- Root-caused the live inline NOTAM outage to the dead `api.aviationapi.com` keyless dependency and removed that path entirely.
+- Corrected the FAA NOTAM/NMS keyed path to use `client_id` / `client_secret`, `icaoLocation`, and `responseFormat=geoJson`; added robust nested GeoJSON parsing.
+- Replaced broken fallback behavior with an honest `NOTAM_FEED_NOT_CONFIGURED` state and FAA NOTAM Search link.
+- Key finding for future work: no viable keyless live NOTAM source exists; inline NOTAMs require FAA credentials (`FAA_NOTAM_CLIENT_ID` / `FAA_NOTAM_CLIENT_SECRET`, aliases `FAA_NMS_CLIENT_ID` / `FAA_NMS_CLIENT_SECRET`).

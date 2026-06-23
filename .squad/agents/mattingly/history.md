@@ -30,3 +30,8 @@
 - T2b plates handling and T2d timeout audit required no changes.
 - T4c dedup complete: `findFirstPairValue` canonicalized in `nfdc-html.ts`; adjacent/intent routes use route-utils search-param helpers.
 - Backend targeted lint is clean; traffic tests pass.
+
+## 2026-06-23: T2a API envelopes shipped
+- `/api/atis` now returns `ApiResponse<AtisBatchData>` and `/api/adjacent` returns `ApiResponse<AdjacentFacilityResult>` including error envelopes.
+- `/api/plate-proxy` success remains raw binary bytes with an explicit exemption comment; JSON errors were intentionally left unchanged.
+- Shipped live in commit `b967317`; build/lint/test validation passed except one pre-existing zero-test NFDC parser suite.
