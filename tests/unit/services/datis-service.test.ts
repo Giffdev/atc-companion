@@ -7,7 +7,7 @@
  *       text, handling day-rollover (HHMM > 5 min in the future → previous UTC day).
  *       Returns null when no HHMMZ token is present.
  *       nowMs defaults to Date.now(); pass an explicit value for deterministic tests.
- *   - export const ATIS_STALE_THRESHOLD_MIN: number   (= 30)
+ *   - export const ATIS_STALE_THRESHOLD_MIN: number   (= 75)
  *   - AtisInfo.stale = ageMinutes > ATIS_STALE_THRESHOLD_MIN
  *
  * NOTE: parseAtisIssuanceTime accepts an optional nowMs param, so tests can pass
@@ -133,55 +133,55 @@ describe("parseAtisIssuanceTime — 00Z day-rollover", () => {
 // ATIS staleness boundary
 // ---------------------------------------------------------------------------
 
-describe("ATIS staleness boundary (ATIS_STALE_THRESHOLD_MIN = 30)", () => {
+describe("ATIS staleness boundary (ATIS_STALE_THRESHOLD_MIN = 75)", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("exports ATIS_STALE_THRESHOLD_MIN as 30", () => {
-    expect(ATIS_STALE_THRESHOLD_MIN).toBe(30);
+  it("exports ATIS_STALE_THRESHOLD_MIN as 75", () => {
+    expect(ATIS_STALE_THRESHOLD_MIN).toBe(75);
   });
 
-  it("flags an ATIS issued exactly 30 minutes ago as NOT stale (boundary is exclusive)", () => {
-    // now = 21:00Z; ATIS = 20:30Z → exactly 30 min → not stale
+  it("flags an ATIS issued exactly 75 minutes ago as NOT stale (boundary is exclusive)", () => {
+    // now = 21:00Z; ATIS = 19:45Z → exactly 75 min → not stale
     setFakeNow("2026-06-23T21:00:00.000Z");
 
-    const text = "KSEA ATIS INFO G 2030Z. WIND 160 AT 5.";
+    const text = "KSEA ATIS INFO G 1945Z. WIND 160 AT 5.";
     const issuedAt = parseAtisIssuanceTime(text)!;
     expect(issuedAt).not.toBeNull();
 
     const ageMinutes = Math.round((Date.now() - new Date(issuedAt).getTime()) / 60_000);
     const stale = ageMinutes > ATIS_STALE_THRESHOLD_MIN;
 
-    expect(ageMinutes).toBe(30);
+    expect(ageMinutes).toBe(75);
     expect(stale).toBe(false);
   });
 
-  it("flags an ATIS issued 31 minutes ago as stale", () => {
-    // now = 21:00Z; ATIS = 20:29Z → 31 min → stale
+  it("flags an ATIS issued 76 minutes ago as stale", () => {
+    // now = 21:00Z; ATIS = 19:44Z → 76 min → stale
     setFakeNow("2026-06-23T21:00:00.000Z");
 
-    const text = "KSEA ATIS INFO F 2029Z. WIND 170 AT 7.";
+    const text = "KSEA ATIS INFO F 1944Z. WIND 170 AT 7.";
     const issuedAt = parseAtisIssuanceTime(text)!;
     expect(issuedAt).not.toBeNull();
 
     const ageMinutes = Math.round((Date.now() - new Date(issuedAt).getTime()) / 60_000);
     const stale = ageMinutes > ATIS_STALE_THRESHOLD_MIN;
 
-    expect(ageMinutes).toBe(31);
+    expect(ageMinutes).toBe(76);
     expect(stale).toBe(true);
   });
 
-  it("flags an ATIS issued 29 minutes ago as NOT stale", () => {
-    // now = 21:00Z; ATIS = 20:31Z → 29 min → not stale
+  it("flags an ATIS issued 60 minutes ago as NOT stale", () => {
+    // now = 21:00Z; ATIS = 20:00Z → 60 min → not stale
     setFakeNow("2026-06-23T21:00:00.000Z");
 
-    const text = "KSEA ATIS INFO H 2031Z. WIND 160 AT 4.";
+    const text = "KSEA ATIS INFO H 2000Z. WIND 160 AT 4.";
     const issuedAt = parseAtisIssuanceTime(text)!;
     expect(issuedAt).not.toBeNull();
 
     const ageMinutes = Math.round((Date.now() - new Date(issuedAt).getTime()) / 60_000);
     const stale = ageMinutes > ATIS_STALE_THRESHOLD_MIN;
 
-    expect(ageMinutes).toBe(29);
+    expect(ageMinutes).toBe(60);
     expect(stale).toBe(false);
   });
 });

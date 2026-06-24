@@ -28,8 +28,8 @@ The UI should always show the ATIS issuance time so operators can cross-check ag
 
 ## Recommended Staleness Threshold
 
-**Recommended `ATIS_STALE_THRESHOLD_MIN`: 30 minutes**  
-(Backend default is currently `ATIS_STALE_THRESHOLD_MIN = 60` in `src/services/datis.ts`.)
+**Recommended `ATIS_STALE_THRESHOLD_MIN`: 75 minutes**  
+(Backend default is currently `ATIS_STALE_THRESHOLD_MIN = 75` in `src/services/datis.ts`.)
 
 ### Rationale
 
@@ -39,14 +39,14 @@ D-ATIS is event-driven, not clock-driven. ATIS is reissued whenever operationall
 - At a quiet airport in stable conditions, a single letter may persist for 60–90 minutes.
 - There is no FAA-mandated fixed interval; FAA Order JO 7110.65 requires ATIS to reflect current conditions, which drives event-based updates.
 
-A 60-minute threshold treats an ATIS as current for the full maximum realistic inter-issuance window — which is already generous — and is made worse by the fact that clowd.io itself introduces additional lag. By the time the UI renders the data, the clowd.io copy may already be 1–2 letters behind the live FAA D-ATIS *before* the issuedAt clock even starts running in the staleness check.
+A 30-minute threshold is too aggressive for stable conditions: it warns on a current ATIS simply because no operationally significant condition has changed. That creates alert fatigue and matches the user report that D-ATIS appears "always stale."
 
-**30 minutes** is recommended because:
+**75 minutes** is recommended because:
 
-1. It provides an earlier warning prompt, giving users time to cross-verify before the ATIS becomes dangerously outdated.
-2. It reflects operational reality: if an ATIS letter is 30 minutes old during active weather, a new issuance is plausible.
-3. It compensates for the unknown clowd.io polling lag, which can add several minutes of undetected staleness on top of the issuedAt age.
-4. Showing a "stale" indicator does not mean the data is wrong — it means "verify the current letter before relying on it," which is appropriate given the source's known lag.
+1. It covers normal stable-weather ATIS persistence of roughly 60 minutes plus modest source/cache latency.
+2. It still warns when the issuance is genuinely old, rather than suppressing stale data entirely.
+3. It keeps the UI focused on the actual ATIS `issuedAt` age; users can still cross-check the visible letter/time when conditions are changing quickly.
+4. It avoids making a third-party source-lag guess look like a definite stale-data finding. Without an authoritative newer letter, age alone should warn only after a generous operational window.
 
 This threshold applies to the `ageMinutes` computed from the ATIS `issuedAt` field (the timestamp of the ATIS issuance as reported by clowd.io), not to the age of our local API cache entry.
 
@@ -91,15 +91,15 @@ This threshold applies to the `ageMinutes` computed from the ATIS `issuedAt` fie
 | nasstatus.com | Likely better than clowd.io | None (scrape) | Fragile; ToS risk |
 | NOAA AWC | N/A — no ATIS | None | Already used; different data type |
 
-**Recommendation:** Retain clowd.io as the current source with a 30-minute staleness threshold and clear age disclosure in the UI. Pursue FAA SWIM access only if the project formally engages as an aviation data services partner — at which point clowd.io should be deprecated in favor of SWIM. There is no currently available public REST source that is both authoritative and fresher than clowd.io.
+**Recommendation:** Retain clowd.io as the current source with a 75-minute staleness threshold and clear age disclosure in the UI. Pursue FAA SWIM access only if the project formally engages as an aviation data services partner — at which point clowd.io should be deprecated in favor of SWIM. There is no currently available public REST source that is both authoritative and fresher than clowd.io.
 
 ---
 
 ## Integration Checklist for Backend (Mattingly)
 
-- [ ] `ATIS_STALE_THRESHOLD_MIN` → change from `60` to **`30`** in `src/services/datis.ts`
+- [x] `ATIS_STALE_THRESHOLD_MIN` → set to **`75`** in `src/services/datis.ts`
 - [ ] Expose `issuedAt` and `ageMinutes` fields in the `AtisInfo` response (already planned per handoff)
-- [ ] Populate `stale` flag using the 30-minute threshold
+- [x] Populate `stale` flag using the 75-minute threshold
 - [ ] Surface `issuedAt` and `stale` in the UI layer (coordinate with front-end)
 - [ ] Add a data-source note in the ATIS response that clowd.io may lag FAA D-ATIS
 

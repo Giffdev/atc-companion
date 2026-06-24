@@ -7,7 +7,7 @@
  */
 
 import { GET } from "@/app/api/atis/route";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const DATIS_SOURCE_ID = "datis-clowd";
 
@@ -18,6 +18,11 @@ const makeDatisResponse = (entries: { type: string; code: string; datis: string 
   });
 
 const req = (url: string) => new Request(url);
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const expectAtisEnvelope = (body: Record<string, unknown>) => {
   expect(body).toMatchObject({
@@ -168,6 +173,74 @@ describe("/api/atis — happy path", () => {
 
     expect(body.data.KBFI?.issuedAt).toBeNull();
     expect(body.data.KBFI?.ageMinutes).toBeNull();
+  });
+
+  it("does not mark an hour-old ATIS stale", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-23T21:00:00.000Z"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeDatisResponse([
+          { type: "combined", code: "M", datis: "KSEA ATIS INFO M 2000Z. WIND 170 AT 6." }
+        ])
+      )
+    );
+
+    const res = await GET(req("http://localhost/api/atis?airports=KSEA"));
+    const body = await res.json();
+
+    expect(body.data.KSEA).toMatchObject({
+      letter: "M",
+      issuedAt: "2026-06-23T20:00:00.000Z",
+      ageMinutes: 60,
+      stale: false
+    });
+  });
+
+  it("marks an ATIS older than the threshold stale", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-23T21:00:00.000Z"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeDatisResponse([
+          { type: "combined", code: "L", datis: "KSEA ATIS INFO L 1944Z. WIND 170 AT 6." }
+        ])
+      )
+    );
+
+    const res = await GET(req("http://localhost/api/atis?airports=KSEA"));
+    const body = await res.json();
+
+    expect(body.data.KSEA).toMatchObject({
+      letter: "L",
+      issuedAt: "2026-06-23T19:44:00.000Z",
+      ageMinutes: 76,
+      stale: true
+    });
+  });
+
+  it("parses near-midnight Zulu issuance times against UTC day rollover", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-23T00:05:00.000Z"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeDatisResponse([
+          { type: "combined", code: "Z", datis: "KSEA ATIS INFO Z 2353Z. WIND 090 AT 4." }
+        ])
+      )
+    );
+
+    const res = await GET(req("http://localhost/api/atis?airports=KSEA"));
+    const body = await res.json();
+
+    expect(body.data.KSEA).toMatchObject({
+      issuedAt: "2026-06-22T23:53:00.000Z",
+      ageMinutes: 12,
+      stale: false
+    });
   });
 });
 

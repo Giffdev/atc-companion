@@ -317,7 +317,7 @@ export const parseRunwaysFromHtml = (html: string): RunwayInfo[] => {
  */
 const inferRunwaysFromAirportData = (airport: { runways?: string[] }): RunwayInfo[] => {
   if (airport.runways && airport.runways.length > 0) {
-    return airport.runways.map((designator) => ({
+    return pairRunwayDesignators(airport.runways).map((designator) => ({
       designator,
       lengthFeet: null,
       widthFeet: null,
@@ -327,6 +327,57 @@ const inferRunwaysFromAirportData = (airport: { runways?: string[] }): RunwayInf
   }
 
   return [];
+};
+
+const pairRunwayDesignators = (designators: string[]): string[] => {
+  const normalizeStaticDesignator = (value: string): string => collapseWhitespace(value)
+    .toUpperCase()
+    .replace(/^RUNWAY\s+/, "")
+    .replace(/^RWY\s+/, "")
+    .replace(/_/g, "/")
+    .replace(/\s+/g, "")
+    .replace(/[^0-9A-Z/]/g, "");
+
+  const pairedDesignators = designators
+    .map(normalizeStaticDesignator)
+    .filter(Boolean);
+  const runwayEnds = new Set<string>();
+  const physicalRunways: string[] = [];
+  const seenPhysicalRunways = new Set<string>();
+
+  const addPhysicalRunway = (designator: string) => {
+    const normalized = normalizeRunwayDesignator(designator);
+    if (normalized && !seenPhysicalRunways.has(normalized)) {
+      seenPhysicalRunways.add(normalized);
+      physicalRunways.push(normalized);
+    }
+  };
+
+  for (const designator of pairedDesignators) {
+    if (designator.includes("/")) {
+      addPhysicalRunway(designator);
+    } else if (/^\d{1,2}[LRCG]?$/.test(designator)) {
+      runwayEnds.add(designator.padStart(2, "0").toUpperCase());
+    }
+  }
+
+  for (const runway of [...runwayEnds].sort()) {
+    if (!runwayEnds.has(runway)) {
+      continue;
+    }
+
+    const num = parseInt(runway.replace(/[LRCG]$/, ""), 10);
+    const suffix = runway.match(/[LRCG]$/)?.[0] ?? "";
+    const reciprocalNum = ((num + 18 - 1) % 36) + 1;
+    const reciprocalSuffix = suffix === "L" ? "R" : suffix === "R" ? "L" : suffix;
+    const reciprocal = `${reciprocalNum.toString().padStart(2, "0")}${reciprocalSuffix}`;
+
+    runwayEnds.delete(runway);
+    runwayEnds.delete(reciprocal);
+    addPhysicalRunway(`${runway}/${reciprocal}`);
+  }
+
+  return physicalRunways;
 };
 
 /**

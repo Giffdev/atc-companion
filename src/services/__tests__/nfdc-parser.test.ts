@@ -1,5 +1,6 @@
 import { parseAirportHoursFromHtml } from "@/services/airport-hours";
-import { parseRunwaysFromHtml } from "@/services/runway-info";
+import { appCache } from "@/lib/cache";
+import { getAirportRunways, parseRunwaysFromHtml } from "@/services/runway-info";
 import { describe, expect, it } from "vitest";
 
 type AirportFixture = {
@@ -82,6 +83,29 @@ const runwayHtml = `
   </html>
 `;
 
+const paeLikeRunwayHtml = `
+  <html>
+    <body>
+      <div id="runway_16L_34R">
+        <h3>RUNWAY 16L/34R</h3>
+        <table>
+          <tr><td>Dimensions</td><td>3,004 ft. x 75 ft.</td></tr>
+          <tr><td>Surface Type</td><td>ASPH</td></tr>
+          <tr><td>Runway Edge Lights</td><td>Medium Intensity</td></tr>
+        </table>
+      </div>
+      <div id="runway_16R_34L">
+        <h3>RUNWAY 16R/34L</h3>
+        <table>
+          <tr><td>Dimensions</td><td>9,010 ft. x 150 ft.</td></tr>
+          <tr><td>Surface Type</td><td>ASPH-CONC FIRST 1000 FT RWY 16R CONC.</td></tr>
+          <tr><td>Runway Edge Lights</td><td>High Intensity</td></tr>
+        </table>
+      </div>
+    </body>
+  </html>
+`;
+
 const airportHoursHtml = `
   <html>
     <body>
@@ -120,6 +144,36 @@ describe("parseRunwaysFromHtml", () => {
   it("returns an empty list when no runway sections or fallback text are present", () => {
     expect(parseRunwaysFromHtml("<html><body>No runway records available.</body></html>")).toEqual([]);
     expect(parseRunwaysFromHtml("")).toEqual([]);
+  });
+
+  it("keeps all valid physical runways for PAE-like parallel runway sections", () => {
+    expect(parseRunwaysFromHtml(paeLikeRunwayHtml)).toEqual([
+      {
+        designator: "16L/34R",
+        lengthFeet: 3004,
+        widthFeet: 75,
+        surface: "ASPH",
+        lighting: "MIRL"
+      },
+      {
+        designator: "16R/34L",
+        lengthFeet: 9010,
+        widthFeet: 150,
+        surface: "ASPH",
+        lighting: "HIRL"
+      }
+    ]);
+  });
+
+  it("falls back to all static PAE runway ends as physical runway pairs when NFDC is unavailable", async () => {
+    appCache.clear();
+
+    const result = await getAirportRunways("KPAE");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.source).toBe("Inferred from airport data");
+    expect(result.data.runways.map((runway) => runway.designator)).toEqual(["16L/34R", "16R/34L"]);
   });
 });
 

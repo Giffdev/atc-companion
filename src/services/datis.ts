@@ -12,11 +12,9 @@ const DATIS_SOURCE: DataSource = {
 
 const DATIS_TTL_MS = 90_000; // 90 seconds — ATIS updates roughly hourly but we check frequently
 
-// Aaron (Data) owns this threshold. D-ATIS is event-driven and clowd.io lags the authoritative
-// FAA feed by one+ letters, so 30 min gives an earlier "verify this letter" signal.
-// (Confirmed by live KSEA case: a 54-min-old INFO J was already behind the real D-ATIS at M —
-// at 60 it wouldn't have warned; at 30 it correctly flags.) Full rationale: docs/data-sources/datis.md
-export const ATIS_STALE_THRESHOLD_MIN = 30;
+// D-ATIS is event-driven, not clock-driven: in stable conditions the same letter can
+// remain valid for an hour or more. Warn only once the issuance is genuinely old.
+export const ATIS_STALE_THRESHOLD_MIN = 75;
 
 export interface DatisEntry {
   airport: string;

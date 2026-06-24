@@ -641,7 +641,7 @@ export const AIRPORT_REFERENCES: AirportReference[] = [
   { icao: "KOXB", faa: "OXB", iata: "OCE", name: "Ocean City Municipal Airport", city: "Ocean City", state: "MD", latitude: 38.310398, longitude: -75.124001 },
   { icao: "KOXR", faa: "OXR", iata: "OXR", name: "Oxnard Airport", city: "Oxnard", state: "CA", latitude: 34.200802, longitude: -119.207001 },
   { icao: "KOZR", faa: "OZR", iata: "OZR", name: "Cairns AAF (Fort Rucker) Air Field", city: "Fort Rucker/Ozark", state: "AL", latitude: 31.2757, longitude: -85.713402 },
-  { icao: "KPAE", faa: "PAE", iata: "PAE", name: "Seattle Paine Field International Airport", city: "Everett", state: "WA", latitude: 47.9063, longitude: -122.281998 },
+  { icao: "KPAE", faa: "PAE", iata: "PAE", name: "Seattle Paine Field International Airport", city: "Everett", state: "WA", latitude: 47.9063, longitude: -122.281998, runways: ["16L", "16R", "34L", "34R"] },
   { icao: "KPAH", faa: "PAH", iata: "PAH", name: "Barkley Regional Airport", city: "Paducah", state: "KY", latitude: 37.060799, longitude: -88.773804 },
   { icao: "KPAM", faa: "PAM", iata: "PAM", name: "Tyndall Air Force Base", city: "Panama City", state: "FL", latitude: 30.069599, longitude: -85.575401 },
   { icao: "KPAO", faa: "PAO", iata: "PAO", name: "Palo Alto Airport", city: "Palo Alto", state: "CA", latitude: 37.461102, longitude: -122.114998 },
