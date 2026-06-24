@@ -161,6 +161,11 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, notams
   }, [activeCritical]);
 
   const badgeTone = badgeCategory ? (CRITICAL_BADGE_TONE[badgeCategory] ?? null) : null;
+  const atisBadgeTone = atis?.stale
+    ? "border-amber-400/40 bg-amber-500/10 ring-2 ring-amber-400/70"
+    : "border-cyan-500/20 bg-cyan-500/10";
+  const atisLabelTone = atis?.stale ? "text-amber-300" : "text-cyan-300";
+  const atisLetterTone = atis?.stale ? "text-amber-200" : "text-cyan-100";
 
   const badgeLabel = useMemo(() => {
     if (!activeCritical || activeCritical.length === 0 || !badgeCategory) return null;
@@ -179,9 +184,9 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, notams
           <p className="mt-1 break-words text-sm text-aviation-muted">{getAirportName(icao)}</p>
         </div>
         {atis ? (
-          <div className={`rounded-full border px-3 py-1 text-center ${atis.stale ? "border-amber-400/40 bg-amber-500/10 ring-2 ring-amber-400/70" : "border-amber-500/20 bg-amber-500/10"}`}>
-            <p className="data-label text-xs text-amber-300">ATIS</p>
-            <p className="font-data text-sm font-semibold text-amber-200">{atis.letter}</p>
+          <div className={`rounded-full border px-3 py-1 text-center ${atisBadgeTone}`}>
+            <p className={`data-label text-xs ${atisLabelTone}`}>ATIS</p>
+            <p className={`font-data text-sm font-semibold ${atisLetterTone}`}>{atis.letter}</p>
             {toHHMMZ(atis.issuedAt) && (
               <p className={`text-[10px] tabular-nums ${atis.stale ? "text-amber-300" : "text-aviation-muted"}`}>
                 Issued {toHHMMZ(atis.issuedAt)}

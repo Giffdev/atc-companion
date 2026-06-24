@@ -106,6 +106,9 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
           const staleRing = atis.stale
             ? "ring-2 ring-amber-400/70"
             : "";
+          const letterStyle = atis.stale
+            ? "bg-amber-500/20 text-amber-300"
+            : "bg-cyan-500/15 text-cyan-100";
           const activeStyle = expandedAirport === icao
             ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-100"
             : "border-aviation-border bg-black/20 text-aviation-text hover:border-cyan-500/30 hover:bg-cyan-500/10";
@@ -120,7 +123,7 @@ export function AtisStrip({ airports, refreshIntervalMs = 90_000 }: AtisStripPro
               aria-pressed={expandedAirport === icao}
             >
               <span className="text-aviation-muted">{icao.replace(/^K/, "")}</span>
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-sm font-bold text-amber-300">
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold ${letterStyle}`}>
                 {atis.letter}
               </span>
               {atis.type !== "combined" && (

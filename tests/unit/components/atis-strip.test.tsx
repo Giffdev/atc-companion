@@ -56,6 +56,7 @@ const flushUpdates = async () => {
 describe("AtisStrip", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("unwraps a successful ApiResponse envelope and renders ATIS letters", async () => {
@@ -91,10 +92,49 @@ describe("AtisStrip", () => {
     await flushUpdates();
 
     expect(screen.getByText("SEA")).toBeInTheDocument();
-    expect(screen.getByText("J")).toBeInTheDocument();
+    expect(screen.getByText("J")).toHaveClass("bg-cyan-500/15", "text-cyan-100");
+    expect(screen.getByText("J")).not.toHaveClass("bg-amber-500/20", "text-amber-300");
     expect(screen.getByText("BFI")).toBeInTheDocument();
     expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.getByText(/Checked 16:00Z/i)).toBeInTheDocument();
+  });
+
+  it("keeps stale ATIS cautionary amber while fresh ATIS is calm cyan", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        jsonResponse(
+          successEnvelope({
+            KSEA: {
+              letter: "J",
+              type: "combined",
+              fullText: "KSEA ATIS INFO J 1853Z. WIND 170 AT 6.",
+              fetchedAt: "2026-06-23T16:00:00.000Z",
+              issuedAt: "2026-06-23T18:53:00.000Z",
+              ageMinutes: 12,
+              stale: false
+            },
+            KBFI: {
+              letter: "A",
+              type: "departure",
+              fullText: "KBFI DEP ATIS INFO A 1730Z.",
+              fetchedAt: "2026-06-23T16:00:00.000Z",
+              issuedAt: "2026-06-23T17:30:00.000Z",
+              ageMinutes: 90,
+              stale: true
+            }
+          })
+        )
+      )
+    );
+
+    render(<AtisStrip airports={["KSEA", "KBFI"]} refreshIntervalMs={600_000} />);
+    await flushUpdates();
+
+    expect(screen.getByText("J")).toHaveClass("bg-cyan-500/15", "text-cyan-100");
+    expect(screen.getByText("J")).not.toHaveClass("bg-amber-500/20", "text-amber-300");
+    expect(screen.getByText("A")).toHaveClass("bg-amber-500/20", "text-amber-300");
+    expect(screen.getByLabelText("Stale ATIS")).toHaveTextContent("STALE");
   });
 
   it("renders the error state for an ok:false ApiResponse envelope", async () => {
