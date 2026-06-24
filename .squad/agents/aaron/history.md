@@ -38,3 +38,10 @@
 - Corrected the FAA NOTAM/NMS keyed path to use `client_id` / `client_secret`, `icaoLocation`, and `responseFormat=geoJson`; added robust nested GeoJSON parsing.
 - Replaced broken fallback behavior with an honest `NOTAM_FEED_NOT_CONFIGURED` state and FAA NOTAM Search link.
 - Key finding for future work: no viable keyless live NOTAM source exists; inline NOTAMs require FAA credentials (`FAA_NOTAM_CLIENT_ID` / `FAA_NOTAM_CLIENT_SECRET`, aliases `FAA_NMS_CLIENT_ID` / `FAA_NMS_CLIENT_SECRET`).
+
+
+## 2026-06-23: PAE runway completeness and static fallback pairing
+- Root-cause pattern: when NFDC runway details are unavailable, fallback inference from approach plates only sees procedure runways and can omit non-procedure physical runways.
+- KPAE now carries complete static runway-end reference data: `16L`, `16R`, `34L`, `34R`.
+- `pairRunwayDesignators()` generically pairs reciprocal runway ends into physical runway designators for the static fallback path; future fallback work should preserve physical runway pairing instead of counting procedure runways.
+- Validated with multi-runway NFDC parse and NFDC-unavailable fallback tests; shipped in `f980f81`.

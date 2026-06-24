@@ -35,3 +35,10 @@
 - `/api/atis` now returns `ApiResponse<AtisBatchData>` and `/api/adjacent` returns `ApiResponse<AdjacentFacilityResult>` including error envelopes.
 - `/api/plate-proxy` success remains raw binary bytes with an explicit exemption comment; JSON errors were intentionally left unchanged.
 - Shipped live in commit `b967317`; build/lint/test validation passed except one pre-existing zero-test NFDC parser suite.
+
+
+## 2026-06-23: D-ATIS event-driven stale threshold corrected
+- D-ATIS freshness is event-driven, not a fixed rapid-refresh feed; current information letters can persist for 60+ minutes in stable conditions.
+- `ATIS_STALE_THRESHOLD_MIN` is now 75 minutes. Avoid reverting to aggressive 30-minute staleness unless backed by a source-specific freshness guarantee.
+- The bug was policy, not timezone/units: UTC issuance parsing and Zulu day rollover behavior were already covered and remain validated.
+- Service and route coverage now prove 60-minute ATIS is fresh, 76-minute ATIS is stale, and midnight UTC rollover remains correct; shipped in `f980f81`.

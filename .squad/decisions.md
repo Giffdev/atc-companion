@@ -269,3 +269,20 @@ After: the panel derives notamPanelResult from the active NOTAM query or the fac
 API route touched: no.
 
 Validation: npm run lint passed; npm run build passed; npx vitest run passed (30 files, 205 tests). Focused component tests added for unavailable vs successful-empty NOTAM states.
+
+
+### 2026-06-23T21:48:33-07:00: PAE runway completeness and static fallback pairing
+**By:** Aaron (Data)
+**Requested by:** Devin Sinha
+**What:** Treat fallback runway lists as physical reciprocal runway pairs, and keep KPAE static runway reference data complete with `16L`, `16R`, `34L`, and `34R`.
+**Why:** When NFDC runway details are unavailable, static fallback and approach-plate inference can miss non-procedure runways. PAE exposed the systemic issue because approach plates only surfaced procedure runways, not both physical runways.
+**Validation:** Added multi-runway NFDC parse and NFDC-unavailable fallback tests; combined build/lint/Vitest passed (30 files, 210 tests).
+**Outcome:** Shipped in commit `f980f81`; live deployment verified.
+
+### 2026-06-23T21:48:33-07:00: D-ATIS stale threshold widened to 75 minutes
+**By:** Mattingly (Backend)
+**Requested by:** Devin Sinha
+**What:** Set `ATIS_STALE_THRESHOLD_MIN` to 75 minutes for D-ATIS responses from `datis-clowd`, superseding the earlier 30-minute threshold.
+**Why:** D-ATIS is event-driven; in stable conditions a current information letter can persist for 60+ minutes. The previous 30-minute threshold falsely marked current ATIS as stale even though Zulu parsing and day rollover handling were correct.
+**Validation:** Added service and route tests for 60-minute fresh, 76-minute stale, and midnight UTC rollover behavior; combined build/lint/Vitest passed (30 files, 210 tests).
+**Outcome:** Shipped in commit `f980f81`; live KSEA ATIS age 68 minutes verified as `stale=false`.
