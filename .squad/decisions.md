@@ -158,3 +158,28 @@ Validation: npm run lint passed; npm run build passed; npx vitest run passed (30
 **Requested by:** Devin Sinha
 **What:** Fresh/non-stale ATIS badges now use the console's calm informational cyan palette instead of amber/yellow. Fresh ATIS letter chips and FacilityOverview capsules use cyan tones; stale ATIS remains amber/yellow and keeps the explicit `STALE` label/ring.
 **Why:** Amber/yellow reads as caution in the dark tower UI and should be reserved for stale or unavailable ATIS states. Cyan communicates nominal/current information while preserving strong contrast and non-color stale affordances.
+
+
+### 2026-06-24T16:26:24-07:00: US airport coverage via live NFDC fallback
+**By:** Aaron (Data)
+
+**Requested by:** Devin Sinha
+
+**Decision:** Use live FAA NFDC Airport Display lookup plus contextual FAA local identifier recognition for durable small-airport coverage. Do **not** bulk-import a full NASR airport dataset into `src/data/airports.ts`.
+
+**Rationale:** The static `AIRPORT_REFERENCES` list remains useful for common airports and aliases, but it is not a full US airport inventory. FAA local identifiers such as `S18`, `38W`, `0S9`, `W10`, and `1A1` should flow through the same live NFDC-backed services already used for runway/hours/frequency data. Recognition accepts 3-4 character alphanumeric FAA LIDs only when airport context is present, while direct bare LID extraction remains limited to curated known references to avoid swallowing ordinary words, aircraft types, N-numbers, and unrelated numbers.
+
+**Implementation notes:** `fetchAirportFromNfdc` now uses the existing cache layer (`airportReference` TTL), parses NFDC title/name, From-city state, latitude/longitude, and runway designators, and caches successful references in the in-memory airport index. Static airports without curated `runways` no longer short-circuit live NFDC enrichment. `getAirportRunways` returns `RUNWAY_DATA_UNAVAILABLE` when neither live NFDC parsing nor authoritative fallback runway designators are available. Facility overview posts `/api/query` with the correct `input` field and uses live-resolved `airportName`/runway details from airport-info responses.
+
+**Validation:** Added mocked NFDC tests for S18-style LID resolution, small-airport runway population, contextual FAA LID recognition, and FacilityOverview live-name display. Full validation passed: `npm run lint`, `npm run build`, and `npx vitest run` (31 files / 217 tests). Shipped in `d942978` and deployed live.
+
+### 2026-06-24T23:51:00Z: INFO airport-code overmatch fix
+**By:** Aaron (Data)
+
+**What:** Fixed a regression where the contextual airport-code gate accepted any four-letter all-alpha token, causing the app phrase `airport info for S18` to extract `INFO` before the real FAA local identifier.
+
+**Decision:** Mirror the direct ICAO gate by only accepting four-letter contextual codes when they are in the airport reference list or start with `K`; FAA local identifiers still flow through `isFaaLocalIdentifier`.
+
+**Why:** The full-US coverage change correctly allowed contextual FAA local identifiers, but its relaxed four-letter branch could swallow common English words. Requiring the K-prefix on the contextual four-letter ICAO branch preserves US ICAO recognition while avoiding `INFO`-style false positives; the FAA-LID shape still requires a digit, so common words are rejected.
+
+**Validation:** Added extractor regressions for `airport info for S18`, `airport info for 38W`, and `airport info for KSEA`, plus an intent-parser regression that selects `S18` rather than `INFO`. Live checks verified S18→FORKS rw 04/22, 38W→Lynden rw 08/26, and KSEA unaffected. Shipped in `d418853` and deployed live.

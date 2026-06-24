@@ -45,3 +45,8 @@
 - KPAE now carries complete static runway-end reference data: `16L`, `16R`, `34L`, `34R`.
 - `pairRunwayDesignators()` generically pairs reciprocal runway ends into physical runway designators for the static fallback path; future fallback work should preserve physical runway pairing instead of counting procedure runways.
 - Validated with multi-runway NFDC parse and NFDC-unavailable fallback tests; shipped in `f980f81`.
+
+## 2026-06-24: Full-US airport coverage and INFO overmatch fix
+- Any US airport can now resolve through live FAA NFDC Airport Display lookup instead of requiring full static NASR coverage; successful live references are cached and can provide airport names, locations, and runway designators.
+- Runway consumers should surface `RUNWAY_DATA_UNAVAILABLE` when neither NFDC nor authoritative fallback runway data is available, rather than treating an empty list as complete.
+- Gotcha: contextual airport-code recognition must require a `K` prefix for four-letter ICAOs unless the token is already in the airport reference list. The FAA-LID branch is safe for context because its shape requires at least one digit, rejecting common words such as `INFO`.
