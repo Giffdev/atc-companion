@@ -45,3 +45,7 @@
 - Operations Console NOTAM UI now uses a three-state pattern: feed unavailable, loaded-empty, and populated list.
 - Feed-unavailable states must use explicit text plus amber warning treatment; never rely on color alone.
 - Never conflate "NOTAM feed failed/unavailable" with "zero active NOTAMs"; only show a no-NOTAMs empty state after a successful live response with zero records.
+
+## 2026-06-24T09:12:58-07:00 — Fresh ATIS calm-cyan state
+- Fresh/non-stale ATIS should use calm cyan, not amber/yellow, so current data does not read as a warning.
+- Stale/unavailable ATIS remains amber and must keep explicit non-color cues such as `STALE`, warning ring, or alert copy.
