@@ -100,6 +100,14 @@ describe("parseIntent", () => {
     });
   });
 
+  it("selects the FAA local identifier instead of internal airport info wording", async () => {
+    await expect(parseIntent("airport info for S18")).resolves.toMatchObject({
+      type: "airport_info",
+      airport: "S18",
+      requiresClarification: false
+    });
+  });
+
   it("parses traffic queries with facility names as traffic, not frequency or airport_info", async () => {
     const [trafficApproach, trafficCenter, approachPlates, approachFreq] = await Promise.all([
       parseIntent("traffic around portland approach"),

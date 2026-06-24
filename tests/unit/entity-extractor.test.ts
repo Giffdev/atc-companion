@@ -22,6 +22,14 @@ describe("entity extraction", () => {
     expect(extractAirportCodes("review item 123 and APP notes")).toEqual([]);
   });
 
+  it("does not extract the internal airport info wording as a four-letter airport code", () => {
+    expect(extractAirportCodes("airport info for S18")).toEqual(["S18"]);
+    expect(extractAirportCodes("airport info for 38W")).toEqual(expect.arrayContaining(["38W"]));
+    expect(extractAirportCodes("airport info for 38W")).not.toContain("INFO");
+    expect(extractAirportCodes("airport info for KSEA")).toEqual(expect.arrayContaining(["KSEA"]));
+    expect(extractAirportCodes("airport info for KSEA")).not.toContain("INFO");
+  });
+
   it("extracts numeric and spoken radio frequencies", () => {
     expect(extractFrequencies("contact tower on 118.7, that's one eighteen point seven")).toEqual(["118.7"]);
   });

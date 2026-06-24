@@ -229,7 +229,7 @@ const isContextualAirportCode = (code: string): boolean => {
     return false;
   }
 
-  return Boolean(findAirportReference(code)) || /^[A-Z]{4}$/.test(code) || isFaaLocalIdentifier(code);
+  return Boolean(findAirportReference(code)) || (/^[A-Z]{4}$/.test(code) && code.startsWith("K")) || isFaaLocalIdentifier(code);
 };
 
 export const extractAirportCodes = (input: string): string[] => {
