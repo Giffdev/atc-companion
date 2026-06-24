@@ -640,6 +640,12 @@ const renderQuerySummary = (
                   )}
                 </div>
               )}
+
+              {airportInfo.runwayDetails && !airportInfo.runwayDetails.ok && (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                  Runways could not be loaded from FAA NFDC. This is not confirmation that the airport has no runways; verify using the official FAA Chart Supplement link.
+                </div>
+              )}
             </div>
 
             {/* Overlying frequencies — inline table */}

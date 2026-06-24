@@ -1,7 +1,8 @@
+import { fetchAirportFromNfdc } from "@/data/airports";
 import { parseAirportHoursFromHtml } from "@/services/airport-hours";
 import { appCache } from "@/lib/cache";
 import { getAirportRunways, parseRunwaysFromHtml } from "@/services/runway-info";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 type AirportFixture = {
   airportId: string;
@@ -106,6 +107,36 @@ const paeLikeRunwayHtml = `
   </html>
 `;
 
+
+const smallAirportNfdcHtml = `
+  <html>
+    <head><title>FORKS</title></head>
+    <body>
+      <div>FAA Identifier 38W</div>
+      <div class="tab-pane active" id="summary">
+        <table>
+          <tr><td>Latitude/Longitude</td><td>47-56-15.786 N / 124-23-45.314 W</td></tr>
+          <tr><td>From city</td><td>1 miles SW of FORKS, WA</td></tr>
+        </table>
+      </div>
+      <a href="#runway_04_22">RWY&nbsp;04/22</a>
+      <div class="tab-pane" id="runway_04_22">
+        <div class="well well-sm"><span>RUNWAY 04/22</span></div>
+        <table>
+          <tr><td>Dimensions</td><td>2400 ft. x 75 ft.</td></tr>
+          <tr><td>Surface Type</td><td>ASPH</td></tr>
+          <tr><td>Runway Edge Lights</td><td>Medium Intensity</td></tr>
+        </table>
+      </div>
+    </body>
+  </html>
+`;
+
+afterEach(() => {
+  appCache.clear();
+  vi.restoreAllMocks();
+});
+
 const airportHoursHtml = `
   <html>
     <body>
@@ -163,6 +194,46 @@ describe("parseRunwaysFromHtml", () => {
         lighting: "HIRL"
       }
     ]);
+  });
+
+  it("parses a small-airport NFDC page with local identifier runway data", () => {
+    expect(parseRunwaysFromHtml(smallAirportNfdcHtml)).toEqual([
+      {
+        designator: "04/22",
+        lengthFeet: 2400,
+        widthFeet: 75,
+        surface: "ASPH",
+        lighting: "MIRL"
+      }
+    ]);
+  });
+
+  it("resolves unknown FAA local identifiers through NFDC and caches name, coordinates, and runways", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(smallAirportNfdcHtml));
+
+    const airport = await fetchAirportFromNfdc("S18");
+
+    expect(airport).toMatchObject({
+      icao: "S18",
+      faa: "S18",
+      name: "FORKS",
+      city: "FORKS",
+      state: "WA",
+      runways: ["04/22"]
+    });
+    expect(airport?.latitude).toBeCloseTo(47.9377, 3);
+    expect(airport?.longitude).toBeCloseTo(-124.3959, 3);
+  });
+
+  it("loads runways from NFDC for static small airports missing curated runway data", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(smallAirportNfdcHtml));
+
+    const result = await getAirportRunways("38W");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.airportName).toBe("Lynden Airport");
+    expect(result.data.runways.map((runway) => runway.designator)).toEqual(["04/22"]);
   });
 
   it("falls back to all static PAE runway ends as physical runway pairs when NFDC is unavailable", async () => {

@@ -15,6 +15,13 @@ describe("entity extraction", () => {
     expect(extractAirportCodes("weather at KJFK then taxi to LAX")).toEqual(expect.arrayContaining(["KJFK", "LAX"]));
   });
 
+  it("recognizes contextual FAA local identifiers without over-matching ordinary words or numbers", () => {
+    expect(extractAirportCodes("runway configuration at S18")).toContain("S18");
+    expect(extractAirportCodes("airport info for 38W")).toContain("38W");
+    expect(extractAirportCodes("show me airport 1A1 weather")).toContain("1A1");
+    expect(extractAirportCodes("review item 123 and APP notes")).toEqual([]);
+  });
+
   it("extracts numeric and spoken radio frequencies", () => {
     expect(extractFrequencies("contact tower on 118.7, that's one eighteen point seven")).toEqual(["118.7"]);
   });

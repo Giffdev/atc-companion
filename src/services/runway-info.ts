@@ -28,9 +28,9 @@ export interface AirportRunways {
  * Results are cached for 28 days (runway data rarely changes).
  */
 export const getAirportRunways = async (airportCodeInput: string): Promise<ApiResponse<AirportRunways>> => {
-  const faaCode = toFaaCode(airportCodeInput);
-  const icaoCode = airportCodeInput.toUpperCase();
   const airportRef = findAirportReference(airportCodeInput) ?? await fetchAirportFromNfdc(airportCodeInput);
+  const faaCode = airportRef?.faa ?? toFaaCode(airportCodeInput);
+  const icaoCode = airportRef?.icao ?? airportCodeInput.toUpperCase();
   const cacheKey = createCacheKey("airport-runways", { airport: icaoCode });
   const sourceUrl = `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}`;
 
@@ -82,8 +82,21 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
       // Fall through to inference
     }
 
-    // Fallback: derive from approach plates if we have them
+    // Fallback: derive from airport reference data when live runway details are unavailable.
     const inferredRunways = inferRunwaysFromAirportData(airportRef);
+    if (inferredRunways.length === 0) {
+      return createApiErrorResponse(
+        {
+          code: "RUNWAY_DATA_UNAVAILABLE",
+          message: `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration using the official FAA Chart Supplement link.`,
+          details: sourceUrl,
+          retryable: true,
+          status: 503
+        },
+        { source, fetchedAt }
+      );
+    }
+
     return createApiResponse(
       { airportIcao: icaoCode, airportName: airportRef.name, runways: inferredRunways, source: "Inferred from airport data" },
       source,

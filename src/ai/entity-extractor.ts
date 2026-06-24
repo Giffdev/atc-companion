@@ -75,8 +75,9 @@ const RUNWAY_SIDE_MAP: Record<string, string> = {
 };
 
 const AIRPORT_CONTEXT_WORDS = /\b(?:at|for|near|nearest|into|from|to|airport|field|station)\s+([A-Za-z0-9]{2,4})\b/g;
+const AIRPORT_CONTEXT_AFTER_WORDS = /\b([A-Za-z0-9]{2,4})\s+(?:airport|field|runways?|diagram|weather|metar|taf|notams?)\b/gi;
 const ICAO_PATTERN = /\b([A-Z][A-Z0-9]{2,3})\b/g;
-const FAA_LID_PATTERN = /\b(\d[A-Z0-9]{1,2}[A-Z])\b/gi;
+const FAA_LID_PATTERN = /\b([A-Z0-9]{3,4})\b/gi;
 const IATA_PATTERN = /\b([A-Z]{3})\b/g;
 const FREQUENCY_PATTERN = /\b(1(?:1[8-9]|2\d|3[0-6])(?:\.\d{1,3})?)\b/g;
 const ALTITUDE_FEET_PATTERN = /\b(\d{3,5})\s*(?:feet|foot|ft)\b/gi;
@@ -92,6 +93,7 @@ const AIRCRAFT_TYPE_PATTERN = /\b(?:A\d{3}|B\d{3,4}|C\d{3}|SR\d{2}|PA-\d{2,2}|E\
 const SQUAWK_PATTERN = /\b(?:squawk\s+)?(7500|7600|7700)\b/gi;
 const SPEED_PATTERN = /\b(\d{2,3})\s*(?:knots?|kias|kt|kts)\b/gi;
 const AIRPORT_CODE_STOPWORDS = new Set(["THE", "AND", "FOR", "WITH", "ILS", "VOR", "SID", "STAR", "TAF", "APP"]);
+const FAA_LID_SHAPE = /^(?=.{3,4}$)(?=.*[A-Z])(?=.*\d)[A-Z0-9]+$/;
 
 const REGULATORY_CUE_WORDS = /\b(?:far|cfr|part|section|regulation|rule)\b/i;
 
@@ -220,20 +222,30 @@ const collectMatches = (pattern: RegExp, input: string): string[] => {
   return matches;
 };
 
+const isFaaLocalIdentifier = (code: string): boolean => FAA_LID_SHAPE.test(code);
+
+const isContextualAirportCode = (code: string): boolean => {
+  if (AIRPORT_CODE_STOPWORDS.has(code)) {
+    return false;
+  }
+
+  return Boolean(findAirportReference(code)) || /^[A-Z]{4}$/.test(code) || isFaaLocalIdentifier(code);
+};
+
 export const extractAirportCodes = (input: string): string[] => {
   const normalized = normalizeAviationText(input);
   const uppercased = normalized.toUpperCase();
   const directCodes = collectMatches(ICAO_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{4}$/.test(code) && (code.startsWith("K") || Boolean(findAirportReference(code)))
   );
-  const contextualCodes = Array.from(normalized.matchAll(AIRPORT_CONTEXT_WORDS))
+  const contextualCodes = [
+    ...Array.from(normalized.matchAll(AIRPORT_CONTEXT_WORDS)),
+    ...Array.from(normalized.matchAll(AIRPORT_CONTEXT_AFTER_WORDS))
+  ]
     .map((match) => match[1]?.toUpperCase())
-    .filter(
-      (code): code is string =>
-        Boolean(code) && !AIRPORT_CODE_STOPWORDS.has(code) && Boolean(findAirportReference(code))
-    );
+    .filter((code): code is string => Boolean(code) && isContextualAirportCode(code));
   const faaLidCodes = collectMatches(FAA_LID_PATTERN, uppercased).filter(
-    (code) => Boolean(findAirportReference(code))
+    (code) => isFaaLocalIdentifier(code) && Boolean(findAirportReference(code))
   );
   const iataCodes = collectMatches(IATA_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{3}$/.test(code) && !AIRPORT_CODE_STOPWORDS.has(code) && Boolean(findAirportReference(code))

@@ -1,3 +1,6 @@
+import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
+import { extractTableCellPairs, findFirstPairValue } from "@/services/nfdc-html";
+
 export interface AirportReference {
   icao: string;
   faa: string;
@@ -1132,6 +1135,66 @@ const parseDms = (dms: string): number | null => {
   return /[SW]/i.test(m[4]) ? -deg : deg;
 };
 
+const FAA_LOCAL_IDENTIFIER_PATTERN = /^(?=.{3,4}$)(?=.*[A-Z])(?=.*\d)[A-Z0-9]+$/;
+
+const toNfdcCanonicalCode = (code: string): string => code.trim().toUpperCase().replace(/^K(?=[A-Z0-9]{3}$)/, "");
+
+const toDynamicAirportIcao = (normalizedInput: string, faaCode: string): string => {
+  if (/^K[A-Z]{3}$/.test(normalizedInput)) {
+    return normalizedInput;
+  }
+
+  if (/^[A-Z]{3}$/.test(faaCode)) {
+    return `K${faaCode}`;
+  }
+
+  return faaCode;
+};
+
+const parseNfdcAirportName = (html: string, faaCode: string): string => {
+  const titleMatch = html.match(/<title>\s*([\s\S]*?)\s*<\/title>/i);
+  const title = titleMatch?.[1]?.replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  if (title) {
+    return title;
+  }
+
+  const nameMatch = html.match(/font-weight:\s*bold[^>]*>\s*([^<]+)/i);
+  return nameMatch?.[1]?.replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim() ?? `Airport ${faaCode}`;
+};
+
+const parseNfdcCityState = (html: string): { city: string; state: string } => {
+  const pairs = extractTableCellPairs(html);
+  const fromCity = findFirstPairValue(pairs, (label) => label === "from city");
+  const cityStateMatch = fromCity?.match(/\bof\s+([^,]+),\s*([A-Z]{2})\b/i);
+
+  return {
+    city: cityStateMatch?.[1]?.trim() ?? "",
+    state: cityStateMatch?.[2]?.trim().toUpperCase() ?? ""
+  };
+};
+
+const parseNfdcRunwayDesignators = (html: string): string[] => {
+  const seen = new Set<string>();
+  const runways: string[] = [];
+  const add = (value: string | undefined) => {
+    const normalized = value?.toUpperCase().replace(/_/g, "/").replace(/&NBSP;/g, " ").replace(/\s+/g, "").trim();
+    if (normalized && /^\d{1,2}[LRCG]?\/\d{1,2}[LRCG]?$/.test(normalized) && !seen.has(normalized)) {
+      seen.add(normalized);
+      runways.push(normalized);
+    }
+  };
+
+  for (const match of html.matchAll(/\b(?:RUNWAY|RWY)(?:&nbsp;|\s)+(\d{1,2}[LRCG]?\s*\/\s*\d{1,2}[LRCG]?)/gi)) {
+    add(match[1]);
+  }
+
+  for (const match of html.matchAll(/href=["']#runway_([^"']+)["']/gi)) {
+    add(match[1]);
+  }
+
+  return runways;
+};
+
 /**
  * Dynamically fetch airport info from FAA NFDC when not in static database.
  * Caches into AIRPORT_INDEX for future lookups within the same server lifetime.
@@ -1139,46 +1202,48 @@ const parseDms = (dms: string): number | null => {
 export const fetchAirportFromNfdc = async (code: string): Promise<AirportReference | null> => {
   const normalized = code.trim().toUpperCase();
   const existing = findAirportReference(normalized);
-  if (existing) return existing;
+  if (existing?.runways && existing.runways.length > 0) return existing;
 
-  const faaCode = normalized.replace(/^K/, "");
+  const faaCode = toNfdcCanonicalCode(normalized);
+  const cacheKey = createCacheKey("airportReference", { airport: faaCode });
   try {
-    const res = await fetch(`${NFDC_AIRPORT_URL}?airportId=${encodeURIComponent(faaCode)}`, {
-      signal: AbortSignal.timeout(8000)
+    const { value: airport } = await getOrPopulateCache(cacheKey, getCacheTtlMs("airportReference"), async () => {
+      const res = await fetch(`${NFDC_AIRPORT_URL}?airportId=${encodeURIComponent(faaCode)}`, {
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) return null;
+      const html = await res.text();
+
+      const name = parseNfdcAirportName(html, faaCode);
+      const { city, state } = parseNfdcCityState(html);
+
+      const coordMatch = html.match(/Latitude\/Longitude<\/td>\s*<td[^>]*>\s*([\s\S]*?)<\/td>/i);
+      if (!coordMatch) return null;
+      const coordText = coordMatch[1].replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+      const parts = coordText.split("/").map((s) => s.trim());
+      if (parts.length < 2) return null;
+      const latitude = parseDms(parts[0]);
+      const longitude = parseDms(parts[1]);
+      if (latitude === null || longitude === null) return null;
+
+      const icao = toDynamicAirportIcao(normalized, faaCode);
+      const runways = parseNfdcRunwayDesignators(html);
+      return { icao, faa: faaCode, name, city, state, latitude, longitude, ...(runways.length > 0 ? { runways } : {}) };
     });
-    if (!res.ok) return null;
-    const html = await res.text();
 
-    // Parse airport name from header
-    const nameMatch = html.match(/font-weight:\s*bold[^>]*>\s*([^<]+)/i);
-    const name = nameMatch?.[1]?.replace(/&nbsp;/g, " ").trim() ?? `Airport ${faaCode}`;
+    if (!airport) return existing && FAA_LOCAL_IDENTIFIER_PATTERN.test(existing.faa) ? existing : null;
 
-    // Parse city/state from header line (after name)
-    const cityMatch = html.match(new RegExp(escapeRegExp(name) + "\\s*<\\/span>\\s*<br[^>]*>\\s*([^,<]+)\\s*,\\s*([A-Z]{2})", "i"));
-    const city = cityMatch?.[1]?.trim() ?? "";
-    const state = cityMatch?.[2]?.trim() ?? "";
-
-    // Parse lat/lon
-    const coordMatch = html.match(/Latitude\/Longitude<\/td>\s*<td[^>]*>\s*([\s\S]*?)<\/td>/i);
-    if (!coordMatch) return null;
-    const coordText = coordMatch[1].replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
-    const parts = coordText.split("/").map(s => s.trim());
-    if (parts.length < 2) return null;
-    const latitude = parseDms(parts[0]);
-    const longitude = parseDms(parts[1]);
-    if (latitude === null || longitude === null) return null;
-
-    const icao = /^\d/.test(faaCode) ? faaCode : `K${faaCode}`;
-    const airport: AirportReference = { icao, faa: faaCode, name, city, state, latitude, longitude };
-
+    const merged: AirportReference = existing ? { ...airport, ...existing, runways: airport.runways ?? existing.runways } : airport;
     // Cache for future lookups
-    AIRPORT_INDEX.set(icao, airport);
-    AIRPORT_INDEX.set(faaCode, airport);
-    if (name) AIRPORT_INDEX.set(normalizeAirportLookupKey(name), airport);
+    const icao = merged.icao;
+    AIRPORT_INDEX.set(icao, merged);
+    AIRPORT_INDEX.set(faaCode, merged);
+    if (merged.name) AIRPORT_INDEX.set(normalizeAirportLookupKey(merged.name), merged);
+    if (merged.city) AIRPORT_INDEX.set(normalizeAirportLookupKey(merged.city), merged);
 
-    return airport;
+    return merged;
   } catch {
-    return null;
+    return existing && FAA_LOCAL_IDENTIFIER_PATTERN.test(existing.faa) ? existing : null;
   }
 };
 

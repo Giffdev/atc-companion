@@ -31,9 +31,13 @@ interface RunwayQueryResult {
   response: {
     ok: boolean;
     data?: {
+      airportName?: string;
+      airportCity?: string;
+      airportState?: string;
       runwayDetails?: {
         ok: boolean;
         data?: { runways: RunwayInfo[] };
+        error?: { message: string };
       };
     };
   };
@@ -67,7 +71,7 @@ const formatVisibility = (weather: WeatherBundle | null): string => {
   return visibility.rawValue ?? "Unknown";
 };
 
-const getAirportName = (icao: string): string => findAirportReference(icao)?.name ?? "Unknown Airport";
+const getAirportName = (icao: string, liveName?: string): string => liveName ?? findAirportReference(icao)?.name ?? "Unknown Airport";
 
 const WeatherSkeletonCard = ({ icao }: { icao: string }) => (
   <div className="rounded-2xl border border-aviation-border bg-black/15 p-4">
@@ -102,6 +106,8 @@ type AirportCardProps = {
   atis: AtisEntry | null;
   atisChecked: boolean;
   runways: RunwayInfo[];
+  runwayError?: string;
+  airportName?: string;
   notams: Notam[] | undefined;
   onSelectAirport: (icao: string) => void;
 };
@@ -141,7 +147,7 @@ const useNotamEvaluationTime = (): number => {
   return nowMs;
 };
 
-const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, notams, onSelectAirport }: AirportCardProps) => {
+const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, runwayError, airportName, notams, onSelectAirport }: AirportCardProps) => {
   const flightCategory = weather?.metar?.flightCategory ?? "UNKNOWN";
   const notamEvaluationTimeMs = useNotamEvaluationTime();
 
@@ -181,7 +187,7 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, notams
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="break-words font-data text-xl font-semibold tracking-[0.16em] text-aviation-text sm:text-2xl">{icao}</h3>
-          <p className="mt-1 break-words text-sm text-aviation-muted">{getAirportName(icao)}</p>
+          <p className="mt-1 break-words text-sm text-aviation-muted">{getAirportName(icao, airportName)}</p>
         </div>
         {atis ? (
           <div className={`rounded-full border px-3 py-1 text-center ${atisBadgeTone}`}>
@@ -253,6 +259,12 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, notams
         </div>
       )}
 
+      {runwayError && runways.length === 0 && (
+        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+          Runways could not be loaded. Verify using the official FAA Chart Supplement link.
+        </div>
+      )}
+
       <button
         className="mt-auto min-h-[44px] rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-left text-sm font-medium text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/15"
         onClick={() => onSelectAirport(icao)}
@@ -276,6 +288,8 @@ export default function FacilityOverview({
   const [weatherByAirport, setWeatherByAirport] = useState<Record<string, WeatherBundle | null>>({});
   const [atisByAirport, setAtisByAirport] = useState<Record<string, AtisEntry | null>>({});
   const [runwaysByAirport, setRunwaysByAirport] = useState<Record<string, RunwayInfo[]>>({});
+  const [runwayErrorsByAirport, setRunwayErrorsByAirport] = useState<Record<string, string | undefined>>({});
+  const [airportNamesByAirport, setAirportNamesByAirport] = useState<Record<string, string | undefined>>({});
   const [loadedKey, setLoadedKey] = useState("");
 
   useEffect(() => {
@@ -317,14 +331,22 @@ export default function FacilityOverview({
               const response = await fetch(`/api/query`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query: `airport info for ${icao}` })
+                body: JSON.stringify({ input: `airport info for ${icao}` })
               });
-              if (!response.ok) return [] as RunwayInfo[];
+              if (!response.ok) return { runways: [] as RunwayInfo[], runwayError: "Airport information request failed" };
               const payload = (await response.json()) as RunwayQueryResult;
-              if (payload.response?.ok && payload.response.data?.runwayDetails?.ok) {
-                return payload.response.data.runwayDetails.data?.runways ?? [];
+              const data = payload.response?.data;
+              if (payload.response?.ok && data?.runwayDetails?.ok) {
+                return {
+                  airportName: data?.airportName,
+                  runways: data.runwayDetails.data?.runways ?? []
+                };
               }
-              return [] as RunwayInfo[];
+              return {
+                airportName: data?.airportName,
+                runways: [] as RunwayInfo[],
+                runwayError: data?.runwayDetails?.error?.message
+              };
             })
           )
         ]);
@@ -335,14 +357,21 @@ export default function FacilityOverview({
         });
 
         const nextRunwaysByAirport: Record<string, RunwayInfo[]> = {};
+        const nextRunwayErrorsByAirport: Record<string, string | undefined> = {};
+        const nextAirportNamesByAirport: Record<string, string | undefined> = {};
         runwayResults.forEach((result, index) => {
-          nextRunwaysByAirport[normalizedAirports[index]] = result.status === "fulfilled" ? (result.value ?? []) : [];
+          const airport = normalizedAirports[index];
+          nextRunwaysByAirport[airport] = result.status === "fulfilled" ? (result.value?.runways ?? []) : [];
+          nextRunwayErrorsByAirport[airport] = result.status === "fulfilled" ? result.value?.runwayError : "Runway request failed";
+          nextAirportNamesByAirport[airport] = result.status === "fulfilled" ? result.value?.airportName : undefined;
         });
 
         if (!cancelled) {
           setWeatherByAirport(nextWeatherByAirport);
           setAtisByAirport(nextAtisByAirport);
           setRunwaysByAirport(nextRunwaysByAirport);
+          setRunwayErrorsByAirport(nextRunwayErrorsByAirport);
+          setAirportNamesByAirport(nextAirportNamesByAirport);
           setLoadedKey(requestKey);
         }
       })();
@@ -381,8 +410,10 @@ export default function FacilityOverview({
                   atis={atisByAirport[icao] ?? null}
                   atisChecked={icao in atisByAirport}
                   icao={icao}
+                  airportName={airportNamesByAirport[icao]}
                   notams={notams?.filter((n) => n.affectedFacility === icao)}
                   onSelectAirport={onSelectAirport}
+                  runwayError={runwayErrorsByAirport[icao]}
                   runways={runwaysByAirport[icao] ?? []}
                   weather={weatherByAirport[icao] ?? null}
                 />
