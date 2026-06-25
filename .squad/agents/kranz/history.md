@@ -15,3 +15,7 @@
 
 ## 2026-06-24T21:44:52-07:00 — Frequency gap policy resolved
 Frequency-gap policy moved from options analysis into shipped Option C: no absence assertion when sources lack records, plus a guarded unverified 122.9 convention hint for eligible small/non-towered cases. Live commit: `6487c7b`.
+
+## 2026-06-25T09:40:42-07:00 — Phase B Canada shipped
+
+Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in commit `2618ee5` for Devin Sinha. Contributions recorded: Kranz scoped the Canada plan, Aaron generated/merged CA data server-side, Mattingly gated 122.9 and runway jurisdiction paths, Haise added Canadian extraction, Swigert removed hardcoded FAA-only copy, Lovell passed safety review, and Rai's yellow advisory was resolved. Unified validation: lint 0 warnings, clean build, 260 tests passed; production CYVR returns real runways with no Canadian 122.9 or FAA Chart Supplement leakage.

@@ -1395,3 +1395,85 @@ None.
 - `npm run build`: PASS, exit 0, Next.js 16.2.9 printed `✓ Compiled successfully in 3.4s`.
 - `npx vitest run`: PASS, exit 0, 32 test files passed, 245 tests passed, 0 failed.
 
+
+### 2026-06-24T23:43:21-07:00: Phase B Canada airport database scope
+**By:** Kranz (Lead / Architect)
+**Requested by:** Devin Sinha
+**Source inbox:** `kranz-phase-b-canada-scope.md`
+
+**What:** Phase B adds Canada (`iso_country === "CA"`) to the generated OurAirports fallback dataset as sibling `ca-airports.json`, `ca-runways.json`, and `ca-frequencies.json` files, merged server-side with the existing US generated data. The dataset reader must remain `server-only`; client-safe extraction stays rule-based.
+
+**Safety:** The unverified `122.9 MHz` inferred CTAF hint is US-only: `datasetAirport?.country === "US" && NON_TOWERED_DATASET_AIRPORT_TYPES.has(datasetAirport.type)`. No Canadian ATF/MF/CTAF default is inferred in Phase B; Canadian gaps must point to official Canadian aeronautical publications / NAV CANADA, not FAA-only sources.
+
+**Scope:** Canadian ICAO/local identifiers and city/province extraction are supported without broad client-side generated indexes. NAV CANADA CFS ingestion and Canadian inferred frequency defaults are deferred.
+
+### 2026-06-24T23:59:00-07:00: Phase B Canada dataset foundation
+**By:** Aaron (Data)
+**Requested by:** Devin Sinha
+**Source inbox:** `aaron-phase-b-canada-data.md`
+
+**What:** The airport generator now emits per-country file sets for US and CA while preserving OurAirports transforms, excluded airport types, runway/frequency shapes, and `country` from `raw.iso_country`. The server-only dataset reader merges prefixes `["us", "ca"]` into the existing lookup indexes.
+
+**Evidence:** `npm run generate:airports` produced 16,865 US airports / 17,220 runways / 12,987 frequencies and 1,933 CA airports / 1,439 runways / 1,431 frequencies. `CYVR` resolves as Vancouver International Airport with `country: "CA"` and frequency rows; `CSQ4` was used as a Canadian local-code spot check.
+
+**Validation:** `npm run generate:airports`, lint with zero warnings, build, and Vitest passed (81 suites / 247 tests at this slice).
+
+### 2026-06-24T23:55:00-07:00: Phase B frequency CTAF gating
+**By:** Mattingly (Backend)
+**Requested by:** Devin Sinha
+**Source inbox:** `mattingly-phase-b-freq-gating.md`
+
+**What:** Frequency gaps emit the unverified `122.9 MHz` CTAF convention only for known US non-towered dataset airports. Canadian and other known non-US dataset airports never receive `inferredCtaf`; Canadian frequency gaps direct users to official Canadian aeronautical publications / NAV CANADA.
+
+**Evidence:** `CAA4` verifies the Canadian no-frequency gap path with no inferred CTAF; `CYVR` verifies confirmed Canadian OurAirports frequency rows still return normally.
+
+### 2026-06-24T23:55:00-07:00: Phase B Canada entity extraction
+**By:** Haise (AI/NLP Engineer)
+**Requested by:** Devin Sinha
+**Source inbox:** `haise-phase-b-canada-extraction.md`
+
+**What:** Entity extraction now normalizes Canadian provinces/territories (AB, BC, MB, NB, NL, NS, NT, NU, ON, PE, QC, SK, YT and full names), parses city/province phrases like `Vancouver, BC`, and accepts contextual Canadian `C[A-Z0-9]{3}` airport identifiers without importing server-only generated data.
+
+**Safety:** Extraction remains client-safe and rule-based. Stopwords including `INFO` and `NO` guard against prior overmatch classes.
+
+**Validation:** Tests cover `CYVR weather`, `frequencies at CYXX`, `show me the airport at Vancouver, BC`, contextual `CAT4`, US city/state regression, and no `NO`/`INFO` airport overmatch.
+
+### 2026-06-24T23:55:01-07:00: Phase B Canada UI copy guardrails
+**By:** Swigert (Frontend)
+**Requested by:** Devin Sinha
+**Source inbox:** `swigert-phase-b-ui-copy.md`
+
+**What:** The UI keeps the `inferredCtaf` display block but relies on Mattingly's server gate so it never appears for Canadian airports. Airport-info runway and frequency gaps now prefer server-provided messages, allowing Canadian NAV CANADA / official-publications copy while retaining FAA-specific wording for US responses.
+
+**Coverage:** OperationsConsole verifies a Canadian frequency gap message containing NAV CANADA renders without a 122.9 hint. FacilityOverview runway gaps use server-provided copy; DiagramPanel's Chart Supplement controls were reviewed and left unchanged because they are reference links, not fallback authority text.
+
+### 2026-06-25T00:03:54-07:00: Rai Phase B Canada RAI review resolved
+**By:** Rai (RAI Reviewer)
+**Requested by:** Devin Sinha
+**Source inbox:** `rai-phase-b-review.md`
+
+**What:** Rai initially rated Phase B yellow because frequency jurisdiction safeguards were sound but runway data-gap copy still risked pointing Canadian airports to the FAA Chart Supplement. The advisory required jurisdiction-aware runway gap copy: Canadian gaps use Canadian aeronautical publications / NAV CANADA, other non-US gaps use neutral jurisdiction wording, and FAA Chart Supplement remains US-only.
+
+**Outcome:** Mattingly's runway jurisdiction gate resolved the yellow finding; no critical blocker remained.
+
+### 2026-06-25T00:09:27-07:00: Phase B runway jurisdiction gating
+**By:** Mattingly (Backend)
+**Requested by:** Devin Sinha
+**Source inbox:** `mattingly-phase-b-runway-jurisdiction.md`
+
+**What:** Runway lookup resolves the generated dataset airport before FAA NFDC. Known non-US dataset airports skip FAA NFDC and use generated dataset runways directly when present; US or unknown-country airports can still use FAA NFDC.
+
+**Jurisdiction copy:** US runway gaps keep FAA Chart Supplement wording; Canadian gaps direct users to official Canadian aeronautical publications / NAV CANADA; other known non-US gaps use neutral official-publications-for-that-jurisdiction wording; unknown airport-not-found copy no longer treats FAA as the sole database.
+
+**Evidence:** `CYVR` returns Canadian OurAirports runways without querying FAA NFDC; `CAA4` returns Canadian/NAV CANADA gap wording with no FAA/NFDC/Chart Supplement copy; `00AA` preserves the US FAA Chart Supplement gap path.
+
+### 2026-06-25T00:08:00-07:00: Phase B Canada safety review PASS
+**By:** Lovell (Test/Safety)
+**Requested by:** Devin Sinha
+**Source inbox:** `lovell-phase-b-safety-review.md`
+
+**Verdict:** PASS — 5/5 safety areas passed with no RED blocker.
+
+**Findings:** 122.9 CTAF is gated to US non-towered dataset airports; Canadian data is direct OurAirports CSV transform with no fabricated Canadian overrides; `src/data/airport-dataset.ts` remains server-only and generated CA data was not found in the static client bundle; UI data-gap states render Canadian-safe server messages; US regressions remain covered.
+
+**Validation:** `npm run generate:airports`, lint with zero warnings, build, targeted safety/entity tests, and full Vitest passed. Final full-suite evidence in the shipment manifest was 260 tests passing after Rai's yellow finding was resolved.
