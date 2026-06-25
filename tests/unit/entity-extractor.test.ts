@@ -30,6 +30,13 @@ describe("entity extraction", () => {
     expect(extractAirportCodes("airport info for KSEA")).not.toContain("INFO");
   });
 
+  it("resolves city and state place names conservatively", () => {
+    expect(extractAirportCodes("show me the runway configuration at forks, wa")).toEqual(["S18"]);
+    expect(extractAirportCodes("show me the runway configuration at forks, washington")).toEqual(["S18"]);
+    expect(extractAirportCodes("show me the runway configuration at forks, washington")).not.toContain("KKLS");
+    expect(extractAirportCodes("show me the runway configuration at yakima, washington")[0]).toBe("KYKM");
+  });
+
   it("extracts numeric and spoken radio frequencies", () => {
     expect(extractFrequencies("contact tower on 118.7, that's one eighteen point seven")).toEqual(["118.7"]);
   });

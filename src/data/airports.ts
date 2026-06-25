@@ -16,6 +16,7 @@ export interface AirportReference {
 
 export const AIRPORT_REFERENCES: AirportReference[] = [
   { icao: "38W", faa: "38W", name: "Lynden Airport", city: "Lynden", state: "WA", latitude: 48.9554, longitude: -122.4538 },
+  { icao: "S18", faa: "S18", name: "FORKS", city: "FORKS", state: "WA", latitude: 47.9377, longitude: -124.3959, runways: ["04/22"] },
   { icao: "K67L", faa: "67L", iata: "MFH", name: "Mesquite Airport", city: "Mesquite", state: "NV", latitude: 36.833105, longitude: -114.055928 },
   { icao: "K76F", faa: "76F", name: "Van Zandt County Regional Airport", city: "Wills Point", state: "TX", latitude: 32.681499, longitude: -95.9841 },
   { icao: "K79J", faa: "79J", name: "South Alabama Regional At Bill Benton Field Airport", city: "Andalusia/Opp", state: "AL", latitude: 31.3088, longitude: -86.393799 },
@@ -1285,50 +1286,86 @@ const STATE_NAME_TO_ABBREV: Record<string, string> = {
   "WISCONSIN": "WI", "WYOMING": "WY",
 };
 
-/** Check if the input text contains a city reference matching the airport */
-const hasCityContextMatch = (normalizedInput: string, airport: AirportReference): boolean => {
-  const city = normalizeAirportLookupKey(airport.city);
-  if (!city) return false;
+const STATE_ABBREVIATIONS = new Set(Object.values(STATE_NAME_TO_ABBREV));
+const STATE_NAMES_BY_LENGTH = Object.entries(STATE_NAME_TO_ABBREV).sort((left, right) => right[0].length - left[0].length);
 
-  // Detect if the user specified a state context
-  let inputStateAbbrev: string | null = null;
-  const stateAbbrMatch = normalizedInput.match(/\bIN\s+([A-Z]{2})\b/);
-  if (stateAbbrMatch) {
-    inputStateAbbrev = stateAbbrMatch[1];
-  } else {
-    for (const [stateName, abbrev] of Object.entries(STATE_NAME_TO_ABBREV)) {
-      if (normalizedInput.includes(stateName)) {
-        inputStateAbbrev = abbrev;
-        break;
-      }
+const getInputStateAbbrev = (normalizedInput: string): string | null => {
+  for (const [stateName, abbrev] of STATE_NAMES_BY_LENGTH) {
+    if (new RegExp(`(?:^| )${escapeRegExp(stateName)}(?= |$)`).test(normalizedInput)) {
+      return abbrev;
     }
   }
 
-  // If a state was specified and this airport is NOT in that state, reject it
-  if (inputStateAbbrev && airport.state !== inputStateAbbrev) return false;
+  const tokens = normalizedInput.split(" ");
+  return tokens.find((token) => STATE_ABBREVIATIONS.has(token)) ?? null;
+};
 
-  // If a state was specified and this airport IS in that state, it's a match
-  if (inputStateAbbrev && airport.state === inputStateAbbrev) return true;
+const getCityMatchPosition = (normalizedInput: string, airport: AirportReference): number => {
+  const city = normalizeAirportLookupKey(airport.city);
+  if (!city) return -1;
 
-  // Direct city name match
-  if (normalizedInput.includes(city)) return true;
+  const directPosition = findAirportKeyPosition(normalizedInput, city);
+  if (directPosition >= 0) return directPosition;
 
-  // Check if any word in the input is a known abbreviation for this airport's city
   const inputWords = normalizedInput.split(" ");
   for (const word of inputWords) {
     const expansions = CITY_ABBREVIATIONS[word];
-    if (expansions) {
-      for (const expansion of expansions) {
-        if (city.includes(expansion) || expansion.includes(city)) return true;
+    if (!expansions) continue;
+
+    for (const expansion of expansions) {
+      if (city.includes(expansion) || expansion.includes(city)) {
+        return normalizedInput.indexOf(word);
       }
     }
   }
 
-  return false;
+  return -1;
+};
+
+/** Check if the input text contains a city reference matching the airport */
+const hasCityContextMatch = (normalizedInput: string, airport: AirportReference): boolean => {
+  const cityPosition = getCityMatchPosition(normalizedInput, airport);
+  if (cityPosition < 0) return false;
+
+  const inputStateAbbrev = getInputStateAbbrev(normalizedInput);
+  if (inputStateAbbrev && airport.state !== inputStateAbbrev) return false;
+
+  return true;
+};
+
+const airportPriorityScore = (airport: AirportReference): number => {
+  let score = 0;
+  if (airport.iata) score += 20;
+  if (/\bINTERNATIONAL\b/i.test(airport.name)) score += 15;
+  if (normalizeAirportLookupKey(airport.name).includes(normalizeAirportLookupKey(airport.city))) score += 10;
+  if (airport.runways && airport.runways.length > 0) score += 5;
+  return score;
+};
+
+const findExplicitCityStateAirportReferences = (normalizedInput: string): AirportReference[] => {
+  const inputStateAbbrev = getInputStateAbbrev(normalizedInput);
+  if (!inputStateAbbrev) return [];
+
+  const matches = AIRPORT_REFERENCES.map((airport) => ({
+    airport,
+    cityPosition: airport.state === inputStateAbbrev ? getCityMatchPosition(normalizedInput, airport) : -1
+  }))
+    .filter((match) => match.cityPosition >= 0)
+    .sort((left, right) => {
+      if (left.cityPosition !== right.cityPosition) return left.cityPosition - right.cityPosition;
+      return airportPriorityScore(right.airport) - airportPriorityScore(left.airport);
+    });
+
+  return matches.map((match) => match.airport);
 };
 
 export const findAirportReferencesInText = (input: string): AirportReference[] => {
   const normalizedInput = normalizeAirportLookupKey(input);
+  const explicitCityStateMatches = findExplicitCityStateAirportReferences(normalizedInput);
+  if (explicitCityStateMatches.length > 0) {
+    return explicitCityStateMatches;
+  }
+
   const matches = AIRPORT_REFERENCES.map((airport) => {
     const keyMatches = createAirportSearchKeys(airport)
       .map(({ key, partial }) => ({
