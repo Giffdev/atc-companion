@@ -67,3 +67,9 @@ Mattingly updated runway, frequency, and plates services for commit `c358047` so
 ## 2026-06-25T13:05:00-07:00 — Curated runway precedence shipped
 
 Mattingly fixed runway fallback precedence in coordinator commit `f3bb6e0`: live FAA NFDC remains primary, curated `airports.ts` runway arrays now outrank OurAirports fallback, and curated fallback source labels are explicit. KPAE now falls back to `16L/34R` and `16R/34L` instead of stale/decommissioned `11/29`. Full validation passed with 286 tests and production live checks.
+
+
+## 2026-06-25T13:35:00-07:00 — Curated runway override removed
+- Removed the curated-runway override and `CURATED_RUNWAY_SOURCE` from `src/services/runway-info.ts`.
+- Removed explicit `runways[]` arrays from curated airport identity entries so runway sourcing is live FAA NFDC, then closed-filtered OurAirports, then inferred fallback.
+- Updated backend/dataset tests; production verification passed after commit f592fd9 with KPAE 11/29 absent and major airport runways correct.

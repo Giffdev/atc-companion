@@ -1592,3 +1592,18 @@ Validation note: adding Mexico introduced an OurAirports local-code collision (`
 **References:** src/services/runway-info.ts, src/services/__tests__/nfdc-parser.test.ts, decisions/inbox/Mattingly-curated-runway-precedence.md
 **Why:** Hand-vetted curated runway data is higher-confidence than broad community dataset rows for operationally sensitive airports. KPAE/PAE now falls back to curated physical pairs `16L/34R` and `16R/34L` instead of stale/decommissioned OurAirports `11/29`, and curated fallback source labels honestly read `Curated airport reference data`.
 **Validation:** `npm run lint`, targeted NFDC parser tests, `npm run build`, and the final coordinated full suite passed; production verification covered KPAE plus Canada/global city scenarios.
+
+### 2026-06-25T13:21:00-07:00: User directive — no per-airport curated runway data
+**By:** Devin Sinha (via Copilot)
+**What:** Runway and airport data must come from accurate universal/live sources, not hand-curated per-airport runway lists in `airports.ts`. KPAE must still exclude the decommissioned 11/29 runway, but the fix must scale beyond the small curated-airport set.
+**Why:** Per-airport curated entries do not scale to ~980+ airports and go stale. This directive drove the live-data runway refactor.
+
+### 2026-06-25T13:21:13-07:00: Closed runway filtering in generated datasets
+**By:** Aaron (Data)
+**What:** Treat the OurAirports `runways.csv` `closed` column as authoritative for generated runway datasets. The generator excludes rows where `closed` trims to exactly `"1"`; all other values, including empty, missing, or `"0"`, are retained.
+**Why:** This applies the source runway-status signal universally and prevents decommissioned runways such as KPAE 11/29 from leaking into flight-safety reference data without hand-curated airport-specific runway lists.
+
+### 2026-06-25T13:35:00-07:00: Curated runway safety net removed
+**By:** Mattingly (Backend)
+**What:** Removed the hand-curated runway override from `getAirportRunways`; runway precedence is now live FAA NFDC for US airports, then the closed-filtered OurAirports generated dataset, then inferred fallback. Explicit runway arrays were removed from curated airport identity entries.
+**Why:** Aaron's generator now filters closed/decommissioned OurAirports runway rows, so keeping the curated branch would contradict the no-curated-runway directive and produce dishonest `Curated airport reference data` source labels.

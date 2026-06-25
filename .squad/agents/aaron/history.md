@@ -75,3 +75,9 @@ Updated `docs/data-sources.md` to describe OurAirports as the bundled/generated 
 
 ## 2026-06-25T11:58:56.987-07:00 — Mexico airport dataset shipped
 Aaron added the Mexico `mx` country-filtered airport dataset segment and regenerated MX airport/runway/frequency artifacts for commit `c358047`. Mexico now contributes 1,585 airports with verified MX lookups for MMMX, MMUN, MMTJ, MMGL, and MMMY; keep dataset precedence strong enough to protect established IATA/local lookups such as PAE.
+
+
+## 2026-06-25T13:35:00-07:00 — Closed runway filter shipped
+- Parsed OurAirports `runways.csv` `closed` column in `scripts/generate-airport-dataset.ts` and skipped rows where `closed=1`.
+- Regenerated US/CA/Caribbean/Mexico runway datasets; KPAE 11/29 is removed without airport-specific curated runway lists.
+- Production verification passed after commit f592fd9: KPAE, KSEA, KJFK, and KORD runway outputs are correct.
