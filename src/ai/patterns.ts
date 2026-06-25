@@ -5,6 +5,8 @@ import {
   extractEntities,
   extractNavigationAirports
 } from "@/ai/entity-extractor";
+import { getDatasetAirport } from "@/data/airport-dataset";
+import { findAirportReference } from "@/data/airports";
 import type {
   AirportInfoDetail,
   BoundingBox,
@@ -102,6 +104,67 @@ const FACILITY_INFO_PATTERN =
 
 const FACILITY_AIRPORTS_PATTERN =
   /(?:(?:airports?|fields?)\s+(?:under|in|within|at|for|covered by|served by|part of|does)\b.*\b(?:approach|center|tracon|artcc|cover)\b|\b(?:approach|center|tracon|artcc)\s+(?:cover|have|include|serve)|\b(?:list|show|what|which|give|display)\b.*\bairports?\b.*\b(?:under|in|within|at|for|part of)\b.*\b(?:approach|center|tracon|artcc)\b)/i;
+
+const AIRPORT_IDENTIFIER_TOKEN_PATTERN = /\b[A-Za-z0-9]{2,4}\b/g;
+const TRIVIAL_AIRPORT_IDENTIFIER_REMAINDER_PATTERN = /^[\s,.;:!?()[\]{}'"`/\\&+-]*(?:and[\s,.;:!?()[\]{}'"`/\\&+-]*)*$/i;
+
+const resolveExactAirportIdentifierToken = (token: string, airports: string[]): string | undefined => {
+  const normalizedToken = token.toUpperCase();
+  const airportSet = new Set(airports.map((airport) => airport.toUpperCase()));
+  const reference = findAirportReference(normalizedToken);
+
+  if (reference) {
+    const referenceCodes = [reference.icao, reference.faa, reference.iata]
+      .filter((code): code is string => Boolean(code))
+      .map((code) => code.toUpperCase());
+
+    if (
+      referenceCodes.includes(normalizedToken) &&
+      (airportSet.size === 0 || referenceCodes.some((code) => airportSet.has(code)))
+    ) {
+      return reference.icao;
+    }
+  }
+
+  const datasetAirport = getDatasetAirport(normalizedToken);
+  if (datasetAirport) {
+    const datasetCodes = [
+      datasetAirport.ident,
+      datasetAirport.icao,
+      datasetAirport.gpsCode,
+      datasetAirport.iata,
+      datasetAirport.localCode
+    ]
+      .filter((code): code is string => Boolean(code))
+      .map((code) => code.toUpperCase());
+
+    if (
+      datasetCodes.includes(normalizedToken) &&
+      (airportSet.size === 0 || datasetCodes.some((code) => airportSet.has(code)))
+    ) {
+      return normalizedToken;
+    }
+  }
+
+  return undefined;
+};
+
+const detectBareAirportIdentifierQueryAirports = (input: string, airports: string[]): string[] => {
+  const detectedAirports: string[] = [];
+  const remainder = input.replace(AIRPORT_IDENTIFIER_TOKEN_PATTERN, (token) => {
+    const airport = resolveExactAirportIdentifierToken(token, airports);
+    if (!airport) {
+      return token;
+    }
+
+    detectedAirports.push(airport);
+    return " ";
+  });
+
+  return detectedAirports.length > 0 && TRIVIAL_AIRPORT_IDENTIFIER_REMAINDER_PATTERN.test(remainder)
+    ? detectedAirports
+    : [];
+};
 
 const detectWeatherSubtype = (input: string): WeatherSubtype => {
   const normalized = input.toLowerCase();
@@ -233,6 +296,13 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
   );
   if (dataTypeCandidates.length >= 2 && entities.airports.length > 0) {
     return ["airport_info"];
+  }
+
+  if (
+    !candidates.includes("airport_info") &&
+    detectBareAirportIdentifierQueryAirports(input, entities.airports).length > 0
+  ) {
+    candidates.push("airport_info");
   }
 
   return candidates;
@@ -385,6 +455,16 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
       confidence: entities.airports.length > 0 ? 0.91 : 0.68,
       airport: entities.airports[0],
       detail: airportInfoDetail
+    };
+  }
+
+  const bareAirportIdentifierAirports = detectBareAirportIdentifierQueryAirports(input, entities.airports);
+  if (bareAirportIdentifierAirports.length > 0) {
+    return {
+      type: "airport_info",
+      confidence: 0.9,
+      airport: entities.airports[0] ?? bareAirportIdentifierAirports[0],
+      detail: "all"
     };
   }
 

@@ -193,6 +193,51 @@ describe("parseIntent", () => {
     expect("airport" in seattleIntent ? seattleIntent.airport : undefined).toBeTruthy();
   });
 
+  it("parses bare airport identifiers as airport overview requests", async () => {
+    const [greensboroIntent, victoriaIntent, auburnIntent, multiIdentifierIntent] = await Promise.all([
+      parseIntent(" kgso, "),
+      parseIntent("CYYJ"),
+      parseIntent("s50"),
+      parseIntent("kbfi kpae")
+    ]);
+
+    expect(greensboroIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KGSO",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect(victoriaIntent).toMatchObject({
+      type: "airport_info",
+      airport: "CYYJ",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect(auburnIntent).toMatchObject({
+      type: "airport_info",
+      airport: "S50",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect(multiIdentifierIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KBFI",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect(greensboroIntent.confidence).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("does not parse ordinary four-letter words as bare airport overview requests", async () => {
+    const intent = await parseIntent("time");
+
+    expect(intent).toMatchObject({
+      type: "unknown",
+      requiresClarification: true
+    });
+    expect(intent).not.toMatchObject({ type: "airport_info" });
+  });
+
   it("parses Canadian ICAO frequency requests with airport context", async () => {
     const intent = await parseIntent("frequencies at CYXX");
 
