@@ -102,6 +102,39 @@ describe("parseIntent", () => {
     });
   });
 
+  it("prioritizes explicit airport codes over fuzzy place-name matches", async () => {
+    const [langleyIntent, bareCanadianIntent, seattleNameIntent, usExplicitIntent] = await Promise.all([
+      parseIntent("show me everything for langley, CYNJ"),
+      parseIntent("everything for CYNJ"),
+      parseIntent("weather at SeaTac"),
+      parseIntent("weather for SeaTac, KDEN")
+    ]);
+
+    expect(langleyIntent).toMatchObject({
+      type: "airport_info",
+      airport: "CYNJ",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect(langleyIntent).not.toMatchObject({ airport: "KLFI" });
+    expect(bareCanadianIntent).toMatchObject({
+      type: "airport_info",
+      airport: "CYNJ",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect(seattleNameIntent).toMatchObject({
+      type: "weather",
+      airport: "KSEA",
+      requiresClarification: false
+    });
+    expect(usExplicitIntent).toMatchObject({
+      type: "weather",
+      airport: "KDEN",
+      requiresClarification: false
+    });
+  });
+
   it("parses Canadian ICAO frequency requests with airport context", async () => {
     const intent = await parseIntent("frequencies at CYXX");
 

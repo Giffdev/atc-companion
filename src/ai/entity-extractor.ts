@@ -392,6 +392,7 @@ export const extractCityRegions = (input: string): CityRegionEntity[] => {
 
 const isFaaLocalIdentifier = (code: string): boolean => FAA_LID_SHAPE.test(code);
 const isCanadianIcaoIdentifier = (code: string): boolean => CANADIAN_ICAO_SHAPE.test(code);
+const isExplicitCanadianIcaoIdentifier = (code: string): boolean => /^C[YZ][A-Z0-9]{2}$/.test(code);
 const isCaribbeanIcaoIdentifier = (code: string): boolean => CARIBBEAN_ICAO_SHAPE.test(code);
 const isMexicanIcaoIdentifier = (code: string): boolean => MEXICAN_ICAO_SHAPE.test(code);
 
@@ -419,6 +420,7 @@ export const extractAirportCodes = (input: string): string[] => {
       /^[A-Z]{4}$/.test(code) &&
       !AIRPORT_CODE_STOPWORDS.has(code) &&
       (code.startsWith("K") ||
+        isExplicitCanadianIcaoIdentifier(code) ||
         isCaribbeanIcaoIdentifier(code) ||
         isMexicanIcaoIdentifier(code) ||
         Boolean(findAirportReference(code)))
@@ -438,7 +440,7 @@ export const extractAirportCodes = (input: string): string[] => {
   const namedAirportCodes =
     cityRegions.length > 0 ? [] : findAirportReferencesInText(normalized).map((airport) => toIcaoCode(airport.icao));
 
-  return dedupe([...namedAirportCodes, ...directCodes, ...contextualCodes, ...faaLidCodes, ...iataCodes]).filter(
+  return dedupe([...directCodes, ...contextualCodes, ...faaLidCodes, ...iataCodes, ...namedAirportCodes]).filter(
     (code) => !REGULATORY_CUE_WORDS.test(code)
   );
 };
