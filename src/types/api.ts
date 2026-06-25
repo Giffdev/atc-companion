@@ -17,6 +17,12 @@ export interface ApiError {
   details?: string;
   retryable?: boolean;
   status?: number;
+  inferredCtaf?: {
+    frequencyMHz: number;
+    unverified: true;
+    basis: string;
+  };
+  frequencies?: [];
 }
 
 export interface ApiCacheMetadata {

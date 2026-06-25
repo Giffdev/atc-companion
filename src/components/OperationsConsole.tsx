@@ -21,7 +21,7 @@ import { API_ENDPOINTS, TRAFFIC_REFRESH_INTERVAL_MS, WEATHER_REFRESH_INTERVAL_MS
 import { formatTimestamp } from "@/lib/utils";
 import { getDataSource } from "@/data/sources";
 import type { ControllerFacility } from "@/types/facility";
-import type { ApiResponse } from "@/types/api";
+import type { ApiError, ApiResponse } from "@/types/api";
 import type { ApproachPlate, FarReference, Frequency, Metar, Pirep, Taf, TrafficTarget, WeatherBundle } from "@/types/aviation";
 import type { ParsedIntent } from "@/types/intents";
 import type { NavigationResult } from "@/services/navigation";
@@ -47,6 +47,7 @@ import type { Notam } from "@/types/aviation";
 const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
 const RESULT_ORDER: DashboardResultType[] = ["weather", "frequency", "traffic", "notam", "plates", "navigation", "regulatory"];
 const NOTAM_FEED_UNAVAILABLE_CODES = new Set(["NOTAM_FEED_NOT_CONFIGURED", "NOTAM_EMBEDDED_SEARCH"]);
+const FREQUENCY_DATA_GAP_CODE = "FREQUENCY_DATA_GAP";
 
 /** Format a rich airport label like "KSEA — Seattle-Tacoma Intl, WA" */
 const formatAirportLabel = (icao: string, name?: string | null, city?: string | null, state?: string | null): string => {
@@ -140,8 +141,41 @@ const createDetailText = (response: ApiResponse<unknown>): string => {
   return `${response.source.name} • ${formatTimestamp(response.fetchedAt)}`;
 };
 
-const isNotamFeedUnavailableError = (error: ApiResponse<unknown>["error"]): boolean =>
+const isNotamFeedUnavailableError = (error: ApiError | undefined): boolean =>
   Boolean(error && NOTAM_FEED_UNAVAILABLE_CODES.has(error.code));
+
+const isFrequencyDataGapError = (error: ApiError | undefined): boolean =>
+  error?.code === FREQUENCY_DATA_GAP_CODE;
+
+const renderFrequencyDataGap = (error: ApiError) => (
+  <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+    <p>{error.message}</p>
+    {error.inferredCtaf ? (
+      <div className="space-y-2 rounded-xl border border-aviation-border bg-black/20 p-3 text-aviation-muted">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200">Unverified convention — verify before use</p>
+        <p>
+          <span className="font-data text-aviation-text">{error.inferredCtaf.frequencyMHz.toFixed(1)} MHz</span> is the FAA default CTAF convention for
+          non-towered airports without an assigned frequency. This is not confirmed published data; verify CTAF/UNICOM in the FAA Chart Supplement before use.
+        </p>
+      </div>
+    ) : null}
+  </div>
+);
+
+const getFrequencyDataGapError = (liveResult: LiveQueryResult | null): ApiError | null => {
+  if (liveResult?.intent.type === "frequency" && !liveResult.response.ok && isFrequencyDataGapError(liveResult.response.error)) {
+    return liveResult.response.error;
+  }
+
+  if (liveResult?.intent.type === "airport_info" && liveResult.response.ok) {
+    const frequencies = (liveResult.response.data as AirportInfoQueryPayload).frequencies;
+    if (!frequencies.ok && isFrequencyDataGapError(frequencies.error)) {
+      return frequencies.error;
+    }
+  }
+
+  return null;
+};
 
 const applyResponseStatus = (items: SourceStatusItem[], id: SourceStatusItem["id"], response: ApiResponse<unknown>): SourceStatusItem[] =>
   items.map((item) =>
@@ -408,6 +442,10 @@ const renderQuerySummary = (
   }
 
   if (!liveResult.response.ok) {
+    if (isFrequencyDataGapError(liveResult.response.error)) {
+      return renderFrequencyDataGap(liveResult.response.error);
+    }
+
     if (isNotamFeedUnavailableError(liveResult.response.error)) {
       const searchUrl = liveResult.response.error.details ?? "https://notams.aim.faa.gov/notamSearch/";
       return (
@@ -966,8 +1004,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     liveResult?.intent.type === "airport_info" &&
     liveResult.response.ok &&
     !(liveResult.response.data as AirportInfoQueryPayload).frequencies.ok;
+  const frequencyDataGapError = getFrequencyDataGapError(liveResult) ?? getFrequencyDataGapError(facilityResults.get("frequency") ?? null);
   const frequencyEmptyMessage = airportInfoFrequencyUnavailable
-    ? `No published FAA frequencies for ${formatAirportTitle(frequencyPanelAirport)}. Verify via official FAA sources.`
+    ? `Frequency data unavailable for ${formatAirportTitle(frequencyPanelAirport)}. Verify via official FAA sources.`
     : "No frequencies returned for the active live query.";
 
   const trafficAirportIcao = useMemo(() => {
@@ -1650,6 +1689,8 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                             </div>
                           ))}
                         </div>
+                      ) : frequencyDataGapError ? (
+                        renderFrequencyDataGap(frequencyDataGapError)
                       ) : (
                         <div className="text-sm text-aviation-muted">{frequencyEmptyMessage}</div>
                       )}

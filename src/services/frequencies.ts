@@ -1,5 +1,5 @@
 import { findApproachFacility, findApproachFacilityByAirport } from "@/data/approach-facilities";
-import { getDatasetFrequencies } from "@/data/airport-dataset";
+import { getDatasetAirport, getDatasetFrequencies } from "@/data/airport-dataset";
 import { LOCAL_FREQUENCY_SEED } from "@/data/frequency-seed";
 import { toFaaCode, toIcaoCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
@@ -9,6 +9,21 @@ import { OURAIRPORTS_SOURCE } from "@/services/dataset-airport-fallback";
 import type { ApiResponse } from "@/types/api";
 import type { Frequency, FrequencyType } from "@/types/aviation";
 
+export const FREQUENCY_DATA_GAP_CODE = "FREQUENCY_DATA_GAP";
+
+export interface InferredCtafConvention {
+  frequencyMHz: 122.9;
+  unverified: true;
+  basis: "FAA default CTAF for non-towered airports without an assigned frequency";
+}
+
+const DEFAULT_CTAF_CONVENTION: InferredCtafConvention = {
+  frequencyMHz: 122.9,
+  unverified: true,
+  basis: "FAA default CTAF for non-towered airports without an assigned frequency"
+};
+
+const NON_TOWERED_DATASET_AIRPORT_TYPES = new Set(["small_airport", "seaplane_base", "heliport", "balloonport"]);
 const FREQUENCY_SOURCE = getDataSource("faaNasr");
 const FREQUENCY_SOURCE_URL = "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/";
 const NFDC_BASE_URL = "https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp";
@@ -53,6 +68,35 @@ const getDatasetFallbackFrequencies = (airportCode: string, requestedType?: stri
       isStale: false
     }))
     .filter((record) => !requestedFrequencyType || record.type === requestedFrequencyType);
+};
+
+const isDatasetNonToweredAirport = (airport: string, airportCode: string, faaCode: string): boolean => {
+  const datasetAirport = getDatasetAirport(airportCode) ?? getDatasetAirport(faaCode) ?? getDatasetAirport(airport);
+  return datasetAirport ? NON_TOWERED_DATASET_AIRPORT_TYPES.has(datasetAirport.type) : false;
+};
+
+const toFrequencyDataGapResponse = (airport: string, airportCode: string, faaCode: string): ApiResponse<never> => {
+  const hasNonToweredHint = isDatasetNonToweredAirport(airport, airportCode, faaCode);
+  const message = hasNonToweredHint
+    ? `Frequency data could not be loaded for ${airportCode} from our available sources. This is not confirmation that the airport has no published frequency.`
+    : `Frequency data could not be loaded for ${airportCode} from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`;
+
+  return createApiErrorResponse(
+    {
+      code: FREQUENCY_DATA_GAP_CODE,
+      message,
+      details: "Available sources returned no confirmed frequency records. Verify CTAF/UNICOM in the official FAA Chart Supplement before use.",
+      retryable: true,
+      status: 503,
+      frequencies: [],
+      inferredCtaf: hasNonToweredHint ? DEFAULT_CTAF_CONVENTION : undefined
+    },
+    {
+      source: withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL),
+      fetchedAt: toIsoNow(),
+      stalenessCategory: "frequency"
+    }
+  );
 };
 
 const fetchNfdcFrequencies = async (faaCode: string): Promise<Frequency[]> => {
@@ -207,18 +251,5 @@ export const getFrequencies = async (airport: string, freqType?: string): Promis
     });
   }
 
-  return createApiErrorResponse(
-    {
-      code: "AIRPORT_NOT_FOUND",
-      message: `No FAA frequency data found for ${airportCode}.`,
-      details: "Neither the local seed nor the FAA NFDC returned frequency data for this airport.",
-      retryable: false,
-      status: 404
-    },
-    {
-      source: withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL),
-      fetchedAt: toIsoNow(),
-      stalenessCategory: "frequency"
-    }
-  );
+  return toFrequencyDataGapResponse(airport, airportCode, faaCode);
 };

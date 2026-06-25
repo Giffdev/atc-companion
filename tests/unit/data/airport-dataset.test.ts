@@ -41,6 +41,15 @@ describe("airport dataset", () => {
     });
   });
 
+  it("resolves Bandera 4W0 as a small airport with no static frequency rows", () => {
+    expect(getDatasetAirport("4W0")).toMatchObject({
+      ident: "4W0",
+      name: "Bandera State Airport",
+      type: "small_airport"
+    });
+    expect(getDatasetFrequencies("4W0")).toEqual([]);
+  });
+
   it("preserves all runways for multi-runway airports", () => {
     const runways = getDatasetRunways("PAE");
 

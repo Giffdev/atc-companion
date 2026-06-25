@@ -290,6 +290,46 @@ const createFrequencyResult = (timestamp: string) => ({
   timestamp
 });
 
+const createFrequencyDataGapResult = (timestamp: string, facility: string, includeInferredCtaf: boolean) => ({
+  intent: {
+    type: "frequency",
+    facility,
+    confidence: 0.99,
+    rawInput: `frequencies at ${facility}`,
+    parsedAt: timestamp,
+    source: QUERY_SOURCE,
+    entities: [],
+    requiresClarification: false
+  },
+  response: {
+    ok: false as const,
+    data: null,
+    source: QUERY_SOURCE,
+    attribution: { primary: QUERY_SOURCE },
+    fetchedAt: timestamp,
+    isStale: false,
+    error: {
+      code: "FREQUENCY_DATA_GAP",
+      message: `Frequency data could not be loaded for ${facility} from our available sources. This is not confirmation that the airport has no published frequency.`,
+      details: "Available sources returned no confirmed frequency records. Verify CTAF/UNICOM in the official FAA Chart Supplement before use.",
+      retryable: false,
+      status: 503,
+      frequencies: [],
+      ...(includeInferredCtaf
+        ? {
+            inferredCtaf: {
+              frequencyMHz: 122.9,
+              unverified: true as const,
+              basis: "FAA default CTAF for non-towered airports without an assigned frequency"
+            }
+          }
+        : {})
+    }
+  },
+  executionTimeMs: 14,
+  timestamp
+});
+
 const createEmptyPlateResult = (timestamp: string) => ({
   intent: {
     type: "plates",
@@ -648,9 +688,73 @@ describe("OperationsConsole auto-refresh", () => {
     await flushUpdates();
 
     expect(screen.getByRole("heading", { name: "38W — Lynden Airport core frequencies" })).toBeInTheDocument();
-    expect(screen.getByText("No published FAA frequencies for 38W — Lynden Airport. Verify via official FAA sources.")).toBeInTheDocument();
+    expect(screen.getByText("Frequency data unavailable for 38W — Lynden Airport. Verify via official FAA sources.")).toBeInTheDocument();
     expect(screen.queryByText("Seattle Tower")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "KBLI — Bellingham International Airport core frequencies" })).not.toBeInTheDocument();
+  });
+
+  it("renders frequency data gaps with an unverified 122.9 CTAF convention hint when supplied", async () => {
+    const timestamp = "2026-06-18T05:00:00.000Z";
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse(createFrequencyDataGapResult(timestamp, "4W0", true)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OperationsConsole initialNow={timestamp} />);
+
+    await flushUpdates();
+    fetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit frequency query" }));
+    await flushUpdates();
+
+    expect(screen.getAllByText(/Frequency data could not be loaded for 4W0/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unverified convention — verify before use").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/122\.9 MHz/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/not confirmed published data/i).length).toBeGreaterThan(0);
+  });
+
+  it.each(["5A8", "ZZZZ"])("renders frequency data gaps without any 122.9 hint for %s when no inferred CTAF is supplied", async (facility) => {
+    const timestamp = "2026-06-18T05:00:00.000Z";
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse(createFrequencyDataGapResult(timestamp, facility, false)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OperationsConsole initialNow={timestamp} />);
+
+    await flushUpdates();
+    fetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit frequency query" }));
+    await flushUpdates();
+
+    expect(screen.getAllByText(new RegExp(`Frequency data could not be loaded for ${facility}`, "i")).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/122\.9/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Unverified convention — verify before use")).not.toBeInTheDocument();
+  });
+
+  it("continues to render confirmed frequency lists normally", async () => {
+    const timestamp = "2026-06-18T05:00:00.000Z";
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse(createFrequencyResult(timestamp)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OperationsConsole initialNow={timestamp} />);
+
+    await flushUpdates();
+    fetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit frequency query" }));
+    await flushUpdates();
+
+    expect(screen.getByText("Seattle Tower")).toBeInTheDocument();
+    expect(screen.getAllByText("TWR").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Unverified convention/)).not.toBeInTheDocument();
   });
 
   it("clears the selected home facility summary when querying a different airport", async () => {

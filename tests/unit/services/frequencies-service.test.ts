@@ -6,13 +6,14 @@
  *     with source metadata (no network call required).
  *   - APP freq_type: routes to approach-facility seed for known facilities;
  *     returns 404 for unknown approach facilities.
- *   - Error path: airport absent from local seed AND NFDC returns no usable
- *     frequencies → 404 AIRPORT_NOT_FOUND.
+ *   - Data gap path: airport absent from local seed AND NFDC/dataset return no
+ *     confirmed frequencies → 503 FREQUENCY_DATA_GAP, with guarded CTAF hint
+ *     only for dataset-proven non-towered airport types.
  */
 
 import { appCache } from "@/lib/cache";
 import { getFrequencies } from "@/services/frequencies";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -20,6 +21,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeEach(() => {
   appCache.clear();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -101,8 +106,8 @@ describe("getFrequencies — APP type", () => {
 // Error path — NFDC fallback
 // ---------------------------------------------------------------------------
 
-describe("getFrequencies — NFDC fallback and error", () => {
-  it("returns 404 AIRPORT_NOT_FOUND when NFDC HTML has no COMMUNICATIONS section", async () => {
+describe("getFrequencies — NFDC fallback and data gaps", () => {
+  it("returns FREQUENCY_DATA_GAP with unverified 122.9 CTAF convention for a non-towered small_airport gap", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -117,16 +122,48 @@ describe("getFrequencies — NFDC fallback and error", () => {
       })
     );
 
-    const response = await getFrequencies("ZZZZ");
+    const response = await getFrequencies("4W0");
 
     expect(response.ok).toBe(false);
     if (response.ok) return;
 
-    expect(response.error.code).toBe("AIRPORT_NOT_FOUND");
-    expect(response.error.status).toBe(404);
+    expect(response.error.code).toBe("FREQUENCY_DATA_GAP");
+    expect(response.error.status).toBe(503);
+    expect(response.error.retryable).toBe(true);
+    expect(response.error.frequencies).toEqual([]);
+    expect(response.error.inferredCtaf).toEqual({
+      frequencyMHz: 122.9,
+      unverified: true,
+      basis: "FAA default CTAF for non-towered airports without an assigned frequency"
+    });
+    expect(response.error.message).toBe(
+      "Frequency data could not be loaded for 4W0 from our available sources. This is not confirmation that the airport has no published frequency."
+    );
   });
 
-  it("returns 404 AIRPORT_NOT_FOUND when NFDC fetch throws a network error", async () => {
+  it("returns FREQUENCY_DATA_GAP without CTAF hint for a towered/medium_airport gap", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("Network error");
+      })
+    );
+
+    const response = await getFrequencies("5A8");
+
+    expect(response.ok).toBe(false);
+    if (response.ok) return;
+
+    expect(response.error.code).toBe("FREQUENCY_DATA_GAP");
+    expect(response.error.status).toBe(503);
+    expect(response.error.inferredCtaf).toBeUndefined();
+    expect(response.error.frequencies).toEqual([]);
+    expect(response.error.message).toBe(
+      "Frequency data could not be loaded for 5A8 from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement."
+    );
+  });
+
+  it("returns FREQUENCY_DATA_GAP without CTAF hint for an unknown airport gap", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -139,7 +176,22 @@ describe("getFrequencies — NFDC fallback and error", () => {
     expect(response.ok).toBe(false);
     if (response.ok) return;
 
-    expect(response.error.code).toBe("AIRPORT_NOT_FOUND");
-    expect(response.error.status).toBe(404);
+    expect(response.error.code).toBe("FREQUENCY_DATA_GAP");
+    expect(response.error.status).toBe(503);
+    expect(response.error.inferredCtaf).toBeUndefined();
+    expect(response.error.frequencies).toEqual([]);
+    expect(response.error.message).toBe(
+      "Frequency data could not be loaded for ZZZZ from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement."
+    );
+  });
+
+  it("leaves airports with confirmed frequencies unaffected and without CTAF hint", async () => {
+    const response = await getFrequencies("KBFI");
+
+    expect(response.ok).toBe(true);
+    if (!response.ok) return;
+
+    expect(response.data.length).toBeGreaterThan(0);
+    expect(response.error).toBeUndefined();
   });
 });
