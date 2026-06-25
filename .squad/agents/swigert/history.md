@@ -49,3 +49,9 @@
 ## 2026-06-24T09:12:58-07:00 — Fresh ATIS calm-cyan state
 - Fresh/non-stale ATIS should use calm cyan, not amber/yellow, so current data does not read as a warning.
 - Stale/unavailable ATIS remains amber and must keep explicit non-color cues such as `STALE`, warning ring, or alert copy.
+
+- 2026-06-24T21:33:19-07:00 — Stale facility query-state fix shipped live in commit `4cab907`; explicit airport queries now exit facility-dashboard mode and clear prior facility/query/supplemental panels.
+
+
+## 2026-06-24T21:44:52-07:00 — Frequency gap UI shipped
+OperationsConsole now renders frequency data gaps without asserting absence and shows 122.9 only as a distinct unverified/verify-before-use convention hint when supplied by the service; shipped live in commit `6487c7b`.

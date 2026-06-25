@@ -46,3 +46,7 @@
 ## 2026-06-24T19:00:00-07:00 — Phase A shipped live
 Phase A Global Airport Database release is live at atc-companion.vercel.app via commit e7791d0. Dataset runway/frequency fallbacks, city/state resolution, and validation gates all passed; live checks confirmed 38W 08/26, 38W CTAF 122.9, and Forks WA -> S18.
 
+
+
+## 2026-06-24T21:44:52-07:00 — Frequency data-gap contract shipped
+Implemented the backend `FREQUENCY_DATA_GAP` outcome for missing confirmed frequency records. The guarded `inferredCtaf` 122.9 hint is unverified metadata only and never a confirmed frequency row; shipped live in commit `6487c7b`.

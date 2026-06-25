@@ -11,3 +11,7 @@
 - Scaffolded the full Next.js/Tailwind project baseline and validated install/build/test.
 - Established the contract that Aaron's source metadata and staleness rules must flow through Mattingly's services into Swigert's UI.
 - Confirmed Haise's LLM usage is limited to intent classification/parsing, with Lovell's safety tests enforcing the no-fabrication boundary.
+
+
+## 2026-06-24T21:44:52-07:00 — Frequency gap policy resolved
+Frequency-gap policy moved from options analysis into shipped Option C: no absence assertion when sources lack records, plus a guarded unverified 122.9 convention hint for eligible small/non-towered cases. Live commit: `6487c7b`.

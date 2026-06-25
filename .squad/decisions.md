@@ -1117,3 +1117,281 @@ Retaining prior frequency data can show a different airport's radios for the que
 The airport-info merge still retains prior weather and procedure data when those nested lookups fail. This fix is scoped to frequencies per request; plates/weather should be assessed separately before changing fallback behavior.
 
 
+
+
+### 2026-06-24T21:33:19-07:00: Explicit query exits facility-dashboard mode and clears stale facility panels
+**By:** Swigert (Frontend)
+
+**What:** Added an explicit facility-dashboard mode to `OperationsConsole`: selecting a home facility enables facility-summary-first rendering, while an explicit airport query disables that mode and clears prior facility/query/supplemental panels.
+
+**Why:** Selecting a home facility such as KDEN left facility summary panels rendered after an explicit query for another airport such as 38W. Explicit queries must render the queried airport without stale home-facility dashboard state.
+
+**Validation:** Updated `src/components/OperationsConsole.tsx` and `tests/unit/components/operations-console-autorefresh.test.tsx`. Swigert reported 238 tests passing, lint with 0 warnings, and a clean build. Coordinator committed `4cab907`, pushed `origin/master`, and deployed production at `atc-companion.vercel.app`.
+
+
+### 2026-06-24T21:44:52-07:00: Kranz frequency-gap policy recommendation
+**By:** Kranz (inbox merge)
+
+_Source inbox:_ `kranz-frequency-gap-policy.md`
+
+# Kranz frequency-gap policy recommendation
+
+**Date:** 2026-06-24T21:44:52-07:00  
+**Requested by:** Devin Sinha  
+**Owner:** Kranz (Lead / Architect)  
+**Status:** Recommendation — do not implement until assigned
+
+## Confirmed code path
+
+For a US airport such as `4W0`, `getFrequencies()` first checks the local seed, then live FAA NFDC, then the generated OurAirports frequency dataset:
+
+- `src/services/frequencies.ts:151-156` normalizes the airport and handles APP separately.
+- `src/services/frequencies.ts:158-181` returns local seed frequencies when present.
+- `src/services/frequencies.ts:183-200` tries FAA NFDC Airport Display frequencies and silently falls through when fetch/parsing fails.
+- `src/services/frequencies.ts:202-208` calls `getDatasetFallbackFrequencies()` and returns OurAirports frequencies when present.
+- `src/data/airport-dataset.ts:130-131` returns `[]` for unknown frequency records, so an airport present in the airport dataset but missing from `us-frequencies.json` is indistinguishable from "no frequency records in our static source."
+- `src/services/frequencies.ts:210-217` currently emits `AIRPORT_NOT_FOUND` with `No FAA frequency data found for ${airportCode}.` and details `Neither the local seed nor the FAA NFDC returned frequency data for this airport.`
+
+User-facing paths:
+
+- Direct failed live query: `src/components/OperationsConsole.tsx:410-431` renders `liveResult.response.error.message`, so users can see `No FAA frequency data found for K4W0.`
+- Airport-info/frequency panel gap: `src/components/OperationsConsole.tsx:965-971` computes `frequencyEmptyMessage` as `No published FAA frequencies for ${formatAirportTitle(frequencyPanelAirport)}. Verify via official FAA sources.`
+- `src/components/OperationsConsole.tsx:1653-1655` renders that message when the frequency panel has no rows.
+
+The current UI therefore asserts "no published FAA frequencies" even when the evidence is only "our live NFDC request failed and OurAirports has no row."
+
+## Prior pattern to preserve
+
+The project already avoids asserting absence on data gaps:
+
+- `src/services/runway-info.ts:107-115` returns `RUNWAY_DATA_UNAVAILABLE` when runway details cannot be loaded.
+- `src/components/OperationsConsole.tsx:644-647` says: `Runways could not be loaded from FAA NFDC. This is not confirmation that the airport has no runways; verify using the official FAA Chart Supplement link.`
+- `src/components\FacilityOverview.tsx:262-264` uses the shorter facility-card version: `Runways could not be loaded. Verify using the official FAA Chart Supplement link.`
+
+## Options
+
+### Option A — Messaging-only gap fix
+
+Do not show an inferred frequency. Change the empty/error copy to stop claiming absence.
+
+Proposed user-facing messaging:
+
+- Direct frequency query: `Frequency data could not be loaded for 4W0 from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`
+- Airport-info panel: `Frequencies could not be loaded from FAA NFDC or the static dataset. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement link.`
+
+Pros:
+
+- Safest; no guessed operational value is displayed.
+- Fully consistent with the runway-gap and NOTAM-unavailable patterns.
+- Small implementation surface: service error code/message plus frontend panel copy/tests.
+
+Cons:
+
+- Does not answer the user's "wouldn't it be at least 122.9?" intuition inline.
+- Users must open the Chart Supplement to discover the likely CTAF convention or the actual published value.
+
+### Option B — Messaging plus informational 122.9 default
+
+Keep the gap warning, and add an explicitly non-authoritative convention note.
+
+Proposed user-facing messaging:
+
+- Primary warning: `Frequency data could not be loaded for 4W0 from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`
+- Secondary note: `AIM/FAA convention: a non-towered airport without an assigned CTAF/UNICOM may use 122.9 MHz for self-announce. This is a default convention, not confirmed published data for 4W0. Verify before use.`
+
+Pros:
+
+- Directly addresses the user's 122.9 question.
+- Makes the convention explicit while avoiding an authoritative-looking frequency row.
+
+Cons:
+
+- Still risks a user mentally promoting 122.9 into "the answer," especially in a frequency panel.
+- Requires careful display treatment and tests so the hint never appears as a normal `Frequency` record.
+- May be wrong for fields with assigned CTAF/UNICOM values such as 122.8, 123.0, 122.7, or 122.725.
+
+### Option C — Guarded hybrid: show the 122.9 convention only when the app has non-towered/small-airport evidence
+
+Show Option A for all gaps. Add the 122.9 convention note only when independent metadata indicates a non-towered/small-airport scenario, for example `hours.isTowered === false` from airport-hours/NFDC parsing and/or `getDatasetAirport(code).type === "small_airport"` / `seaplane_base`. Suppress the hint for towered, unknown, medium/large, or non-US cases.
+
+Proposed user-facing messaging:
+
+- Primary warning: `Frequency data could not be loaded for 4W0 from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`
+- Conditional note: `Because this appears to be a non-towered small airport, 122.9 MHz may be the default self-announce CTAF when no CTAF/UNICOM is assigned. This is not confirmed for 4W0; verify in the Chart Supplement before use.`
+
+Pros:
+
+- Answers the 122.9 question in the cases where it is most relevant.
+- Reduces the chance of showing a misleading hint for towered airports.
+- Does not require fabricating a normal frequency row.
+
+Cons:
+
+- More complex: frontend/service needs a clear frequency-gap state and access to airport type/towered metadata.
+- If towered/non-towered metadata is itself unavailable or stale, the hint must be suppressed.
+- Still carries some safety risk because a concrete number is displayed.
+
+## Recommendation
+
+Recommend **Option A now**: messaging-only frequency-gap fix.
+
+Rationale:
+
+1. The confirmed bug is not that the app lacks a 122.9 rule; it is that the app asserts absence from incomplete data. The safe correction is to state "could not be loaded" and direct the user to the FAA Chart Supplement.
+2. Aviation data must not be fabricated. 122.9 is a valid default convention for some non-towered no-assigned-frequency cases, but it is not guaranteed and must not be presented as published data for a specific airport.
+3. Option A matches the established runway-gap and NOTAM-unavailable patterns: failure to load official data is not evidence of absence.
+4. We can later add Option C as a deliberately designed safety-reviewed enhancement if the product needs the educational 122.9 hint. That follow-up should be visually distinct from normal frequency rows and suppressed unless non-towered/small-airport evidence is available.
+
+## Implementation plan
+
+Assign as a small coordinated change:
+
+- **Mattingly (service layer):**
+  - Update `src/services/frequencies.ts` so the no-data fallback is not `AIRPORT_NOT_FOUND`.
+  - Use a code such as `FREQUENCY_DATA_UNAVAILABLE`, `retryable: true`, and wording that says the data could not be loaded from available sources.
+  - Preserve source attribution and avoid returning inferred `Frequency` records.
+
+- **Swigert (frontend messaging):**
+  - Update `src/components/OperationsConsole.tsx` frequency empty/error copy to mirror the runway gap pattern.
+  - Ensure airport-info nested frequency failures render an amber gap message, not `No published FAA frequencies`.
+  - Keep normal successful-empty semantics only if the service can truly distinguish an authoritative empty result; today it cannot for this path.
+
+- **Aaron (dataset):**
+  - No immediate dataset change required for Option A.
+  - Separately track OurAirports frequency incompleteness for small fields such as 4W0 and decide whether future NASR/NFDC cycle ingestion should replace or overlay `us-frequencies.json`.
+
+- **Lovell / Rai (safety review):**
+  - Review copy and tests for the safety invariant: never assert no published frequency when both live NFDC and static data are unavailable/incomplete.
+  - If a later Option C hint is proposed, require explicit safety review before showing `122.9 MHz` anywhere in the UI.
+
+Suggested validation for implementers:
+
+- Add/adjust tests around `getFrequencies("4W0")` or a mocked dataset-missing airport so the response is `FREQUENCY_DATA_UNAVAILABLE`, not `AIRPORT_NOT_FOUND`.
+- Add/adjust OperationsConsole tests asserting the frequency panel says "could not be loaded" and "not confirmation" rather than "No published FAA frequencies."
+
+
+
+### 2026-06-24T21:44:52-07:00: Mattingly frequency-gap implementation
+**By:** Mattingly (inbox merge)
+
+_Source inbox:_ `mattingly-frequency-gap-impl.md`
+
+# Mattingly frequency-gap implementation
+
+**Date:** 2026-06-24T21:44:52-07:00  
+**Owner:** Mattingly (Backend)  
+**Status:** Implemented service-layer contract for Kranz Option C / guarded hybrid
+
+## Response contract for Swigert
+
+`getFrequencies(code)` and `/api/frequencies?airport=CODE` keep confirmed frequencies as the existing success contract: `ApiResponse<Frequency[]>` with `ok: true` and `data: Frequency[]`.
+
+When no confirmed frequency records are available from the local seed, live FAA NFDC, or the static OurAirports fallback, the service returns an error envelope:
+
+```ts
+interface FrequencyDataGapResponse extends ApiErrorResponse {
+  ok: false;
+  data: null;
+  error: {
+    code: "FREQUENCY_DATA_GAP";
+    message: string;
+    details: "Available sources returned no confirmed frequency records. Verify CTAF/UNICOM in the official FAA Chart Supplement before use.";
+    retryable: true;
+    status: 503;
+    frequencies: [];
+    inferredCtaf?: {
+      frequencyMHz: 122.9;
+      unverified: true;
+      basis: "FAA default CTAF for non-towered airports without an assigned frequency";
+    };
+  };
+}
+```
+
+Guard for `error.inferredCtaf`: present only when `getDatasetAirport(code)` resolves to `type` of `small_airport`, `seaplane_base`, `heliport`, or `balloonport`. It is omitted for `medium_airport`, `large_airport`, and unknown/not-in-dataset airports.
+
+## Safety invariant
+
+`error.frequencies` is always `[]` on this data-gap path. `122.9` is never emitted as a confirmed `Frequency` record and must not be rendered as published or FAA-authoritative frequency data.
+
+## Messages
+
+Non-towered guarded hint message:
+
+`Frequency data could not be loaded for {CODE} from our available sources. This is not confirmation that the airport has no published frequency.`
+
+Towered/unknown no-hint message:
+
+`Frequency data could not be loaded for {CODE} from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`
+
+
+
+### 2026-06-24T21:44:52-07:00: Swigert frequency gap UI
+**By:** Swigert (inbox merge)
+
+_Source inbox:_ `swigert-frequency-gap-ui.md`
+
+# Swigert frequency gap UI
+
+**By:** Swigert
+**When:** 2026-06-24T21:44:52-07:00
+
+## Decision
+OperationsConsole renders `FREQUENCY_DATA_GAP` as an informational frequency-panel gap state using the service-provided message verbatim. When the service includes `error.inferredCtaf`, the UI shows 122.9 MHz only in a separate unverified convention hint, never in the confirmed frequency list.
+
+## Hint copy
+Unverified convention — verify before use: 122.9 MHz is the FAA default CTAF convention for non-towered airports without an assigned frequency. This is not confirmed published data; verify CTAF/UNICOM in the FAA Chart Supplement before use.
+
+## Rationale
+The user-approved Option C contract distinguishes missing confirmed source data from an authoritative absence of a published frequency. The UI must preserve that distinction and prevent controllers from treating the default non-towered CTAF convention as published data.
+
+
+
+### 2026-06-24T22:14:47-07:00: Lovell frequency-gap safety review
+**By:** Lovell (inbox merge)
+
+_Source inbox:_ `lovell-frequency-gap-review.md`
+
+# Lovell frequency-gap safety review
+
+**Date:** 2026-06-24T22:14:47-07:00
+**Reviewer:** Lovell (Test & Safety)
+**Verdict:** PASS
+
+## Safety-critical assertions
+
+1. ✓ 122.9 cannot enter the confirmed `frequencies` array.
+   - The data-gap error envelope sets `frequencies: []` and carries the convention separately as `error.inferredCtaf` only when allowed (`src/services/frequencies.ts:91-92`).
+   - Confirmed frequency rendering only maps `dashboardData.frequencies` (`src/components/OperationsConsole.tsx:1666-1693`), while airport-info failed frequency lookups merge as `[]` (`src/components/OperationsConsole.tsx:271`).
+   - Test evidence: non-towered gap asserts `error.frequencies === []` while `inferredCtaf.frequencyMHz === 122.9` (`tests/unit/services/frequencies-service.test.ts:130-138`).
+
+2. ✓ Every UI surface that shows 122.9 labels it unverified/verify-before-use.
+   - The only UI renderer for `inferredCtaf` labels it `Unverified convention — verify before use`, says `not confirmed published data`, and requires FAA Chart Supplement verification (`src/components/OperationsConsole.tsx:150-159`).
+   - Both direct frequency gaps and nested airport-info frequency gaps flow through this same renderer (`src/components/OperationsConsole.tsx:165-174`, `src/components/OperationsConsole.tsx:446`, `src/components/OperationsConsole.tsx:1692-1693`).
+   - Test evidence: component test requires the unverified label, 122.9 MHz text, and not-confirmed-published-data warning together (`tests/unit/components/operations-console-autorefresh.test.tsx:696-715`).
+
+3. ✓ Towered/unknown airports never show 122.9.
+   - `inferredCtaf` is emitted only for dataset airport types `small_airport`, `seaplane_base`, `heliport`, and `balloonport`; all other/unknown types resolve to `undefined` (`src/services/frequencies.ts:26`, `src/services/frequencies.ts:78-93`).
+   - Test evidence: towered/medium gap asserts no `inferredCtaf` and empty confirmed frequencies (`tests/unit/services/frequencies-service.test.ts:144-163`); unknown airport gap now asserts the same (`tests/unit/services/frequencies-service.test.ts:166-185`). UI coverage now parameterizes no-122.9/no-label for `5A8` and `ZZZZ` (`tests/unit/components/operations-console-autorefresh.test.tsx:718-737`).
+
+4. ✓ Gap messages do not assert the airport has no frequency.
+   - Service messages say `Frequency data could not be loaded... This is not confirmation that the airport has no published frequency` for both hint and no-hint branches (`src/services/frequencies.ts:80-82`).
+   - UI prints the service message and, for the convention hint, separately states the value is not confirmed published data (`src/components/OperationsConsole.tsx:152`, `src/components/OperationsConsole.tsx:157-158`).
+   - Test evidence: service tests assert the exact no-absence-confirmation message for non-towered, towered, and unknown gaps (`tests/unit/services/frequencies-service.test.ts:139-140`, `tests/unit/services/frequencies-service.test.ts:161-184`).
+
+## Tests added/strengthened
+
+- Added unknown-airport service coverage: `tests/unit/services/frequencies-service.test.ts:166-185`.
+- Strengthened UI no-hint coverage to run for both towered/medium `5A8` and unknown `ZZZZ`: `tests/unit/components/operations-console-autorefresh.test.tsx:718-737`.
+- Existing coverage confirmed for non-towered hint and normal frequency list unaffected: `tests/unit/services/frequencies-service.test.ts:110-140`, `tests/unit/services/frequencies-service.test.ts:188-195`, `tests/unit/components/operations-console-autorefresh.test.tsx:696-715`, `tests/unit/components/operations-console-autorefresh.test.tsx:739-758`.
+
+## Defects found
+
+None.
+
+## Validation gates
+
+- `npm run lint`: PASS, exit 0, eslint `--max-warnings=0` produced 0 warnings.
+- `npm run build`: PASS, exit 0, Next.js 16.2.9 printed `✓ Compiled successfully in 3.4s`.
+- `npx vitest run`: PASS, exit 0, 32 test files passed, 245 tests passed, 0 failed.
+
