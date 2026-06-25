@@ -1612,3 +1612,13 @@ Validation note: adding Mexico introduced an OurAirports local-code collision (`
 **What:** Updated product docs to describe runway lookup precedence as FAA NFDC HTML parsing, then generated OurAirports active runway records with closed-runway filtering, then inferred airport-reference fallback. Removed the stale static/curated runway override from documented fallback behavior and corrected generated dataset prefixes to US, Canada, Mexico, and Caribbean.
 **References:** README.md, docs/FEATURES.md, docs/ARCHITECTURE.md, docs/data-sources.md, decisions/inbox/kranz-live-runway-docs.md
 **Why:** Source verification confirmed curated airport entries no longer carry hand-authored runway arrays after the live-data runway refactor. Product documentation now matches commit f592fd9 and follow-up docs commit 75c7852, including Mexico dataset coverage and closed=1 runway filtering.
+
+
+### 2026-06-25T15:57:00-07:00: Bare airport identifiers show airport overview
+**By:** Haise (parser/NLP)
+
+**Decision:** Bare airport-code-only input resolves to `airport_info` with `detail: "all"` instead of prompting for clarification.
+
+**Rationale:** The parser now adds the airport overview fallback only when exact airport identifier tokens can be stripped and only trivial punctuation/filler remains. Exact identifiers are validated from curated airport references or the generated airport dataset, covering local identifiers such as `S50` without importing server-only data into client-side entity extraction. Canadian/Caribbean false-positive protections remain guarded because dataset-only relaxation applies only to identifier-only input, not embedded prose.
+
+**Outcome:** Committed by coordinator as Giffdev in `75ce19e` and pushed to `master`; 288 tests passed, lint and build clean.

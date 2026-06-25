@@ -35,3 +35,8 @@ Haise shipped Mexican MM-prefixed ICAO recognition in commit `c358047` by adding
 ## 2026-06-25T13:05:00-07:00 — Bare city resolution shipped
 
 Haise fixed Canada/global bare-city airport resolution in coordinator commit `f3bb6e0`. Bare locator/directive place-name cues now emit city entities for the server multi-country resolver, so `langley` resolves to CYNJ and `abbotsford` resolves to CYXX while Everett still resolves to KPAE and explicit CYNJ remains preserved. Full validation passed with 286 tests and production live checks.
+
+
+## 2026-06-25T16:12:00-07:00 — Bare airport identifiers show overview
+
+Bare airport identifier-only input now resolves to `airport_info` with `detail: "all"` instead of clarification. Exact identifier stripping is limited to identifier-only text with trivial filler/punctuation, preserving Canadian/Caribbean false-positive protections for embedded prose. Coordinator committed as `75ce19e`; tests, lint, and build were clean.
