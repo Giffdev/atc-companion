@@ -34,3 +34,7 @@
 - Added executable NFDC parser coverage for runway parsing and airport-hours parsing, including empty/fallback cases.
 - Scoped suite passed with 4 tests; full repo suite is now green at 203 tests.
 - Shipped live in commit `67676b8` and deployed to atc-companion.vercel.app.
+
+## 2026-06-24T19:00:00-07:00 — Phase A shipped live
+Phase A Global Airport Database release is live at atc-companion.vercel.app via commit e7791d0. Dataset runway/frequency fallbacks, city/state resolution, and validation gates all passed; live checks confirmed 38W 08/26, 38W CTAF 122.9, and Forks WA -> S18.
+

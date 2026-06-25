@@ -195,3 +195,925 @@ Validation: npm run lint passed; npm run build passed; npx vitest run passed (30
 **Decision:** Detect state from both abbreviations and full names, but state match alone is never sufficient. When a city/state query is supplied, require an actual city match within the named state before loose airport-name matching, with position-ordered selection and `airportPriorityScore` as the tiebreaker. Add `S18` / Forks, WA to curated `AIRPORT_REFERENCES` so city-name resolution has an authoritative local reference.
 
 **Validation:** Added entity-extractor and intent-parser regressions for `forks, wa`, `forks, washington`, and `yakima, washington`; full validation passed (`npm exec vitest -- run tests\unit\entity-extractor.test.ts tests\unit\intent-parser.test.ts`, `npm run lint`, `npm run build`, `npx vitest run` — 221 tests). Live verification: `forks, wa`→S18, `forks, washington`→S18, `kelso, wa`→KKLS. Shipped in commit `bdf3b0c` and deployed to atc-companion.vercel.app.
+
+### 2026-06-24T19:00:00-07:00: Aaron airport dataset build
+**By:** Aaron (inbox merge)
+
+_Source inbox:_ `aaron-airport-dataset-build.md`
+
+# Aaron airport dataset build
+
+- Built Phase A as a US-only generated static dataset from OurAirports public-domain `airports.csv` and `runways.csv`.
+- Kept `COUNTRIES = ["US"]` at the top of the generator so CA / Caribbean expansion is a one-line allowlist edit.
+- Excluded `closed`, `heliport`, and `balloonport`; preserved small, medium, large, and seaplane-base airports.
+- Emitted compact JSON into `src/data/generated/us-airports.json` and `src/data/generated/us-runways.json`.
+- Loaded generated JSON server-side with `fs.readFileSync` in `src/data/airport-dataset.ts` instead of importing the JSON into bundled modules.
+- Added explicit `server-only` marker and only server/test code imports the lookup module.
+- Preserved all runways per airport; PAE returns `11/29`, `16L/34R`, and `16R/34L`.
+- Applied an explicit local designator correction for 38W from `07/25` to `08/26` because the Phase A bug fix requires the current Lynden runway designator.
+
+### 2026-06-24T19:00:00-07:00: Aaron data-source research: airport coverage expansion
+**By:** Aaron (inbox merge)
+
+_Source inbox:_ `aaron-airport-dataset-research.md`
+
+# Aaron data-source research: airport coverage expansion
+
+Date: 2026-06-24
+Requester: Devin Sinha
+Repo: Giffdev/atc-companion
+
+## Recommendation
+
+Use **OurAirports** as the primary airport/runway source for the next ingestion design. It is the best fit because it is worldwide, nightly refreshed, CSV/UTF-8, has both airport and runway files, includes municipality/city and region/country codes, and is explicitly public domain. Keep FAA NFDC/NASR as an optional later US-only quality overlay, not the base source; use OpenFlights only as a comparison/reference source, not as app input.
+
+## Existing app target model
+
+`src/data/airports.ts` defines:
+
+```ts
+export interface AirportReference {
+  icao: string;
+  faa: string;
+  iata?: string;
+  name: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  aliases?: string[];
+  runways?: string[];
+}
+```
+
+`AIRPORT_REFERENCES` is currently a static TypeScript array. The `icao` field already contains true ICAO identifiers where available, but also local/non-ICAO identifiers for small fields (for example `S18`); `faa` is required and currently acts as the FAA/local code used for US lookup/search.
+
+## Candidate 1: OurAirports
+
+### Source facts
+
+- Download page: https://ourairports.com/data/
+- Data dictionary: https://ourairports.com/help/data-dictionary.html
+- GitHub-hosted CSVs: https://davidmegginson.github.io/ourairports-data/
+- OurAirports says the CSV dump covers airports, countries, regions, and related files, is updated every night, and is stored on GitHub.
+- Terms: "All data is released to the Public Domain"; credit is appreciated but not required.
+- Current page snapshot fetched 2026-06-24 lists:
+  - `airports.csv`: 12,659,501 bytes, last modified Jun 24, 2026
+  - `runways.csv`: 3,952,801 bytes, last modified Jun 24, 2026
+  - `regions.csv`: 484,619 bytes
+  - `countries.csv`: 24,583 bytes
+
+### Coverage counts from current CSV snapshot
+
+Computed directly from `airports.csv` and `runways.csv` on 2026-06-24.
+
+| Area | Airport rows, all types | Not closed | App-candidate airfields (large/medium/small/seaplane only) | Candidate runway rows |
+|---|---:|---:|---:|---:|
+| United States (`US`) | 32,553 | 25,117 | 16,865 | 17,223 |
+| Canada (`CA`) | 3,316 | 2,454 | 1,933 | 1,439 |
+| Caribbean set below | 507 | 419 | 334 | 178 |
+| US + Canada + Caribbean | 36,376 | 27,990 | 19,132 | 18,840 |
+
+Type breakdown for US + Canada + Caribbean: 146 large, 1,146 medium, 16,702 small, 1,138 seaplane bases, 8,824 heliports, 8,386 closed, 34 balloonports.
+
+The current CSV uses `closed` as the closed-airport type; the data dictionary mentions `closed_airport`. Ingestion should tolerate both.
+
+### Caribbean ISO country codes to include
+
+Recommended Caribbean operating set for this project:
+
+`PR`, `VI`, `BS`, `JM`, `DO`, `HT`, `CU`, `TT`, `BB`, `KY`, `TC`, `AG`, `AI`, `AW`, `BL`, `BQ`, `CW`, `DM`, `GD`, `GP`, `KN`, `LC`, `MF`, `MQ`, `MS`, `SX`, `VC`, `VG`; optionally include `BM` for Bermuda if product scope treats it as nearby North Atlantic/Caribbean.
+
+Current OurAirports all-type row counts: PR 73, VI 11, BS 78, JM 27, DO 50, HT 22, CU 156, TT 3, BB 2, KY 10, TC 9, AG 6, AI 2, AW 4, BL 1, BQ 4, CW 1, DM 3, GD 3, GP 10, KN 3, LC 2, MF 2, MQ 4, MS 2, SX 1, VC 6, VG 8, BM 4.
+
+### Fields
+
+`airports.csv` fields needed by the app:
+
+- identifiers: `ident`, `icao_code`, `iata_code`, `gps_code`, `local_code`
+- display/search: `name`, `municipality`, `keywords`
+- geography: `latitude_deg`, `longitude_deg`, `elevation_ft`, `continent`, `iso_country`, `iso_region`
+- status/type: `type`, `scheduled_service`
+- optional links: `home_link`, `wikipedia_link`
+
+Important dictionary details:
+
+- `ident` is the interoperable key and is ICAO if available; otherwise local code or generated ISO2-prefixed code.
+- `iso_region` is a country-prefixed subdivision code such as `US-WA` or `CA-BC`.
+- `municipality` is the primary municipality served when available, not necessarily the physical municipality.
+- Airport types include large/medium/small/heliport/seaplane/balloon/closed variants.
+
+`runways.csv` is suitable for the non-US runway gap. It has one row per landing surface and includes:
+
+- join keys: `airport_ref`, `airport_ident`
+- geometry/dimensions: `length_ft`, `width_ft`, `surface`
+- status: `lighted`, `closed`
+- runway-end identifiers and details: `le_ident`, `he_ident`, endpoint lat/lon/elevation, true headings, displaced thresholds
+
+### Size and format
+
+All required OurAirports files are CSV/UTF-8.
+
+Raw source size today: `airports.csv` 12.66 MB + `runways.csv` 3.95 MB. A filtered US+Canada+Caribbean all-type subset is about 4.68 MB airports + 2.09 MB runways as CSV. A likely app-candidate subset excluding closed airports, heliports, and balloonports is 19,132 airport rows and 18,840 runway rows, about 2.67 MB airports + 1.58 MB runways as CSV before app-specific compaction/minification.
+
+This is large for direct client bundling if kept as full objects, but reasonable for a generated compact lookup artifact, lazy-loaded JSON, or server/API-backed search index.
+
+### Data quality notes
+
+Strengths:
+
+- Best public/open single source found for combined US, Canadian, and Caribbean coverage.
+- Includes runways globally, which is critical because FAA NFDC cannot supply Canadian/Caribbean runway data.
+- Nightly refresh cadence and public GitHub-hosted CSV snapshots make deterministic ingestion straightforward.
+- Includes closed airports and heliports explicitly, allowing product-level filtering instead of silent omissions.
+
+Known gaps/risks:
+
+- Not official for navigation; use for reference/search only.
+- Municipality can be empty or represent served city rather than physical city.
+- `ident` is not always ICAO; generated idents exist for sites without ICAO/local codes.
+- Runway surface is not a strict controlled vocabulary; normalize common values but preserve raw surface if later displayed.
+- Some countries/territories have sparse runway coverage for small/private fields.
+- Heliports and closed airports create noise if not filtered.
+
+## Candidate 2: OpenFlights
+
+### Source facts
+
+- Source: https://openflights.org/data.php
+- Download: https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat
+- The site says the airport database has over 10,000 airports/train/ferry terminals globally; `airports.csv` contains only type `airport` and source `OurAirports`.
+- Current GitHub `airports.dat` fetched 2026-06-24 has 7,698 rows and is 1,127,225 bytes.
+- Fields include Airport ID, Name, City, Country, IATA, ICAO, Latitude, Longitude, Altitude, timezone/DST/tz database timezone, Type, Source.
+- Licensing is Open Database License/Database Contents License for the OpenFlights databases; public redistribution of derived works may require attribution and share-alike licensing. The page also says airport base data derived from OurAirports/DAFIF is public domain, but the published OpenFlights database is still presented under ODbL.
+
+### Coverage counts from current `airports.dat`
+
+- United States: 1,512
+- Canada: 430
+- Caribbean set: 146
+
+This is much smaller than OurAirports and lacks runway data. It is focused on airline/travel airports, not comprehensive ATC/reference coverage.
+
+### Verdict
+
+Do not use as the ingestion base. It is useful only for sanity checks on major commercial airports or timezone enrichment if needed. The share-alike licensing and no-runways limitation are poor fits for this app.
+
+## Candidate 3: FAA NFDC/NASR
+
+FAA NFDC/NASR is the authoritative US aviation source and includes airport/runway detail with a 28-day aeronautical data cycle. It remains valuable for US-specific quality improvements and may be what the app already relies on for live NFDC lookups.
+
+However, it is US-only. It does not solve Canada or Caribbean coverage. Treat as an optional US overlay after the OurAirports base works:
+
+1. Start from OurAirports for all selected countries/territories.
+2. For `iso_country = US`, optionally override/augment runway details and identifiers from FAA NFDC if a build phase needs official US fidelity.
+3. Do not block Canada/Caribbean ingestion on FAA integration.
+
+## Candidate 4: country civil-aviation/open-government sources
+
+Examples include Canadian open-data/GIS airport layers and individual civil aviation authority datasets. These can be official, but they are fragmented by country, often GIS-oriented, inconsistently licensed, and inconsistent in runway schema. Canada has open-government airport layers, but Caribbean coverage would require many separate sources and license checks.
+
+Use these only as targeted validation/overlays for high-value countries later. They are not a good phase-one base source.
+
+## Ingestion plan recommendation
+
+Do not build this yet, but scope the build around this plan:
+
+1. Snapshot source files into a dated data-input folder or generated-data cache:
+   - `airports.csv`
+   - `runways.csv`
+   - `regions.csv`
+   - `countries.csv`
+   - store source URL, fetched timestamp, byte size, and row count in metadata.
+2. Filter `airports.csv` where `iso_country` is one of:
+   - `US`, `CA`, and the Caribbean set above.
+3. Product filter for initial app search:
+   - include `large_airport`, `medium_airport`, `small_airport`, `seaplane_base`
+   - exclude `heliport`, `balloonport`, `closed`/`closed_airport` by default
+   - keep an option to include heliports later behind a feature flag/search filter.
+4. Join `runways.csv` on `runways.airport_ident = airports.ident`; include only `closed = 0` runway surfaces.
+5. Shape to `AirportReference`:
+   - `icao`: prefer `icao_code`, else `gps_code`, else `ident`.
+   - `faa`: for US, prefer `local_code`, else strip leading `K` only when `icao_code` is a standard contiguous-US `Kxxx`; for non-US, use `local_code || gps_code || ident` until the model is renamed to `localCode`.
+   - `iata`: `iata_code` when present.
+   - `name`: `name`.
+   - `city`: `municipality` when present; fallback to parsed `keywords`, then `name`.
+   - `state`: split `iso_region` after the first hyphen for US/CA (`WA`, `BC`, etc.); for Caribbean, preserve full region suffix or display country/territory code if region is not useful.
+   - `latitude`/`longitude`: parse `latitude_deg`/`longitude_deg`.
+   - `runways`: map each non-closed runway to `le_ident/he_ident` if both are present; otherwise single end ident. Sort naturally and de-duplicate.
+   - `aliases`: include `iata_code`, `gps_code`, `local_code`, `ident`, `keywords` tokens, and maybe region/country names from `regions.csv`/`countries.csv`.
+6. Generate compact app artifact(s):
+   - `AirportReference[]` for existing code compatibility, or
+   - a compact JSON search index plus an adapter to current `AirportReference`.
+7. Add validation checks before shipping:
+   - no missing `icao`/`faa`/`name`/`city`/coordinates in final records, or explicit fallback reason logged
+   - runway join rate by country/territory
+   - duplicate search keys by `icao`, `faa`, `iata`
+   - sample golden airports: KSEA, S18, CYVR, CYYZ, MYNN, MKJP, MDPC, MDSD, TJSJ, TIST.
+
+## Decision
+
+Proceed with **OurAirports as the phase-one canonical source** for US + Canada + Caribbean airport and runway ingestion. Design the code so FAA NFDC can later override US details, but do not mix sources in the first build unless a specific quality issue demands it.
+
+### 2026-06-24T19:00:00-07:00: Aaron frequencies dataset decisions
+**By:** Aaron (inbox merge)
+
+_Source inbox:_ `aaron-frequencies-dataset.md`
+
+# Aaron frequencies dataset decisions
+
+- 2026-06-24T18:29:28-07:00 — Extended the generated static airport dataset with OurAirports airport-frequencies.csv, filtered to the existing US airport subset by airport_ident and emitted compact frequency records keyed by generated airport ident.
+- 2026-06-24T18:29:28-07:00 — Kept OurAirports frequency type tokens raw (for example CTAF, UNICOM, TWR, GND) and exposed DatasetFrequency through getDatasetFrequencies(code), resolving the same code variants as airport/runway lookups.
+- 2026-06-24T18:29:28-07:00 — Added an explicit local correction for Lynden 38W CTAF 122.9 because the current OurAirports frequency CSV has no 38W row while the product requirement needs the static dataset to cover it.
+
+### 2026-06-24T19:00:00-07:00: 2026-06-24 Haise city/state detection
+**By:** Haise (inbox merge)
+
+_Source inbox:_ `haise-city-detection.md`
+
+## 2026-06-24 Haise city/state detection
+- Added client-safe detection only for comma-style US city/region phrases; no server-only airport dataset imports.
+- Emits `cityLocations: [{ city, regionCode }]` from `extractEntities`, and parsed intent entities include `{ label: "city", value: city, city, regionCode }`.
+- Suppresses named-airport text matching when an explicit city/state phrase is present so `forks, washington` is not misread as KKLS.
+- Added regression coverage for `INFO` not being treated as an airport code and for KSEA/38W/S18 code queries.
+
+### 2026-06-24T19:00:00-07:00: Decision/Scoping Record: Global Airport Database Expansion
+**By:** Kranz (inbox merge)
+
+_Source inbox:_ `kranz-global-airport-db-plan.md`
+
+# Decision/Scoping Record: Global Airport Database Expansion
+
+**Owner:** Kranz (Lead/Architect)  
+**Requested by:** Devin Sinha  
+**Date:** 2026-06-24  
+**Status:** Proposed — do not build until approved
+
+## Context
+
+ATC Companion currently resolves airports through a hand-curated `AIRPORT_REFERENCES` array in `src/data/airports.ts`, plus live FAA NFDC lookups keyed by airport ID. The recent city/state name-resolution work (`findAirportReferencesInText()`, `detectAirportAmbiguity()`, city abbreviations, state-name normalization) only works for airports present in that curated list. FAA NFDC remains useful for US airport IDs, but it cannot answer "airport near obscure city by city name" unless we already know the airport identifier.
+
+The user wants two related capabilities:
+
+1. Larger airport database so any US city resolves by name.
+2. Airport coverage for Canada and the Caribbean.
+
+Aaron/Data is separately evaluating source datasets. This plan assumes a public-domain global airports + runways dataset will be available with municipality/city, country, region, ICAO/IATA/local identifiers, coordinates, runway metadata, and source/license metadata.
+
+## Decision Summary
+
+Adopt a **generated, server-loaded regional airport reference dataset** rather than a hand-curated TypeScript array or client-bundled global module.
+
+Recommended shape:
+
+- Keep the existing curated `AIRPORT_REFERENCES` as a small high-confidence override layer.
+- Add a build-time generation pipeline that ingests the public-domain global dataset and emits compact regional artifacts for:
+  - `US`
+  - `CA`
+  - explicitly scoped Caribbean countries/territories
+- Load those artifacts from server-only code for query parsing/API execution.
+- Emit a compact city/region index alongside the airport list so city-name resolution is an indexed lookup, not an O(n) scan across tens of thousands of rows.
+- Expose only tiny lookup results to client components via existing `/api/query` envelopes; do not import the generated dataset from `"use client"` components.
+
+This gives broad name coverage without inflating the Next.js client bundle or depending on a live third-party airport-search API at request time.
+
+## 1. Data Strategy
+
+### Options Considered
+
+#### A. Bundle the full global dataset into `src/data/airports.ts`
+
+Reject.
+
+Pros:
+
+- Simple imports.
+- Works offline.
+
+Cons:
+
+- A global airport dataset can contain tens of thousands of rows and runway rows.
+- `src/data/airports.ts` is already imported by client components (`FacilityOverview.tsx`, `OperationsConsole.tsx`). If the large dataset remains in that import path, Next.js can pull it into client bundles.
+- TypeScript compile and lint time will degrade if we generate a huge `.ts` literal.
+- Hard to refresh cleanly.
+
+#### B. Live API lookup for city/name search
+
+Reject as the primary path.
+
+Pros:
+
+- Small bundle.
+- Freshness delegated to provider.
+
+Cons:
+
+- Query latency and availability become user-facing.
+- Requires provider-specific behavior, rate-limit handling, and probably an API key if reliable.
+- Name resolution is core UX and should not fail just because an upstream search API is unavailable.
+- FAA NFDC is US-only and identifier-keyed, so it does not solve Canada/Caribbean city lookup.
+
+#### C. Generated server-side regional data files plus indexes
+
+Recommend.
+
+Pros:
+
+- Keeps client bundle small.
+- Supports offline/server-local name and code resolution.
+- Can be refreshed on a known cadence.
+- Allows country/region scoping instead of shipping every global heliport/seaplane base.
+- Gives deterministic tests and deterministic ambiguity behavior.
+
+Cons:
+
+- Requires a generation script and artifacts.
+- Server code must avoid importing large data into client modules.
+
+### Recommended Implementation Shape
+
+Create a new generated-data boundary:
+
+- `scripts/generate-airport-reference-data.ts`
+  - Input: Aaron's selected public-domain source files.
+  - Output:
+    - `src/generated/airports/airports.us-ca-caribbean.json`
+    - `src/generated/airports/city-index.us-ca-caribbean.json`
+    - `src/generated/airports/code-index.us-ca-caribbean.json`
+    - `src/generated/airports/metadata.json`
+  - Optional later split:
+    - `airports.us.json`
+    - `airports.ca.json`
+    - `airports.caribbean.json`
+
+Use JSON rather than a huge generated TypeScript module. JSON can be loaded server-side with dynamic import or `fs/promises`, and it avoids TypeScript parsing tens of thousands of object literals.
+
+Add server-only accessor module:
+
+- `src/data/airport-reference.server.ts`
+  - `getAirportReferenceByCode(code)`
+  - `searchAirportReferencesByText(input)`
+  - `resolveAirportByCityRegion(query)`
+  - `getAirportRunwaysFromReferenceData(code)`
+  - Caches parsed JSON in module scope.
+  - Imports `server-only` so accidental client imports fail during development/build.
+
+Keep a small shared module:
+
+- `src/data/airport-types.ts`
+  - `AirportReference`
+  - `AirportRegion`
+  - `AirportDataSourceKind`
+  - `AirportResolutionCandidate`
+  - type-only exports safe for client/server.
+
+Refactor current `src/data/airports.ts` into one of two patterns:
+
+1. **Preferred:** split into:
+   - `airports.static.ts` for the curated override array.
+   - `airport-lookup.server.ts` for generated server lookup + NFDC dynamic lookup.
+   - `airport-lookup.shared.ts` for small helpers that client code can use without pulling generated JSON.
+2. **Interim:** keep `airports.ts` API names, but move large generated access behind dynamic server-only functions and stop importing it from `"use client"` files.
+
+Because `FacilityOverview.tsx` and `OperationsConsole.tsx` currently import `findAirportReference` directly, the client-import boundary must be fixed before adding large data. Options:
+
+- For client display labels, use data already returned by API (`airportName`, `airportCity`, `airportState`) wherever possible.
+- Add a tiny client-safe curated lookup for facility airports only.
+- Replace broad client calls to `findAirportReference()` with server-provided labels, or a lightweight `src/data/airport-labels.client.ts` generated with only the current facility airports if needed.
+
+### Dataset Fields to Keep
+
+The generated artifact should be compact. Keep only fields used by current or near-term code:
+
+```ts
+interface AirportReference {
+  icao: string;
+  faa?: string;       // US FAA LID when available
+  iata?: string;
+  local?: string;     // Canadian/foreign local identifier if distinct
+  name: string;
+  city: string;
+  region: string;     // US state, CA province/territory, foreign admin region
+  country: string;    // ISO-3166 alpha-2
+  latitude: number;
+  longitude: number;
+  type?: "large_airport" | "medium_airport" | "small_airport" | "seaplane_base" | "heliport" | "closed";
+  scheduledService?: boolean;
+  runways?: RunwayInfo[];
+  source: "curated" | "faa-nfdc" | "open-dataset";
+}
+```
+
+Keep runway records compact:
+
+```ts
+interface RunwayInfo {
+  designator: string;
+  lengthFeet: number | null;
+  widthFeet: number | null;
+  surface: string | null;
+  lighting: string | null;
+}
+```
+
+Filter out closed facilities by default. Include heliports/seaplane bases only if the product explicitly needs them; otherwise they create noisy city matches.
+
+## 2. City to Airport Resolution
+
+### Index Design
+
+Generate indexes at build time instead of deriving all search keys on every request.
+
+Recommended JSON shape:
+
+```json
+{
+  "cityRegion": {
+    "SEATTLE|WA|US": ["KSEA", "KBFI", "KRNT", "KPAE"],
+    "VANCOUVER|BC|CA": ["CYVR", "CZBB", "CYPK"],
+    "SAN JUAN|PR|US": ["TJSJ", "TJIG", "TJRV"]
+  },
+  "cityCountry": {
+    "SEATTLE|US": ["KSEA", "KBFI", "KRNT", "KPAE"],
+    "VANCOUVER|CA": ["CYVR", "CZBB", "CYPK"]
+  },
+  "cityOnly": {
+    "PORTLAND": ["KPDX", "KPWM", "..."]
+  },
+  "nameKeys": {
+    "SEATTLE TACOMA": ["KSEA"],
+    "PEARSON": ["CYYZ"]
+  },
+  "code": {
+    "KSEA": "KSEA",
+    "SEA": "KSEA",
+    "CYVR": "CYVR",
+    "YVR": "CYVR"
+  }
+}
+```
+
+Normalize with the same spirit as `normalizeAirportLookupKey()`:
+
+- Uppercase.
+- Strip punctuation to spaces.
+- Collapse whitespace.
+- Normalize accents/diacritics if the source includes them.
+- Preserve slash-separated municipality aliases by emitting multiple city keys.
+
+Add region-name maps:
+
+- Existing US state names to abbreviations.
+- Canadian province/territory names to abbreviations.
+- Caribbean territory/country aliases:
+  - "Puerto Rico" / "PR"
+  - "USVI" / "U.S. Virgin Islands" / "VI"
+  - "Bahamas"
+  - "Jamaica"
+  - etc., based on the approved Caribbean scope.
+
+### Ranking
+
+For each city key, pre-sort candidate ICAOs using an explicit `airportPriorityScore`. Current scoring in `src/data/airports.ts` gives weight to IATA, "International", city in name, and runway presence. Extend it:
+
+1. Not closed.
+2. Facility type priority:
+   - large airport
+   - medium airport
+   - small airport
+   - seaplane base
+   - heliport
+3. Scheduled service or IATA code.
+4. Towered/controlled if the source has that field.
+5. International/major-name indicators.
+6. Runway length, if available.
+7. Distance to city centroid only if the source provides reliable municipality coordinates; otherwise avoid invented precision.
+
+Do not silently choose among multiple plausible airports when the user asked for a city. Instead:
+
+- If the city+region maps to one dominant airport and the next candidate is clearly secondary, resolve to the dominant airport.
+- If multiple candidates are plausible, return a clarification with the top 3-5:
+  - "Multiple airports match Vancouver, BC: CYVR (Vancouver Intl), CZBB (Boundary Bay), CYPK (Pitt Meadows). Which one?"
+- If the user asks for "nearest airport to [city]", prefer the ranked primary but still include alternate candidates if close/ambiguous.
+
+### Integration Points
+
+`findAirportReference(code)` should remain the code-lookup API, but it should be backed by:
+
+1. Curated overrides.
+2. Generated code index.
+3. FAA NFDC dynamic lookup for US airport IDs only.
+
+`findAirportReferencesInText(input)` should become:
+
+1. Fast code extraction from generated code index.
+2. Explicit city+region/country matching from generated city indexes.
+3. Name-key matching from generated name index.
+4. Curated aliases and facility/team-specific aliases.
+
+Keep `detectAirportAmbiguity(input)`, but update it to understand city ambiguity, not just same-name ambiguity. Today it only triggers for name-derived matches and explicitly avoids city-derived matches. With a large database, city-derived ambiguity is expected and should be first-class.
+
+Recommended API addition:
+
+```ts
+type AirportResolution =
+  | { kind: "resolved"; airport: AirportReference; candidates?: AirportReference[] }
+  | { kind: "ambiguous"; candidates: AirportReference[]; prompt: string }
+  | { kind: "not_found" };
+```
+
+Use this internally in the intent parser so ambiguity can produce the existing `unknown` intent with `reason: "ambiguous-airport"`.
+
+## 3. Canada and Caribbean Integration
+
+### Key Risk: Current ICAO Recognition Rejects Non-US 4-Letter ICAOs
+
+`src/ai/entity-extractor.ts` currently has a deliberate K-prefix gate:
+
+- Direct 4-letter ICAO matches require `code.startsWith("K")` or `findAirportReference(code)`.
+- Contextual matches allow `findAirportReference(code)`, `K***`, or FAA local identifiers.
+
+That gate prevents "INFO", "FROM", "WITH", etc. from being interpreted as airports, but it would reject valid Canadian and Caribbean ICAOs unless they are already in the static/generated reference set:
+
+- Canada: `CYVR`, `CYYZ`, `CYUL`, `CYOW`, etc.
+- Caribbean examples: `TJSJ`, `MKJP`, `MYNN`, `TNCM`, `MBPV`, etc.
+
+### Recommended Recognition Model
+
+Do not simply change the gate to "any 4 uppercase letters". That will reintroduce the INFO/FROM over-match bug.
+
+Use a two-tier model:
+
+#### Tier 1: Known-code acceptance
+
+Accept any 3- or 4-character airport code if it exists in the generated code index:
+
+- ICAO
+- IATA
+- FAA LID
+- Canadian/foreign local identifiers if source quality is good
+
+This is the safest expansion. Once `CYVR`, `MKJP`, `TJSJ`, etc. are in the generated dataset, direct references resolve without broad regex trust.
+
+#### Tier 2: Region-prefix acceptance only in aviation context
+
+For unknown 4-letter codes, accept only when:
+
+- The token matches a known ICAO prefix for approved regions, and
+- The user phrase has airport context (`at`, `for`, `near`, `from`, `to`, `airport`, `field`, `METAR`, `TAF`, `NOTAM`, `runways`, etc.), and
+- The token is not in the stopword list.
+
+Approved prefixes for this feature should be generated from the actual dataset, not hardcoded ad hoc. Expected examples:
+
+- US: `K`, plus Alaska/Hawaii/Pacific prefixes already in curated data such as `PA`, `PH`, `PG`, `PJ` as applicable.
+- Canada: `C` ICAO space, especially `CY`, `CZ`, `CW`.
+- Caribbean: `T`, `M`, `MY`, `MK`, `MB`, `MD`, `MU`, `MW`, `TN`, `TT`, etc., constrained by approved country scope.
+
+Unknown prefix acceptance should be conservative. It should support "METAR CYVR" even if the generated dataset misses it, but direct bare `INFO` must remain rejected.
+
+### Specific Entity Extractor Changes
+
+Replace hard-coded `code.startsWith("K")` with helpers:
+
+```ts
+isKnownAirportCode(code): boolean
+isRecognizedIcaoPrefix(code): boolean
+isAirportCodeInContext(code, surroundingText): boolean
+```
+
+Behavior:
+
+- Bare direct extraction:
+  - Accept if `isKnownAirportCode(code)`.
+  - Optionally accept `K***` for US backwards compatibility.
+  - Do not accept unknown `C***`, `T***`, `M***` bare unless confidence is high and tests prove no over-match.
+- Contextual extraction:
+  - Accept known code.
+  - Accept known regional ICAO prefix if the token appears in airport context.
+  - Keep `AIRPORT_CODE_STOPWORDS`, and expand it with observed false positives from tests (`INFO`, `FROM`, `THIS`, `THAT`, `WIND`, etc. as needed).
+- IATA extraction:
+  - Continue requiring known generated lookup; never accept arbitrary 3-letter words.
+
+Add tests for both sides:
+
+Positive:
+
+- `airport info for CYVR`
+- `show runways at CYYZ`
+- `METAR TJSJ`
+- `airport info for MKJP`
+- `weather at TNCM`
+- city names: `airport info for Vancouver BC`, `runways for Montego Bay Jamaica`
+
+Negative:
+
+- `show me airport info`
+- `information from weather`
+- `show info for runway`
+- `from this airport`
+- `with wind info`
+
+### Non-US Runway Lookup
+
+`getAirportRunways()` currently resolves ref -> FAA NFDC URL -> parse runway table -> fallback to static runway designators. FAA NFDC is US-only.
+
+Recommended behavior:
+
+1. If airport country is `US` and has FAA identifier:
+   - Use current FAA NFDC live path first.
+   - Fall back to generated runway data.
+2. If airport country is `CA` or approved Caribbean country:
+   - Do not call FAA NFDC.
+   - Return generated runway data from the open dataset if available.
+   - If runway data is missing, return `RUNWAY_DATA_UNAVAILABLE` with non-FAA verification messaging.
+
+This requires the airport reference to carry `country` and a source marker. `toFaaCode()` should not blindly strip `K` for non-US airports.
+
+Expected new source behavior:
+
+- `source: "FAA NFDC"` for US live runway data.
+- `source: "Open airport reference dataset"` for non-US generated runway data.
+- `source: "Inferred from airport data"` only when we are deriving designators without dimensions.
+
+## 4. Attribution and Reliability
+
+The existing API pattern is good: `ApiResponse<T>` carries `source`, `attribution.primary`, `supporting`, `reliability`, `refresh_interval`, `fetchedAt`, stale markers, and cache metadata. `runwayDetails` already nests its own source envelope inside the airport-info orchestrator payload.
+
+Add a source registry entry once Aaron finalizes the dataset:
+
+```ts
+openAirportDataset: {
+  id: "open-airport-reference",
+  name: "<final dataset name>",
+  authority: "Open aviation dataset",
+  reliability: "medium",
+  refresh_interval: "Generated from public dataset; refresh on approved cadence",
+  dataFormat: ["CSV", "JSON"],
+  reliabilityNotes: "Community/public-domain reference data. Useful for discovery and non-US coverage; verify operational use against official AIP/airport publications."
+}
+```
+
+If the selected source is official for a country, set reliability accordingly per source. If it is a global public-domain dataset, default to `medium`, not `high`.
+
+User-facing messaging:
+
+- US FAA-derived results:
+  - "Source: FAA NASR/NFDC, 28-day cycle."
+- Non-US generated results:
+  - "Source: open airport reference dataset. Verify runway and operational details against official AIP/airport publications before operational use."
+- Missing non-US authoritative data:
+  - Avoid "official FAA Chart Supplement" wording for foreign airports.
+  - Use: "Runway data could not be loaded for CYVR. Verify current airport information using official NAV CANADA / state AIP / airport publications."
+
+Update `FacilityOverview.tsx` and runway error text so it does not always say "official FAA Chart Supplement link." That copy is only correct for FAA-covered US airports.
+
+## 5. Phased Plan and Agent Assignments
+
+### Phase A — Larger US City Coverage
+
+Goal: Any US city in the selected dataset can resolve by city/state name without adding Canada/Caribbean behavior yet.
+
+Scope:
+
+- Generate US-only airport + city indexes.
+- Keep FAA NFDC live lookup as authoritative for US ID lookups and runway details.
+- Add server-only loading boundary.
+- Refactor client imports so generated data does not enter client bundles.
+- Extend ambiguity handling for city-derived matches.
+
+Assignments:
+
+- **Aaron (Data/Pipeline):**
+  - Provide source files, license confirmation, field mapping, and refresh cadence.
+  - Define filters: active public-use airports, include/exclude heliports/seaplane bases.
+- **Mattingly (API/server-loading):**
+  - Build `airport-reference.server.ts`.
+  - Add generated JSON loading and module-scope cache.
+  - Refactor `airports.ts` to keep public API stable while avoiding client bundle bloat.
+- **Haise (Entity extraction/code recognition):**
+  - Wire generated known-code lookup into `entity-extractor`.
+  - Preserve INFO/FROM false-positive protections.
+- **Lovell (Tests):**
+  - Add US city/state resolution tests, ambiguity tests, bundle-boundary regression tests if feasible, and existing parser regression coverage.
+- **Swigert (UI):**
+  - Update ambiguity prompt presentation if needed.
+  - Update non-specific runway error copy only where Phase A touches it.
+
+Hard dependencies:
+
+- Aaron's source schema.
+- Mattingly's server-only boundary before large generated data lands.
+
+Parallelizable:
+
+- Aaron can finalize source mapping while Haise writes extractor tests against a mocked generated lookup.
+- Swigert can update copy/clarification rendering independently.
+
+Exit criteria:
+
+- `airport info for Springfield IL` resolves correctly.
+- Ambiguous `airport info for Portland` asks for clarification instead of guessing.
+- `npm run lint`, `npm run build`, and `npx vitest run` pass.
+- Client bundle does not include the generated regional dataset.
+
+### Phase B — Canadian Coverage
+
+Goal: Canadian airport codes and city/province names resolve, with runway data from generated dataset and honest non-FAA attribution.
+
+Scope:
+
+- Add `CA` data to generated artifacts.
+- Add Canadian province/territory name normalization.
+- Add Canadian ICAO prefix handling through known-code lookup and contextual fallback.
+- Ensure runway lookup bypasses FAA NFDC for `country === "CA"`.
+- Update weather/NOTAM/plates expectations:
+  - Weather may work for ICAO stations if NOAA/AviationWeather covers them.
+  - FAA plates/diagram/hours likely won't; airport-info should degrade gracefully.
+
+Assignments:
+
+- **Aaron:** Validate Canadian fields and province mappings.
+- **Mattingly:** Add country-aware runway source selection and `toFaaCode()` safeguards.
+- **Haise:** Add `CY**`/`CZ**` recognition and negative over-match tests.
+- **Swigert:** Ensure UI labels say province/country cleanly.
+- **Lovell:** Add tests for `CYVR`, `CYYZ`, `Vancouver BC`, `Toronto Ontario`, ambiguity cases.
+
+Hard dependencies:
+
+- Phase A server-only data architecture.
+- Canadian data quality sufficient for code/city/runway fields.
+
+Parallelizable:
+
+- Haise can implement code-gate tests once generated lookup stubs exist.
+- Swigert can update display formatting for `city, region, country`.
+
+Exit criteria:
+
+- `airport info for CYVR` recognized.
+- `airport info for Vancouver BC` resolves or clarifies among Vancouver-area airports.
+- FAA NFDC is not called for Canadian airports.
+- Non-US runway responses carry open-dataset attribution.
+
+### Phase C — Caribbean Coverage
+
+Goal: Approved Caribbean country/territory airport codes and city/country names resolve.
+
+Scope:
+
+- Define exact Caribbean scope before implementation.
+- Add country/territory aliases and region normalization.
+- Add generated code/city/runway data for that scope.
+- Add ICAO prefix handling constrained by generated known-code lookup and contextual regional prefixes.
+- Update verification copy for non-US/non-FAA airports.
+
+Assignments:
+
+- **Aaron:** Produce final country/territory list and dataset coverage notes.
+- **Mattingly:** Add regional split or lazy loading if Caribbean data meaningfully increases artifact size.
+- **Haise:** Add recognition tests for `TJSJ`, `MKJP`, `MYNN`, `TNCM`, plus negative INFO/FROM regressions.
+- **Swigert:** Add country display and ambiguity UI polish.
+- **Lovell:** Add city/country tests: `San Juan PR`, `Kingston Jamaica`, `Nassau Bahamas`, `St Maarten`.
+
+Hard dependencies:
+
+- User approval of "Caribbean" scope.
+- Phase B non-US source attribution and runway behavior.
+
+Parallelizable:
+
+- Aaron's country list and Haise's prefix fixture work can run in parallel.
+
+Exit criteria:
+
+- Approved Caribbean city and code lookups work.
+- Non-US/non-FAA runway lookup does not call NFDC.
+- Ambiguous city names surface clarification.
+
+## 6. Risks and Open Questions
+
+### Risks
+
+1. **Client bundle bloat**
+   - `findAirportReference` is currently imported by client components. Adding large generated data without refactoring will likely increase client JS. This is the first architectural blocker.
+
+2. **False-positive ICAO extraction**
+   - Broadening from `K***` to global ICAO patterns can reintroduce the old INFO/FROM bug. The solution must require known-code lookup and aviation context for unknown regional prefixes.
+
+3. **City ambiguity**
+   - "Any city resolves" does not mean "one airport per city." Many cities have primary, reliever, GA, heliport, and nearby metro airports. The product must clarify rather than pretend certainty.
+
+4. **Data freshness and authority**
+   - FAA NFDC is authoritative for US. A public-domain global dataset may be stale or community-maintained. The UI/API must distinguish FAA high-reliability data from open-dataset medium-reliability data.
+
+5. **Non-US downstream services**
+   - Airport code resolution is only one layer. Plates, diagrams, hours, NOTAMs, and some weather paths are FAA/US-oriented. Airport-info responses for Canada/Caribbean must degrade gracefully and avoid US-specific verification copy.
+
+6. **Identifier semantics**
+   - `faa` is required on the current `AirportReference` interface. Non-US airports need optional `faa`, plus `local` and `country`. Several helper functions assume US behavior (`toFaaCode()` strips `K`).
+
+### Open Questions for Devin/Product
+
+1. What exactly counts as "Caribbean" for launch?
+   - Caribbean sovereign states only?
+   - Include US territories (PR/USVI), Dutch/French territories, Bermuda, Bahamas, Turks and Caicos?
+
+2. Should the generated dataset include only public-use airports, or also private airports, heliports, and seaplane bases?
+   - Recommendation: start with active public-use airports, include seaplane bases only if they have ICAO/IATA or operational relevance, exclude heliports unless explicitly requested.
+
+3. Is offline/server-local lookup a requirement?
+   - Recommendation: yes for name/code resolution. Use live sources only for authoritative operational overlays where available.
+
+4. What freshness SLA is acceptable for open-dataset airport/runway data?
+   - Recommendation: refresh generated artifacts monthly or per upstream release; display source generation date.
+
+5. Should ambiguous city queries prefer "commercial primary" by default, or always ask?
+   - Recommendation: default only when a candidate is clearly dominant by IATA/scheduled/large-airport ranking; otherwise ask.
+
+6. Do we need official Canadian/NAV CANADA data in Phase B, or is the open dataset acceptable for initial discovery?
+   - Recommendation: ship open-dataset discovery with clear verification messaging, then evaluate official sources for future reliability upgrades.
+
+## Concrete Implementation Checklist After Approval
+
+1. Add `AirportReference` v2 type with optional `faa`, `local`, `region`, `country`, `source`.
+2. Add generated-data script and region filters.
+3. Add server-only airport reference loader and module-scope parsed JSON cache.
+4. Refactor client imports away from broad `findAirportReference`.
+5. Replace O(n) city scan with generated city/name indexes.
+6. Add city-derived ambiguity model.
+7. Update entity extractor from `K` gate to known-code/contextual-prefix model.
+8. Make runway lookup country-aware:
+   - US: FAA NFDC first, generated fallback.
+   - Non-US: generated data only, no NFDC.
+9. Add source registry entry for the selected open airport dataset.
+10. Update UI/API copy for non-FAA verification.
+11. Add regression tests for US city coverage, Canadian/Caribbean codes, ambiguity, and INFO/FROM false positives.
+
+## Recommendation
+
+Approve Phase A first: generated US regional airport/city index behind a server-only boundary. This de-risks bundle size and ambiguity handling while delivering the largest immediate user value. Then layer Phase B Canada and Phase C Caribbean on the same architecture, with code-recognition expansion tied to known generated airport codes rather than broad regex acceptance.
+
+### 2026-06-24T19:00:00-07:00: Lovell Phase A validation — 2026-06-24 18:52 PT
+**By:** Lovell (inbox merge)
+
+_Source inbox:_ `lovell-phasea-validation.md`
+
+## Lovell Phase A validation — 2026-06-24 18:52 PT
+
+Verdict: 🟢 PASS for shipping Phase A to production.
+
+Validation gates:
+- `npm run lint`: exit 0, eslint `--max-warnings=0` produced 0 warnings.
+- `npm run build`: exit 0, printed `✓ Compiled successfully in 3.4s`.
+- `npx vitest run --reporter=dot`: exit 0, 32 test files passed, 237 tests passed. Builders' original count was independently reproduced at 235 before I added two reviewer tests for KSEA seed precedence and bare-city graceful handling.
+- Client bundle grep after build: no matches in `.next\static` for `us-airports`, `us-runways`, `us-frequencies`, `Aero B Ranch Airport`, or `OurAirports community dataset`.
+
+Independent proof checks:
+- PASS — 38W frequencies include CTAF 122.9.
+- PASS — 38W runways include 08/26 via OurAirports fallback, not unavailable.
+- PASS — KPAE fallback returns all runways: 11/29, 16L/34R, 16R/34L.
+- PASS — S18 airport-info resolves.
+- PASS — `Forks, WA` and `Forks, Washington` resolve to S18, not KKLS.
+- PASS — `INFO` is not extracted as an airport code.
+- PASS — curated AIRPORT_REFERENCES wins over dataset where both exist; S18 returns curated `FORKS`, not dataset `Forks Airport`.
+- PASS — KSEA local FAA/NASR seed path remains authoritative and is not overridden by dataset fallback.
+
+Regression sweep:
+- PASS — dataset runway/frequency provenance is labeled `OurAirports community dataset` / `ourairports-community-dataset`, reliability medium; no FAA-authoritative overclaim found.
+- PASS — `airport-dataset.ts` has `server-only`; imports trace only through server services/routes/tests. No client component transitively imports it; bundle grep confirms no generated dataset leakage.
+- PASS — bare `Forks` without region does not throw; it returns a clarification response.
+- PASS — unknown dataset code paths return null/empty arrays; service-level unknown handling remains NOT_FOUND/UNAVAILABLE style, no crash found.
+- NOTE — pre-existing weather/plates panel prior-data-on-failure debt appears unchanged; Phase A did not touch those client components.
+
+No blocking issues found.
+
+### 2026-06-24T19:00:00-07:00: 2026-06-24 Phase A Wave 2 dataset wiring
+**By:** Mattingly (inbox merge)
+
+_Source inbox:_ `mattingly-dataset-wiring.md`
+
+## 2026-06-24 Phase A Wave 2 dataset wiring
+- Kept curated AIRPORT_REFERENCES and live FAA NFDC as higher priority than OurAirports.
+- Added server-only OurAirports fallback at service/orchestrator seams only; did not import the dataset into client-shared airports.ts.
+- Frequency fallback maps OurAirports CTAF/UNICOM/TWR/GND/ATIS/AWOS/ASOS/CLD/CD/APP/DEP/CENTER/FSS tokens into the existing FrequencyType enum and marks source as OurAirports community dataset.
+- Runway fallback uses all OurAirports runway records after NFDC misses, preserving multi-runway airports such as KPAE.
+- City entities resolve server-side through the dataset; Forks, WA/Washington selects S18 deterministically.
+- Validation: lint passed, build compiled successfully, client static bundle grep found no us-airports/us-runways/us-frequencies JSON, vitest passed 235/235 tests.
+
+### 2026-06-24T19:00:00-07:00: Swigert frequency panel fix
+**By:** Swigert (inbox merge)
+
+_Source inbox:_ `swigert-frequency-panel-fix.md`
+
+# Swigert frequency panel fix
+
+## Decision
+For `airport_info` responses, clear the frequency panel to `[]` when the nested FAA frequency lookup fails instead of retaining prior dashboard frequencies.
+
+## Rationale
+Retaining prior frequency data can show a different airport's radios for the queried airport. The card label should also derive from the queried airport for `airport_info`, not from the weather station, because small airports may use a nearby METAR station.
+
+## Follow-up risk
+The airport-info merge still retains prior weather and procedure data when those nested lookups fail. This fix is scoped to frequencies per request; plates/weather should be assessed separately before changing fallback behavior.
+
+

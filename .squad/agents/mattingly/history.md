@@ -42,3 +42,7 @@
 - `ATIS_STALE_THRESHOLD_MIN` is now 75 minutes. Avoid reverting to aggressive 30-minute staleness unless backed by a source-specific freshness guarantee.
 - The bug was policy, not timezone/units: UTC issuance parsing and Zulu day rollover behavior were already covered and remain validated.
 - Service and route coverage now prove 60-minute ATIS is fresh, 76-minute ATIS is stale, and midnight UTC rollover remains correct; shipped in `f980f81`.
+
+## 2026-06-24T19:00:00-07:00 — Phase A shipped live
+Phase A Global Airport Database release is live at atc-companion.vercel.app via commit e7791d0. Dataset runway/frequency fallbacks, city/state resolution, and validation gates all passed; live checks confirmed 38W 08/26, 38W CTAF 122.9, and Forks WA -> S18.
+

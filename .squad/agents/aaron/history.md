@@ -55,3 +55,7 @@
 - City/state resolution only works against curated `AIRPORT_REFERENCES`; live NFDC lookup is keyed by airport ID, not city name.
 - Match state as a whole token/word, accepting either full name or abbreviation.
 - For `city, state` queries, require the actual city to match within that state; never let a state-word substring match an airport whose name merely contains the state (for example `Washington` in `Southwest Washington Regional Airport`).
+
+## 2026-06-24T19:00:00-07:00 — Phase A shipped live
+Phase A Global Airport Database release is live at atc-companion.vercel.app via commit e7791d0. Dataset runway/frequency fallbacks, city/state resolution, and validation gates all passed; live checks confirmed 38W 08/26, 38W CTAF 122.9, and Forks WA -> S18.
+
