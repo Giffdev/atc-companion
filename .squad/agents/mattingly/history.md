@@ -54,3 +54,9 @@ Implemented the backend `FREQUENCY_DATA_GAP` outcome for missing confirmed frequ
 ## 2026-06-25T09:40:42-07:00 — Phase B Canada shipped
 
 Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in commit `2618ee5` for Devin Sinha. Contributions recorded: Kranz scoped the Canada plan, Aaron generated/merged CA data server-side, Mattingly gated 122.9 and runway jurisdiction paths, Haise added Canadian extraction, Swigert removed hardcoded FAA-only copy, Lovell passed safety review, and Rai's yellow advisory was resolved. Unified validation: lint 0 warnings, clean build, 260 tests passed; production CYVR returns real runways with no Canadian 122.9 or FAA Chart Supplement leakage.
+
+## 2026-06-25T17:10:00Z — Canadian plates and navigation coordinate gaps shipped
+
+Mattingly shipped Canadian plates jurisdiction handling in commit `5070c70`: non-US FAA DTPP misses now return `PLATES_DATA_GAP` with NAV CANADA / Canada Air Pilot guidance instead of false no-plates copy; CYYJ was live-verified.
+
+Mattingly also shipped the navigation dataset-coordinate fallback in commit `f5d3260`: navigation math now accepts pre-resolved references, and orchestrator resolves curated airports first with dataset fallback for endpoints like CYYJ. Deployed live verification: KPAE→CYYJ returns trueHeading 315, magneticHeading 298, and 63.8nm; 269 tests pass.

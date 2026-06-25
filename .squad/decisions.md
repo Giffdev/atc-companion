@@ -1477,3 +1477,47 @@ None.
 **Findings:** 122.9 CTAF is gated to US non-towered dataset airports; Canadian data is direct OurAirports CSV transform with no fabricated Canadian overrides; `src/data/airport-dataset.ts` remains server-only and generated CA data was not found in the static client bundle; UI data-gap states render Canadian-safe server messages; US regressions remain covered.
 
 **Validation:** `npm run generate:airports`, lint with zero warnings, build, targeted safety/entity tests, and full Vitest passed. Final full-suite evidence in the shipment manifest was 260 tests passing after Rai's yellow finding was resolved.
+
+
+### 2026-06-25T17:10:00Z: Haise route classification fix
+**By:** Haise
+
+- Bug: clear point-to-point route requests such as `show me a direct route from KPAE to CYYJ` were being treated as ambiguous because route queries could also trigger passive `airport_info` classification.
+- Fix: excluded `NAVIGATION_PATTERN` matches from airport-info candidate/collapse paths so navigation action intents win cleanly; also allowed navigation endpoint resolution for contextual ICAO codes such as CYYJ.
+- Tests added: route regressions for US→Canada and US→US direct routes, alternate heading/distance phrasings, pure airport info (`show me info for KSEA`), and compound airport-info collapse (`weather and notams for KSEA`).
+- Validation: shipped in commit `5070c70`; live-verified. `npm run lint` passed with 0 warnings; `npm run build` passed; `npm test` passed with 261/261 tests.
+
+### 2026-06-25T17:10:00Z: Haise navigation reversal fix
+**By:** Haise
+
+Added a positional `X to Y` navigation endpoint extractor in `src/ai/entity-extractor.ts` that preserves typed order for alphanumeric airport identifiers such as `38W` while still resolving aliases like `pae` to `KPAE`.
+
+The fallback airport extraction returns bucket-ordered codes, not text-ordered codes, which reversed routes like `pae to 38w route`. The guarded pattern resolves both captured endpoint tokens before returning, so ordinary English phrases containing `to` fall through to existing behavior.
+
+Files: `src/ai/entity-extractor.ts`, `src/ai/intent-parser.test.ts`.
+Validation: shipped in commit `5070c70`; live-verified. `npm run lint` passed with 0 warnings; `npm run build` passed; `npm test -- --reporter=dot` passed with 266 tests.
+
+### 2026-06-25T17:10:00Z: Plates jurisdiction gap handling
+**By:** Mattingly
+
+Decision: Mirror the Phase B runway/frequency jurisdiction guard for FAA DTPP-backed plates. When `getDatasetAirport(code)?.country` is a non-US country, the plates service skips FAA DTPP entirely and returns `PLATES_DATA_GAP` with a jurisdiction-aware message instead of `AIRPORT_NOT_FOUND` or an empty-procedures implication.
+
+Rationale: FAA DTPP current.xml does not enumerate Canadian airports such as CYYJ. Treating that absence as airport/procedure absence is misleading; Canadian procedures are published through NAV CANADA / Canada Air Pilot (CAP), and the app should direct users to official national publications rather than invent data.
+
+UI plumbing: OperationsConsole extracts `PLATES_DATA_GAP` errors from direct plates queries and airport_info nested plate/SID/STAR/ODP/diagram responses, passes them as `jurisdictionNotes` to PlateViewer, and PlateViewer renders the note instead of generic empty-state copy.
+
+Validation: shipped in commit `5070c70`; live-verified: CYYJ returns the NAV CANADA / Canada Air Pilot note.
+
+### 2026-06-25T17:10:00Z: Mattingly navigation dataset coordinates fallback
+**By:** Mattingly
+
+Decision: Use the existing curated-airport-first, dataset-airport-fallback resolution path in the orchestrator navigation case while keeping `src/services/navigation.ts` client-safe.
+
+Why: `getNavigationBetween` only resolved through the curated airport list, so dataset-only airports like CYYJ could not produce route coordinates. The orchestrator already owns server-only dataset fallback imports, so it is the right boundary for resolving both endpoints before computing navigation.
+
+Files:
+- `src/services/navigation.ts`: added `getNavigationBetweenReferences(from, to, speedKnots)` and kept `getNavigationBetween(...)` as the curated-only compatibility wrapper.
+- `src/services/orchestrator.ts`: navigation case now resolves `from` and `to` via `findAirportReference(...) ?? findDatasetAirportReference(...)`, preserves the existing lookup-failed error, and computes from resolved references.
+- `tests/unit/navigation-service.test.ts`: added reference-based math coverage, CYYJ dataset fallback coverage, and KPAE→CYYJ orchestrator coverage.
+
+Validation: shipped in commit `f5d3260`; deployed and live-verified: KPAE→CYYJ returns trueHeading 315, magneticHeading 298, 63.8nm. `npm run lint` passed with 0 warnings; `npm run build` passed; `npm test` passed with 269 tests.
