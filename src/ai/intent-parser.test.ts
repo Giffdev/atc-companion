@@ -14,6 +14,24 @@ describe("extractEntities", () => {
     expect(entities.farReferences[0]).toMatchObject({ part: 91, section: "113" });
     expect(entities.runways).toContain("28L");
   });
+
+  it("extracts Canadian city and province entities", () => {
+    const entities = extractEntities("show me the airport at Vancouver, BC");
+
+    expect(entities.cityLocations).toContainEqual({ city: "vancouver", regionCode: "BC" });
+  });
+
+  it("keeps US city and state extraction working", () => {
+    const entities = extractEntities("weather near Seattle, Washington");
+
+    expect(entities.cityLocations).toContainEqual({ city: "seattle", regionCode: "WA" });
+  });
+
+  it("does not over-match NO or INFO as airport identifiers", () => {
+    const entities = extractEntities("no airport info");
+
+    expect(entities.airports).toEqual([]);
+  });
 });
 
 describe("parseIntent", () => {
@@ -46,6 +64,36 @@ describe("parseIntent", () => {
       type: "frequency",
       facility: "KSFO",
       freq_type: "TWR",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Canadian ICAO weather requests with airport context", async () => {
+    const intent = await parseIntent("CYVR weather");
+
+    expect(intent).toMatchObject({
+      type: "weather",
+      airport: "CYVR",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Canadian ICAO frequency requests with airport context", async () => {
+    const intent = await parseIntent("frequencies at CYXX");
+
+    expect(intent).toMatchObject({
+      type: "frequency",
+      facility: "CYXX",
+      requiresClarification: false
+    });
+  });
+
+  it("parses contextual Canadian local identifiers", async () => {
+    const intent = await parseIntent("weather at CAT4");
+
+    expect(intent).toMatchObject({
+      type: "weather",
+      airport: "CAT4",
       requiresClarification: false
     });
   });

@@ -290,7 +290,7 @@ const createFrequencyResult = (timestamp: string) => ({
   timestamp
 });
 
-const createFrequencyDataGapResult = (timestamp: string, facility: string, includeInferredCtaf: boolean) => ({
+const createFrequencyDataGapResult = (timestamp: string, facility: string, includeInferredCtaf: boolean, message?: string) => ({
   intent: {
     type: "frequency",
     facility,
@@ -310,7 +310,7 @@ const createFrequencyDataGapResult = (timestamp: string, facility: string, inclu
     isStale: false,
     error: {
       code: "FREQUENCY_DATA_GAP",
-      message: `Frequency data could not be loaded for ${facility} from our available sources. This is not confirmation that the airport has no published frequency.`,
+      message: message ?? `Frequency data could not be loaded for ${facility} from our available sources. This is not confirmation that the airport has no published frequency.`,
       details: "Available sources returned no confirmed frequency records. Verify CTAF/UNICOM in the official FAA Chart Supplement before use.",
       retryable: false,
       status: 503,
@@ -688,7 +688,7 @@ describe("OperationsConsole auto-refresh", () => {
     await flushUpdates();
 
     expect(screen.getByRole("heading", { name: "38W — Lynden Airport core frequencies" })).toBeInTheDocument();
-    expect(screen.getByText("Frequency data unavailable for 38W — Lynden Airport. Verify via official FAA sources.")).toBeInTheDocument();
+    expect(screen.getAllByText("No FAA frequency data found for 38W.").length).toBeGreaterThan(0);
     expect(screen.queryByText("Seattle Tower")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "KBLI — Bellingham International Airport core frequencies" })).not.toBeInTheDocument();
   });
@@ -732,6 +732,29 @@ describe("OperationsConsole auto-refresh", () => {
     await flushUpdates();
 
     expect(screen.getAllByText(new RegExp(`Frequency data could not be loaded for ${facility}`, "i")).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/122\.9/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Unverified convention — verify before use")).not.toBeInTheDocument();
+  });
+
+  it("renders Canadian frequency data gaps with NAV CANADA wording and no 122.9 hint", async () => {
+    const timestamp = "2026-06-18T05:00:00.000Z";
+    const canadaMessage = "Frequency data could not be loaded for CYVR from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in official Canadian aeronautical publications / NAV CANADA before use.";
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse(createFrequencyDataGapResult(timestamp, "CYVR", false, canadaMessage)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OperationsConsole initialNow={timestamp} />);
+
+    await flushUpdates();
+    fetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit frequency query" }));
+    await flushUpdates();
+
+    expect(screen.getAllByText(canadaMessage).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/NAV CANADA/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/122\.9/)).not.toBeInTheDocument();
     expect(screen.queryByText("Unverified convention — verify before use")).not.toBeInTheDocument();
   });

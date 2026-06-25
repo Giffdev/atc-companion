@@ -75,7 +75,8 @@ const RUNWAY_SIDE_MAP: Record<string, string> = {
 };
 
 const AIRPORT_CONTEXT_WORDS = /\b(?:at|for|near|nearest|into|from|to|airport|field|station)\s+([A-Za-z0-9]{2,4})\b/g;
-const AIRPORT_CONTEXT_AFTER_WORDS = /\b([A-Za-z0-9]{2,4})\s+(?:airport|field|runways?|diagram|weather|metar|taf|notams?)\b/gi;
+const AIRPORT_CONTEXT_AFTER_WORDS =
+  /\b([A-Za-z0-9]{2,4})\s+(?:airport|field|runways?|diagram|weather|metar|taf|notams?|frequenc(?:y|ies)|tower|ground|atis|ctaf)\b/gi;
 const ICAO_PATTERN = /\b([A-Z][A-Z0-9]{2,3})\b/g;
 const FAA_LID_PATTERN = /\b([A-Z0-9]{3,4})\b/gi;
 const IATA_PATTERN = /\b([A-Z]{3})\b/g;
@@ -92,8 +93,9 @@ const AIRLINE_CALLSIGN_PATTERN = /\b[A-Z]{2,3}\s?\d{1,4}[A-Z]?\b/g;
 const AIRCRAFT_TYPE_PATTERN = /\b(?:A\d{3}|B\d{3,4}|C\d{3}|SR\d{2}|PA-\d{2,2}|E\d{3}|CRJ\d{3}|ERJ\d{3}|B7\d{2}|A3\d{2})\b/gi;
 const SQUAWK_PATTERN = /\b(?:squawk\s+)?(7500|7600|7700)\b/gi;
 const SPEED_PATTERN = /\b(\d{2,3})\s*(?:knots?|kias|kt|kts)\b/gi;
-const AIRPORT_CODE_STOPWORDS = new Set(["THE", "AND", "FOR", "WITH", "ILS", "VOR", "SID", "STAR", "TAF", "APP"]);
+const AIRPORT_CODE_STOPWORDS = new Set(["THE", "AND", "FOR", "WITH", "ILS", "VOR", "SID", "STAR", "TAF", "APP", "INFO", "NO"]);
 const FAA_LID_SHAPE = /^(?=.{3,4}$)(?=.*[A-Z])(?=.*\d)[A-Z0-9]+$/;
+const CANADIAN_ICAO_SHAPE = /^C(?=.*[A-Z])[A-Z0-9]{3}$/;
 
 const REGULATORY_CUE_WORDS = /\b(?:far|cfr|part|section|regulation|rule)\b/i;
 
@@ -187,12 +189,33 @@ const US_STATE_NAME_TO_CODE: Record<string, string> = {
   wyoming: "WY"
 };
 const US_STATE_CODES = new Set(Object.values(US_STATE_NAME_TO_CODE));
+const CANADIAN_PROVINCE_TERRITORY_NAME_TO_CODE: Record<string, string> = {
+  alberta: "AB",
+  "british columbia": "BC",
+  manitoba: "MB",
+  "new brunswick": "NB",
+  "newfoundland and labrador": "NL",
+  "northwest territories": "NT",
+  "nova scotia": "NS",
+  nunavut: "NU",
+  ontario: "ON",
+  "prince edward island": "PE",
+  quebec: "QC",
+  saskatchewan: "SK",
+  yukon: "YT"
+};
+const CANADIAN_PROVINCE_TERRITORY_CODES = new Set(Object.values(CANADIAN_PROVINCE_TERRITORY_NAME_TO_CODE));
+const REGION_NAME_TO_CODE: Record<string, string> = {
+  ...US_STATE_NAME_TO_CODE,
+  ...CANADIAN_PROVINCE_TERRITORY_NAME_TO_CODE
+};
+const REGION_CODES = new Set([...US_STATE_CODES, ...CANADIAN_PROVINCE_TERRITORY_CODES]);
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const STATE_NAME_PATTERN = Object.keys(US_STATE_NAME_TO_CODE)
+const REGION_NAME_PATTERN = Object.keys(REGION_NAME_TO_CODE)
   .sort((left, right) => right.length - left.length)
   .map(escapeRegExp)
   .join("|");
-const CITY_REGION_PATTERN = new RegExp(`,\\s*(${STATE_NAME_PATTERN}|[A-Za-z]{2})(?=\\b)`, "gi");
+const CITY_REGION_PATTERN = new RegExp(`,\\s*(${REGION_NAME_PATTERN}|[A-Za-z]{2})(?=\\b)`, "gi");
 
 const collapseSpacedLetters = (input: string): string =>
   input.replace(/\b(?:[A-Z]\s+){2,}[A-Z]\b/g, (match) => match.replace(/\s+/g, ""));
@@ -293,10 +316,10 @@ const normalizeRegionCode = (region: string): string | undefined => {
 
   if (/^[a-z]{2}$/.test(normalized)) {
     const regionCode = normalized.toUpperCase();
-    return US_STATE_CODES.has(regionCode) ? regionCode : undefined;
+    return REGION_CODES.has(regionCode) ? regionCode : undefined;
   }
 
-  return US_STATE_NAME_TO_CODE[normalized];
+  return REGION_NAME_TO_CODE[normalized];
 };
 
 const normalizeCityCandidate = (candidate: string): string | undefined => {
@@ -342,13 +365,19 @@ export const extractCityRegions = (input: string): CityRegionEntity[] => {
 };
 
 const isFaaLocalIdentifier = (code: string): boolean => FAA_LID_SHAPE.test(code);
+const isCanadianIcaoIdentifier = (code: string): boolean => CANADIAN_ICAO_SHAPE.test(code);
 
 const isContextualAirportCode = (code: string): boolean => {
   if (AIRPORT_CODE_STOPWORDS.has(code)) {
     return false;
   }
 
-  return Boolean(findAirportReference(code)) || (/^[A-Z]{4}$/.test(code) && code.startsWith("K")) || isFaaLocalIdentifier(code);
+  return (
+    Boolean(findAirportReference(code)) ||
+    (/^[A-Z]{4}$/.test(code) && code.startsWith("K")) ||
+    isCanadianIcaoIdentifier(code) ||
+    isFaaLocalIdentifier(code)
+  );
 };
 
 export const extractAirportCodes = (input: string): string[] => {

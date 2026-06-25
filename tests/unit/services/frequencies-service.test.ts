@@ -141,6 +141,34 @@ describe("getFrequencies — NFDC fallback and data gaps", () => {
     );
   });
 
+  it("returns FREQUENCY_DATA_GAP without CTAF hint or FAA verification copy for a Canadian non-towered gap", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("Canadian dataset gaps should not query FAA NFDC");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await getFrequencies("CAA4");
+
+    expect(response.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    if (response.ok) return;
+
+    expect(response.error.code).toBe("FREQUENCY_DATA_GAP");
+    expect(response.error.status).toBe(503);
+    expect(response.error.retryable).toBe(true);
+    expect(response.error.frequencies).toEqual([]);
+    expect(response.error.inferredCtaf).toBeUndefined();
+    expect(response.error.message).toBe(
+      "Frequency data could not be loaded for CAA4 from our available sources. This is not confirmation that the airport has no published frequency; verify frequency assignments in official Canadian aeronautical publications or with NAV CANADA before use."
+    );
+    expect(response.error.details).toBe(
+      "Available sources returned no confirmed frequency records. Verify frequency assignments in official Canadian aeronautical publications or with NAV CANADA before use."
+    );
+    expect(response.error.message).not.toMatch(/FAA|NFDC|Chart Supplement/);
+    expect(response.error.details).not.toMatch(/FAA|NFDC|Chart Supplement/);
+    expect(response.source.id).toBe("ourairports-community-dataset");
+  });
+
   it("returns FREQUENCY_DATA_GAP without CTAF hint for a towered/medium_airport gap", async () => {
     vi.stubGlobal(
       "fetch",
@@ -192,6 +220,31 @@ describe("getFrequencies — NFDC fallback and data gaps", () => {
     if (!response.ok) return;
 
     expect(response.data.length).toBeGreaterThan(0);
+    expect(response.error).toBeUndefined();
+  });
+
+  it("returns confirmed Canadian OurAirports frequency rows normally", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("Canadian dataset frequencies should not query FAA NFDC");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await getFrequencies("CYVR");
+
+    expect(response.ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    if (!response.ok) return;
+
+    expect(response.data.length).toBeGreaterThan(0);
+    expect(response.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "ATIS",
+          valueMHz: 124.6,
+          source: expect.objectContaining({ id: "ourairports-community-dataset" })
+        })
+      ])
+    );
     expect(response.error).toBeUndefined();
   });
 });

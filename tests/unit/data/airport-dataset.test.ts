@@ -45,9 +45,27 @@ describe("airport dataset", () => {
     expect(getDatasetAirport("4W0")).toMatchObject({
       ident: "4W0",
       name: "Bandera State Airport",
-      type: "small_airport"
+      type: "small_airport",
+      country: "US"
     });
     expect(getDatasetFrequencies("4W0")).toEqual([]);
+  });
+
+  it("resolves Vancouver CYVR from the Canadian generated dataset", () => {
+    expect(getDatasetAirport("CYVR")).toMatchObject({
+      ident: "CYVR",
+      name: "Vancouver International Airport",
+      country: "CA"
+    });
+  });
+
+  it("resolves Canadian local code CSQ4 from the generated dataset", () => {
+    expect(getDatasetAirport("CSQ4")).toMatchObject({
+      ident: "CA-0084",
+      localCode: "CSQ4",
+      name: "Casey (Camp de Base) Airport",
+      country: "CA"
+    });
   });
 
   it("preserves all runways for multi-runway airports", () => {

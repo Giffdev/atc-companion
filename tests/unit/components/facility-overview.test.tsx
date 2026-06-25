@@ -62,4 +62,49 @@ describe("FacilityOverview", () => {
     expect(screen.queryByText("Unknown Airport")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/04\/22/)).toBeInTheDocument());
   });
+
+  it("renders server-provided Canadian runway data-gap copy", async () => {
+    const canadaMessage = "Runways could not be loaded for CYVR. Verify using official Canadian aeronautical publications / NAV CANADA before use.";
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/weather")) {
+        return jsonResponse({ ok: false, data: null });
+      }
+
+      if (url.startsWith("/api/atis")) {
+        return jsonResponse({ ok: true, data: { CYVR: null } });
+      }
+
+      if (url.startsWith("/api/query")) {
+        return jsonResponse({
+          response: {
+            ok: true,
+            data: {
+              airportName: "Vancouver International",
+              runwayDetails: {
+                ok: false,
+                error: { message: canadaMessage }
+              }
+            }
+          }
+        });
+      }
+
+      return jsonResponse({}, { status: 404 });
+    });
+
+    render(
+      <FacilityOverview
+        airports={["CYVR"]}
+        facilityName="Test Facility"
+        facilityType="approach"
+        onSelectAirport={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText(canadaMessage)).toBeInTheDocument();
+    expect(screen.queryByText(/FAA Chart Supplement/)).not.toBeInTheDocument();
+  });
 });

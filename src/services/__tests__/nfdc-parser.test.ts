@@ -135,6 +135,22 @@ const smallAirportNfdcHtml = `
   </html>
 `;
 
+const noRunwayAirportNfdcHtml = `
+  <html>
+    <head><title>Aero B Ranch Airport</title></head>
+    <body>
+      <div>FAA Identifier 00AA</div>
+      <div class="tab-pane active" id="summary">
+        <table>
+          <tr><td>Latitude/Longitude</td><td>38-42-16.000 N / 101-28-23.000 W</td></tr>
+          <tr><td>From city</td><td>3 miles SW of LEOTI, KS</td></tr>
+        </table>
+      </div>
+      <div>No runway records available.</div>
+    </body>
+  </html>
+`;
+
 afterEach(() => {
   appCache.clear();
   vi.restoreAllMocks();
@@ -265,6 +281,67 @@ describe("parseRunwaysFromHtml", () => {
     if (!result.ok) return;
     expect(result.data.source).toBe("OurAirports community dataset");
     expect(result.data.runways.map((runway) => runway.designator)).toEqual(["11/29", "16L/34R", "16R/34L"]);
+  });
+
+  it("keeps FAA Chart Supplement wording for a US runway data gap", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(noRunwayAirportNfdcHtml)));
+
+    const result = await getAirportRunways("00AA");
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("RUNWAY_DATA_UNAVAILABLE");
+    expect(result.error.message).toBe(
+      "Runway data could not be loaded for 00AA. Verify runway configuration using the official FAA Chart Supplement link."
+    );
+    expect(result.error.details).toBe(
+      "https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=00AA"
+    );
+  });
+
+  it("returns Canadian OurAirports runway rows for CYVR without querying FAA NFDC", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("Canadian dataset runways should not query FAA NFDC");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getAirportRunways("CYVR");
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    if (!result.ok) return;
+    expect(result.data.source).toBe("OurAirports community dataset");
+    expect(result.data.runways).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ designator: "08L/26R", lengthFeet: 9940, widthFeet: 200 }),
+        expect.objectContaining({ designator: "08R/26L", lengthFeet: 11500, widthFeet: 200 }),
+        expect.objectContaining({ designator: "13/31", lengthFeet: 7300, widthFeet: 200 })
+      ])
+    );
+    expect(result.error).toBeUndefined();
+  });
+
+  it("uses NAV CANADA wording for a Canadian runway data gap", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("Canadian dataset gaps should not query FAA NFDC");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getAirportRunways("CAA4");
+
+    expect(result.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    if (result.ok) return;
+    expect(result.error.code).toBe("RUNWAY_DATA_UNAVAILABLE");
+    expect(result.error.message).toBe(
+      "Runway data could not be loaded for CAA4. Verify runway configuration in official Canadian aeronautical publications or with NAV CANADA."
+    );
+    expect(result.error.details).toBe(
+      "Available sources returned no runway records. Verify runway configuration in official Canadian aeronautical publications or with NAV CANADA."
+    );
+    expect(result.error.message).not.toMatch(/FAA|NFDC|Chart Supplement/);
+    expect(result.error.details).not.toMatch(/FAA|NFDC|Chart Supplement/);
+    expect(result.source.id).toBe("ourairports-community-dataset");
   });
 });
 

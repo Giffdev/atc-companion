@@ -40,6 +40,7 @@ type RunwayRecord = Record<string, DatasetRunway[]>;
 type FrequencyRecord = Record<string, DatasetFrequency[]>;
 
 const GENERATED_DATA_DIR = path.join(process.cwd(), "src", "data", "generated");
+const DATASET_PREFIXES = ["us", "ca"] as const;
 
 const readGeneratedJson = <T>(fileName: string): T => {
   const filePath = path.join(GENERATED_DATA_DIR, fileName);
@@ -51,9 +52,15 @@ const normalizeCity = (city: string): string => city.trim().replace(/\s+/g, " ")
 const normalizeRegionCode = (regionCode: string): string => regionCode.trim().toUpperCase();
 const cityRegionKey = (city: string, regionCode: string): string => `${normalizeCity(city)}|${normalizeRegionCode(regionCode)}`;
 
-const airportRecords = readGeneratedJson<AirportRecord[]>("us-airports.json");
-const runwayRecords = readGeneratedJson<RunwayRecord>("us-runways.json");
-const frequencyRecords = readGeneratedJson<FrequencyRecord>("us-frequencies.json");
+const airportRecords = DATASET_PREFIXES.flatMap((prefix) => readGeneratedJson<AirportRecord[]>(`${prefix}-airports.json`));
+const runwayRecords = DATASET_PREFIXES.reduce<RunwayRecord>(
+  (records, prefix) => ({ ...records, ...readGeneratedJson<RunwayRecord>(`${prefix}-runways.json`) }),
+  {}
+);
+const frequencyRecords = DATASET_PREFIXES.reduce<FrequencyRecord>(
+  (records, prefix) => ({ ...records, ...readGeneratedJson<FrequencyRecord>(`${prefix}-frequencies.json`) }),
+  {}
+);
 
 const airports = airportRecords.map<DatasetAirport>((airport) => ({
   ...airport,

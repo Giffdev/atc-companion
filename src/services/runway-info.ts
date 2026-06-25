@@ -1,4 +1,4 @@
-import { getDatasetRunways } from "@/data/airport-dataset";
+import { getDatasetAirport, getDatasetRunways, type DatasetAirport, type DatasetRunway } from "@/data/airport-dataset";
 import { fetchAirportFromNfdc, findAirportReference, toFaaCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
@@ -6,7 +6,7 @@ import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
 import { collapseWhitespace, extractTableCellPairs, findFirstPairValue, stripHtmlToText } from "@/services/nfdc-html";
-import { findDatasetAirportReference, OURAIRPORTS_SOURCE } from "@/services/dataset-airport-fallback";
+import { findDatasetAirportReference, OURAIRPORTS_SOURCE, toAirportReferenceFromDataset } from "@/services/dataset-airport-fallback";
 
 const NASR_SOURCE = getDataSource("faaNasr");
 
@@ -25,24 +25,98 @@ export interface AirportRunways {
   source: string;
 }
 
+const getRunwayDatasetAirport = (airportCodeInput: string, faaCode: string): DatasetAirport | undefined =>
+  getDatasetAirport(airportCodeInput) ?? getDatasetAirport(faaCode) ?? undefined;
+
+const getRunwayDatasetRows = (
+  airportCodeInput: string,
+  faaCode: string,
+  airportRef: { icao?: string; faa?: string },
+  datasetAirport?: DatasetAirport
+): DatasetRunway[] => {
+  const candidates = [
+    datasetAirport?.ident,
+    datasetAirport?.icao,
+    datasetAirport?.gpsCode,
+    datasetAirport?.iata,
+    datasetAirport?.localCode,
+    airportRef.icao,
+    airportRef.faa,
+    airportCodeInput,
+    faaCode
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const runways = getDatasetRunways(candidate);
+    if (runways.length > 0) {
+      return runways;
+    }
+  }
+
+  return [];
+};
+
+const getAirportNotFoundMessage = (airportCodeInput: string, datasetAirport?: DatasetAirport): string => {
+  if (datasetAirport?.country === "US") {
+    return `Airport ${airportCodeInput} not found in FAA database.`;
+  }
+
+  if (datasetAirport?.country === "CA") {
+    return `Airport ${airportCodeInput} could not be found in available airport data sources. Verify the identifier in official Canadian aeronautical publications or with NAV CANADA.`;
+  }
+
+  return `Airport ${airportCodeInput} could not be found in available airport data sources. Verify the identifier in official aeronautical publications for that airport's jurisdiction.`;
+};
+
+const getRunwayDataGapMessage = (airportCodeInput: string, datasetAirport?: DatasetAirport): string => {
+  if (datasetAirport?.country === "CA") {
+    return `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration in official Canadian aeronautical publications or with NAV CANADA.`;
+  }
+
+  if (datasetAirport?.country && datasetAirport.country !== "US") {
+    return `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration in official aeronautical publications for that airport's jurisdiction.`;
+  }
+
+  return `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration using the official FAA Chart Supplement link.`;
+};
+
+const getRunwayDataGapDetails = (datasetAirport: DatasetAirport | undefined, sourceUrl: string): string => {
+  if (datasetAirport?.country === "CA") {
+    return "Available sources returned no runway records. Verify runway configuration in official Canadian aeronautical publications or with NAV CANADA.";
+  }
+
+  if (datasetAirport?.country && datasetAirport.country !== "US") {
+    return "Available sources returned no runway records. Verify runway configuration in official aeronautical publications for that airport's jurisdiction.";
+  }
+
+  return sourceUrl;
+};
+
 /**
  * Fetch runway data for an airport from the FAA NFDC airport display page.
  * Results are cached for 28 days (runway data rarely changes).
  */
 export const getAirportRunways = async (airportCodeInput: string): Promise<ApiResponse<AirportRunways>> => {
+  const faaCode = toFaaCode(airportCodeInput);
+  const datasetAirport = getRunwayDatasetAirport(airportCodeInput, faaCode);
+  const shouldQueryNfdc = !datasetAirport || datasetAirport.country === "US";
   const airportRef = findAirportReference(airportCodeInput)
-    ?? await fetchAirportFromNfdc(airportCodeInput)
-    ?? findDatasetAirportReference(airportCodeInput);
-  const faaCode = airportRef?.faa ?? toFaaCode(airportCodeInput);
+    ?? (shouldQueryNfdc ? await fetchAirportFromNfdc(airportCodeInput) : null)
+    ?? (datasetAirport ? toAirportReferenceFromDataset(datasetAirport) : findDatasetAirportReference(airportCodeInput));
   const icaoCode = airportRef?.icao ?? airportCodeInput.toUpperCase();
   const cacheKey = createCacheKey("airport-runways", { airport: icaoCode });
-  const sourceUrl = `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}`;
+  const resolvedFaaCode = airportRef?.faa ?? faaCode;
+  const sourceUrl = `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${resolvedFaaCode}`;
 
   if (!airportRef) {
     return createApiErrorResponse(
       {
         code: "AIRPORT_NOT_FOUND",
-        message: `Airport ${airportCodeInput} not found in FAA database.`,
+        message: getAirportNotFoundMessage(airportCodeInput, datasetAirport),
         retryable: false,
         status: 404
       },
@@ -55,11 +129,15 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
     const source = withSourceUrl(NASR_SOURCE, sourceUrl);
 
     try {
+      if (!shouldQueryNfdc) {
+        throw new Error("NFDC runway lookup skipped for non-US dataset airport");
+      }
+
       const result = await fetchWithRetry<string>(
         `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp`,
         {
           source: NASR_SOURCE,
-          query: { airportId: faaCode },
+          query: { airportId: resolvedFaaCode },
           timeoutMs: 8000,
           retries: 1,
           parseAs: "text"
@@ -67,7 +145,7 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
       );
 
       // Validate real airport page (not error/redirect)
-      const hasAirportContent = result.data.includes(faaCode) || result.data.includes(icaoCode)
+      const hasAirportContent = result.data.includes(resolvedFaaCode) || result.data.includes(icaoCode)
         || /airport\s+(?:name|information)/i.test(result.data);
       if (!hasAirportContent) {
         throw new Error("NFDC returned non-airport page");
@@ -86,7 +164,7 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
       // Fall through to inference
     }
 
-    const datasetRunways = getDatasetRunways(airportCodeInput).map((runway): RunwayInfo => ({
+    const datasetRunways = getRunwayDatasetRows(airportCodeInput, resolvedFaaCode, airportRef, datasetAirport).map((runway): RunwayInfo => ({
       designator: runway.designator,
       lengthFeet: runway.lengthFeet ?? null,
       widthFeet: runway.widthFeet ?? null,
@@ -108,12 +186,12 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
       return createApiErrorResponse(
         {
           code: "RUNWAY_DATA_UNAVAILABLE",
-          message: `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration using the official FAA Chart Supplement link.`,
-          details: sourceUrl,
+          message: getRunwayDataGapMessage(airportCodeInput, datasetAirport),
+          details: getRunwayDataGapDetails(datasetAirport, sourceUrl),
           retryable: true,
           status: 503
         },
-        { source, fetchedAt }
+        { source: datasetAirport?.country && datasetAirport.country !== "US" ? OURAIRPORTS_SOURCE : source, fetchedAt }
       );
     }
 

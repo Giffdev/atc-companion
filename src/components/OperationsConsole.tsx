@@ -177,6 +177,15 @@ const getFrequencyDataGapError = (liveResult: LiveQueryResult | null): ApiError 
   return null;
 };
 
+const getAirportInfoFrequencyError = (liveResult: LiveQueryResult | null): ApiError | null => {
+  if (liveResult?.intent.type !== "airport_info" || !liveResult.response.ok) {
+    return null;
+  }
+
+  const frequencies = (liveResult.response.data as AirportInfoQueryPayload).frequencies;
+  return frequencies.ok ? null : frequencies.error;
+};
+
 const applyResponseStatus = (items: SourceStatusItem[], id: SourceStatusItem["id"], response: ApiResponse<unknown>): SourceStatusItem[] =>
   items.map((item) =>
     item.id !== id
@@ -681,7 +690,7 @@ const renderQuerySummary = (
 
               {airportInfo.runwayDetails && !airportInfo.runwayDetails.ok && (
                 <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-                  Runways could not be loaded from FAA NFDC. This is not confirmation that the airport has no runways; verify using the official FAA Chart Supplement link.
+                  {airportInfo.runwayDetails.error.message || "Runways could not be loaded. This is not confirmation that the airport has no runways; verify using official aeronautical publications before use."}
                 </div>
               )}
             </div>
@@ -1000,13 +1009,11 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     activeIntent?.type === "frequency" ? activeIntent.facility
     : activeIntent?.type === "airport_info" ? activeIntent.airport
     : selectedFacility?.primaryAirport || dashboardData.weather.stationIcao || "Field";
-  const airportInfoFrequencyUnavailable =
-    liveResult?.intent.type === "airport_info" &&
-    liveResult.response.ok &&
-    !(liveResult.response.data as AirportInfoQueryPayload).frequencies.ok;
+  const airportInfoFrequencyError = getAirportInfoFrequencyError(liveResult);
+  const airportInfoFrequencyUnavailable = Boolean(airportInfoFrequencyError);
   const frequencyDataGapError = getFrequencyDataGapError(liveResult) ?? getFrequencyDataGapError(facilityResults.get("frequency") ?? null);
   const frequencyEmptyMessage = airportInfoFrequencyUnavailable
-    ? `Frequency data unavailable for ${formatAirportTitle(frequencyPanelAirport)}. Verify via official FAA sources.`
+    ? (airportInfoFrequencyError?.message ?? `Frequency data unavailable for ${formatAirportTitle(frequencyPanelAirport)}. Verify via official aeronautical publications before use.`)
     : "No frequencies returned for the active live query.";
 
   const trafficAirportIcao = useMemo(() => {

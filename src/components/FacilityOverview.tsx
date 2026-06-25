@@ -261,7 +261,7 @@ const AirportOverviewCard = ({ icao, weather, atis, atisChecked, runways, runway
 
       {runwayError && runways.length === 0 && (
         <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-          Runways could not be loaded. Verify using the official FAA Chart Supplement link.
+          {runwayError}
         </div>
       )}
 

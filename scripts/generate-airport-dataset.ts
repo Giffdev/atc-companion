@@ -1,7 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const COUNTRIES = ["US"] as const;
+const DATASETS = [
+  { country: "US", prefix: "us" },
+  { country: "CA", prefix: "ca" }
+] as const;
 const EXCLUDED_TYPES = new Set(["closed", "heliport", "balloonport"]);
 const AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv";
 const RUNWAYS_URL = "https://davidmegginson.github.io/ourairports-data/runways.csv";
@@ -200,20 +203,19 @@ const toAirport = (raw: RawAirport): GeneratedAirport => {
   };
 };
 
-const main = async (): Promise<void> => {
-  const countryAllowlist = new Set<string>(COUNTRIES);
-  const [airportsCsv, runwaysCsv, frequenciesCsv] = await Promise.all([
-    fetchCsv(AIRPORTS_URL),
-    fetchCsv(RUNWAYS_URL),
-    fetchCsv(FREQUENCIES_URL)
-  ]);
-  const rawAirports = parseCsv(airportsCsv) as unknown as RawAirport[];
-  const rawRunways = parseCsv(runwaysCsv) as unknown as RawRunway[];
-  const rawFrequencies = parseCsv(frequenciesCsv) as unknown as RawFrequency[];
-
+const buildDataset = (
+  country: string,
+  rawAirports: RawAirport[],
+  rawRunways: RawRunway[],
+  rawFrequencies: RawFrequency[]
+): {
+  airports: GeneratedAirport[];
+  runwaysByAirport: Record<string, GeneratedRunway[]>;
+  frequenciesByAirport: Record<string, GeneratedFrequency[]>;
+} => {
   const sourceIdentToGeneratedIdent = new Map<string, string>();
   const airports = rawAirports
-    .filter((airport) => countryAllowlist.has(airport.iso_country))
+    .filter((airport) => airport.iso_country === country)
     .filter((airport) => !EXCLUDED_TYPES.has(airport.type))
     .map((airport) => {
       const generated = toAirport(airport);
@@ -315,18 +317,45 @@ const main = async (): Promise<void> => {
       ])
   );
 
-  await mkdir(OUTPUT_DIR, { recursive: true });
-  await Promise.all([
-    writeFile(path.join(OUTPUT_DIR, "us-airports.json"), JSON.stringify(airports), "utf8"),
-    writeFile(path.join(OUTPUT_DIR, "us-runways.json"), JSON.stringify(sortedRunwaysByAirport), "utf8"),
-    writeFile(path.join(OUTPUT_DIR, "us-frequencies.json"), JSON.stringify(sortedFrequenciesByAirport), "utf8")
-  ]);
+  return {
+    airports,
+    runwaysByAirport: sortedRunwaysByAirport,
+    frequenciesByAirport: sortedFrequenciesByAirport
+  };
+};
 
-  const runwayCount = Object.values(sortedRunwaysByAirport).reduce((sum, runways) => sum + runways.length, 0);
-  const frequencyCount = Object.values(sortedFrequenciesByAirport).reduce((sum, frequencies) => sum + frequencies.length, 0);
-  console.log(
-    `Generated ${airports.length} US airports, ${runwayCount} runways, and ${frequencyCount} frequencies from OurAirports public-domain CSVs plus local corrections.`
-  );
+const main = async (): Promise<void> => {
+  const [airportsCsv, runwaysCsv, frequenciesCsv] = await Promise.all([
+    fetchCsv(AIRPORTS_URL),
+    fetchCsv(RUNWAYS_URL),
+    fetchCsv(FREQUENCIES_URL)
+  ]);
+  const rawAirports = parseCsv(airportsCsv) as unknown as RawAirport[];
+  const rawRunways = parseCsv(runwaysCsv) as unknown as RawRunway[];
+  const rawFrequencies = parseCsv(frequenciesCsv) as unknown as RawFrequency[];
+
+  await mkdir(OUTPUT_DIR, { recursive: true });
+
+  for (const dataset of DATASETS) {
+    const { airports, runwaysByAirport, frequenciesByAirport } = buildDataset(
+      dataset.country,
+      rawAirports,
+      rawRunways,
+      rawFrequencies
+    );
+
+    await Promise.all([
+      writeFile(path.join(OUTPUT_DIR, `${dataset.prefix}-airports.json`), JSON.stringify(airports), "utf8"),
+      writeFile(path.join(OUTPUT_DIR, `${dataset.prefix}-runways.json`), JSON.stringify(runwaysByAirport), "utf8"),
+      writeFile(path.join(OUTPUT_DIR, `${dataset.prefix}-frequencies.json`), JSON.stringify(frequenciesByAirport), "utf8")
+    ]);
+
+    const runwayCount = Object.values(runwaysByAirport).reduce((sum, runways) => sum + runways.length, 0);
+    const frequencyCount = Object.values(frequenciesByAirport).reduce((sum, frequencies) => sum + frequencies.length, 0);
+    console.log(
+      `Generated ${airports.length} ${dataset.country} airports, ${runwayCount} runways, and ${frequencyCount} frequencies from OurAirports public-domain CSVs plus local corrections.`
+    );
+  }
 };
 
 void main().catch((error: unknown) => {

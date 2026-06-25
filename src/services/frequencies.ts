@@ -1,5 +1,5 @@
 import { findApproachFacility, findApproachFacilityByAirport } from "@/data/approach-facilities";
-import { getDatasetAirport, getDatasetFrequencies } from "@/data/airport-dataset";
+import { getDatasetAirport, getDatasetFrequencies, type DatasetAirport } from "@/data/airport-dataset";
 import { LOCAL_FREQUENCY_SEED } from "@/data/frequency-seed";
 import { toFaaCode, toIcaoCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
@@ -70,29 +70,61 @@ const getDatasetFallbackFrequencies = (airportCode: string, requestedType?: stri
     .filter((record) => !requestedFrequencyType || record.type === requestedFrequencyType);
 };
 
-const isDatasetNonToweredAirport = (airport: string, airportCode: string, faaCode: string): boolean => {
-  const datasetAirport = getDatasetAirport(airportCode) ?? getDatasetAirport(faaCode) ?? getDatasetAirport(airport);
-  return datasetAirport ? NON_TOWERED_DATASET_AIRPORT_TYPES.has(datasetAirport.type) : false;
+const getDatasetAirportForFrequencyLookup = (airport: string, airportCode: string, faaCode: string): DatasetAirport | undefined => {
+  return getDatasetAirport(airportCode) ?? getDatasetAirport(faaCode) ?? getDatasetAirport(airport) ?? undefined;
 };
 
-const toFrequencyDataGapResponse = (airport: string, airportCode: string, faaCode: string): ApiResponse<never> => {
-  const hasNonToweredHint = isDatasetNonToweredAirport(airport, airportCode, faaCode);
-  const message = hasNonToweredHint
-    ? `Frequency data could not be loaded for ${airportCode} from our available sources. This is not confirmation that the airport has no published frequency.`
-    : `Frequency data could not be loaded for ${airportCode} from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`;
+const getFrequencyGapVerificationText = (
+  datasetAirport: DatasetAirport | undefined,
+  hasNonToweredHint: boolean
+): string | undefined => {
+  if (datasetAirport?.country === "CA") {
+    return "verify frequency assignments in official Canadian aeronautical publications or with NAV CANADA before use";
+  }
+
+  if (datasetAirport?.country && datasetAirport.country !== "US") {
+    return "verify frequency assignments in official aeronautical publications for that airport's jurisdiction before use";
+  }
+
+  if (!hasNonToweredHint) {
+    return "verify CTAF/UNICOM in the official FAA Chart Supplement";
+  }
+
+  return undefined;
+};
+
+const toFrequencyDataGapResponse = (
+  airport: string,
+  airportCode: string,
+  faaCode: string,
+  datasetAirport = getDatasetAirportForFrequencyLookup(airport, airportCode, faaCode)
+): ApiResponse<never> => {
+  const hasNonToweredHint =
+    datasetAirport?.country === "US" &&
+    NON_TOWERED_DATASET_AIRPORT_TYPES.has(datasetAirport.type);
+  const verificationText = getFrequencyGapVerificationText(datasetAirport, hasNonToweredHint);
+  const message = `Frequency data could not be loaded for ${airportCode} from our available sources. This is not confirmation that the airport has no published frequency${
+    verificationText ? `; ${verificationText}.` : "."
+  }`;
+  const details = verificationText
+    ? `Available sources returned no confirmed frequency records. ${verificationText[0].toUpperCase()}${verificationText.slice(1)}.`
+    : "Available sources returned no confirmed frequency records. Verify CTAF/UNICOM in the official FAA Chart Supplement before use.";
+  const source = datasetAirport?.country && datasetAirport.country !== "US"
+    ? OURAIRPORTS_SOURCE
+    : withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL);
 
   return createApiErrorResponse(
     {
       code: FREQUENCY_DATA_GAP_CODE,
       message,
-      details: "Available sources returned no confirmed frequency records. Verify CTAF/UNICOM in the official FAA Chart Supplement before use.",
+      details,
       retryable: true,
       status: 503,
       frequencies: [],
       inferredCtaf: hasNonToweredHint ? DEFAULT_CTAF_CONVENTION : undefined
     },
     {
-      source: withSourceUrl(FREQUENCY_SOURCE, FREQUENCY_SOURCE_URL),
+      source,
       fetchedAt: toIsoNow(),
       stalenessCategory: "frequency"
     }
@@ -226,6 +258,29 @@ export const getFrequencies = async (airport: string, freqType?: string): Promis
 
   // Fallback: fetch from FAA NFDC
   const faaCode = toFaaCode(airport);
+  const datasetAirport = getDatasetAirportForFrequencyLookup(airport, airportCode, faaCode);
+  const shouldQueryNfdc = !datasetAirport || datasetAirport.country === "US";
+  const tryDatasetFallback = (): ApiResponse<Frequency[]> | undefined => {
+    const datasetFreqs = getDatasetFallbackFrequencies(airportCode, freqType);
+    if (datasetFreqs.length > 0) {
+      return createApiResponse(datasetFreqs, OURAIRPORTS_SOURCE, {
+        fetchedAt: datasetFreqs[0]?.fetchedAt ?? toIsoNow(),
+        stalenessCategory: "frequency"
+      });
+    }
+
+    return undefined;
+  };
+
+  if (!shouldQueryNfdc) {
+    const datasetResponse = tryDatasetFallback();
+    if (datasetResponse) {
+      return datasetResponse;
+    }
+
+    return toFrequencyDataGapResponse(airport, airportCode, faaCode, datasetAirport);
+  }
+
   const nfdcCacheKey = createCacheKey("nfdc-frequencies", { faaCode });
   try {
     const { value: nfdcFreqs, cache } = await getOrPopulateCache(nfdcCacheKey, getCacheTtlMs("frequencyLookup"), () =>
@@ -243,13 +298,10 @@ export const getFrequencies = async (airport: string, freqType?: string): Promis
     // fall through to error
   }
 
-  const datasetFreqs = getDatasetFallbackFrequencies(airportCode, freqType);
-  if (datasetFreqs.length > 0) {
-    return createApiResponse(datasetFreqs, OURAIRPORTS_SOURCE, {
-      fetchedAt: datasetFreqs[0]?.fetchedAt ?? toIsoNow(),
-      stalenessCategory: "frequency"
-    });
+  const datasetResponse = tryDatasetFallback();
+  if (datasetResponse) {
+    return datasetResponse;
   }
 
-  return toFrequencyDataGapResponse(airport, airportCode, faaCode);
+  return toFrequencyDataGapResponse(airport, airportCode, faaCode, datasetAirport);
 };
