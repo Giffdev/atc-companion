@@ -1,9 +1,11 @@
 import { findApproachFacility, findApproachFacilityByAirport } from "@/data/approach-facilities";
+import { getDatasetFrequencies } from "@/data/airport-dataset";
 import { LOCAL_FREQUENCY_SEED } from "@/data/frequency-seed";
 import { toFaaCode, toIcaoCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
+import { OURAIRPORTS_SOURCE } from "@/services/dataset-airport-fallback";
 import type { ApiResponse } from "@/types/api";
 import type { Frequency, FrequencyType } from "@/types/aviation";
 
@@ -15,7 +17,8 @@ const NFDC_TYPE_MAP: Record<string, FrequencyType> = {
   UNICOM: "UNICOM", CTAF: "CTAF", ATIS: "ATIS", "D-ATIS": "ATIS",
   AWOS: "AWOS", ASOS: "AWOS", TOWER: "TWR", TWR: "TWR",
   GROUND: "GND", GND: "GND", CLEARANCE: "DEL", "CLNC DEL": "DEL",
-  CD: "DEL", "APP/DEP": "APP", APPROACH: "APP", DEPARTURE: "APP"
+  CLD: "DEL", CD: "DEL", "APP/DEP": "APP", APPROACH: "APP", DEPARTURE: "APP",
+  DEP: "APP", APP: "APP", CENTER: "CENTER", CTR: "CENTER", FSS: "FSS"
 };
 
 const classifyNfdcFreqType = (label: string): FrequencyType => {
@@ -26,6 +29,30 @@ const classifyNfdcFreqType = (label: string): FrequencyType => {
   if (/\bTOWER\b/.test(upper) || /\bLCL\b/.test(upper)) return "TWR";
   if (/\bGROUND\b/.test(upper) || /\bGND\b/.test(upper)) return "GND";
   return "UNICOM";
+};
+
+const classifyDatasetFreqType = (type: string): FrequencyType => {
+  const upper = type.toUpperCase().replace(/[^A-Z/ -]/g, "").trim();
+  if (NFDC_TYPE_MAP[upper]) return NFDC_TYPE_MAP[upper];
+  if (/\bTOWER\b/.test(upper) || /\bLCL\b/.test(upper)) return "TWR";
+  if (/\bGROUND\b/.test(upper) || /\bGND\b/.test(upper)) return "GND";
+  return "OTHER";
+};
+
+const getDatasetFallbackFrequencies = (airportCode: string, requestedType?: string): Frequency[] => {
+  const fetchedAt = toIsoNow();
+  const requestedFrequencyType = requestedType?.toUpperCase() as FrequencyType | undefined;
+
+  return getDatasetFrequencies(airportCode)
+    .map((record): Frequency => ({
+      type: classifyDatasetFreqType(record.type),
+      valueMHz: record.frequencyMHz,
+      name: record.description ?? record.type,
+      source: OURAIRPORTS_SOURCE,
+      fetchedAt,
+      isStale: false
+    }))
+    .filter((record) => !requestedFrequencyType || record.type === requestedFrequencyType);
 };
 
 const fetchNfdcFrequencies = async (faaCode: string): Promise<Frequency[]> => {
@@ -170,6 +197,14 @@ export const getFrequencies = async (airport: string, freqType?: string): Promis
     }
   } catch {
     // fall through to error
+  }
+
+  const datasetFreqs = getDatasetFallbackFrequencies(airportCode, freqType);
+  if (datasetFreqs.length > 0) {
+    return createApiResponse(datasetFreqs, OURAIRPORTS_SOURCE, {
+      fetchedAt: datasetFreqs[0]?.fetchedAt ?? toIsoNow(),
+      stalenessCategory: "frequency"
+    });
   }
 
   return createApiErrorResponse(

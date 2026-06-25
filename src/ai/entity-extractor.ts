@@ -103,8 +103,14 @@ export interface FarReferenceEntity {
   section?: string;
 }
 
+export interface CityRegionEntity {
+  city: string;
+  regionCode?: string;
+}
+
 export interface ExtractedEntities {
   airports: string[];
+  cityLocations: CityRegionEntity[];
   frequencies: string[];
   altitudesFeet: number[];
   speedKnots: number[];
@@ -127,6 +133,66 @@ export interface ExtractedEntities {
 const dedupe = <T>(values: T[]): T[] => Array.from(new Set(values));
 
 const isAllSingleLetters = (value: string): boolean => /^[A-Z](?:\s+[A-Z])+$/.test(value);
+
+const US_STATE_NAME_TO_CODE: Record<string, string> = {
+  alabama: "AL",
+  alaska: "AK",
+  arizona: "AZ",
+  arkansas: "AR",
+  california: "CA",
+  colorado: "CO",
+  connecticut: "CT",
+  delaware: "DE",
+  florida: "FL",
+  georgia: "GA",
+  hawaii: "HI",
+  idaho: "ID",
+  illinois: "IL",
+  indiana: "IN",
+  iowa: "IA",
+  kansas: "KS",
+  kentucky: "KY",
+  louisiana: "LA",
+  maine: "ME",
+  maryland: "MD",
+  massachusetts: "MA",
+  michigan: "MI",
+  minnesota: "MN",
+  mississippi: "MS",
+  missouri: "MO",
+  montana: "MT",
+  nebraska: "NE",
+  nevada: "NV",
+  "new hampshire": "NH",
+  "new jersey": "NJ",
+  "new mexico": "NM",
+  "new york": "NY",
+  "north carolina": "NC",
+  "north dakota": "ND",
+  ohio: "OH",
+  oklahoma: "OK",
+  oregon: "OR",
+  pennsylvania: "PA",
+  "rhode island": "RI",
+  "south carolina": "SC",
+  "south dakota": "SD",
+  tennessee: "TN",
+  texas: "TX",
+  utah: "UT",
+  vermont: "VT",
+  virginia: "VA",
+  washington: "WA",
+  "west virginia": "WV",
+  wisconsin: "WI",
+  wyoming: "WY"
+};
+const US_STATE_CODES = new Set(Object.values(US_STATE_NAME_TO_CODE));
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const STATE_NAME_PATTERN = Object.keys(US_STATE_NAME_TO_CODE)
+  .sort((left, right) => right.length - left.length)
+  .map(escapeRegExp)
+  .join("|");
+const CITY_REGION_PATTERN = new RegExp(`,\\s*(${STATE_NAME_PATTERN}|[A-Za-z]{2})(?=\\b)`, "gi");
 
 const collapseSpacedLetters = (input: string): string =>
   input.replace(/\b(?:[A-Z]\s+){2,}[A-Z]\b/g, (match) => match.replace(/\s+/g, ""));
@@ -222,6 +288,59 @@ const collectMatches = (pattern: RegExp, input: string): string[] => {
   return matches;
 };
 
+const normalizeRegionCode = (region: string): string | undefined => {
+  const normalized = region.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (/^[a-z]{2}$/.test(normalized)) {
+    const regionCode = normalized.toUpperCase();
+    return US_STATE_CODES.has(regionCode) ? regionCode : undefined;
+  }
+
+  return US_STATE_NAME_TO_CODE[normalized];
+};
+
+const normalizeCityCandidate = (candidate: string): string | undefined => {
+  const normalized = candidate
+    .toLowerCase()
+    .replace(/[^a-z0-9.' -]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:the\s+)?(?:airport|field)\s+(?:at|in|for)\s+/, "")
+    .trim();
+
+  return normalized && /[a-z0-9]/.test(normalized) ? normalized : undefined;
+};
+
+const extractCityBeforeComma = (prefix: string): string | undefined => {
+  const trimmedPrefix = prefix.replace(/[;:!?]+$/g, "").trim();
+  const locatorMatch = /\b(?:at|for|near|nearest|in|around|into|from|to)\s+([^,]+)$/i.exec(trimmedPrefix);
+  const candidate = locatorMatch?.[1] ?? trimmedPrefix.split(/[.!?;]/).pop() ?? "";
+  const normalized = normalizeCityCandidate(candidate);
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  const wordCount = normalized.split(/\s+/).length;
+  return locatorMatch || wordCount <= 5 ? normalized : undefined;
+};
+
+export const extractCityRegions = (input: string): CityRegionEntity[] => {
+  const normalized = normalizeAviationText(input);
+  const matches: CityRegionEntity[] = [];
+
+  for (const match of normalized.matchAll(CITY_REGION_PATTERN)) {
+    const regionCode = match[1] ? normalizeRegionCode(match[1]) : undefined;
+    const city = extractCityBeforeComma(normalized.slice(0, match.index));
+
+    if (city && regionCode) {
+      matches.push({ city, regionCode });
+    }
+  }
+
+  return dedupe(matches.map((value) => JSON.stringify(value))).map((value) => JSON.parse(value) as CityRegionEntity);
+};
+
 const isFaaLocalIdentifier = (code: string): boolean => FAA_LID_SHAPE.test(code);
 
 const isContextualAirportCode = (code: string): boolean => {
@@ -235,6 +354,7 @@ const isContextualAirportCode = (code: string): boolean => {
 export const extractAirportCodes = (input: string): string[] => {
   const normalized = normalizeAviationText(input);
   const uppercased = normalized.toUpperCase();
+  const cityRegions = extractCityRegions(normalized);
   const directCodes = collectMatches(ICAO_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{4}$/.test(code) && (code.startsWith("K") || Boolean(findAirportReference(code)))
   );
@@ -250,7 +370,8 @@ export const extractAirportCodes = (input: string): string[] => {
   const iataCodes = collectMatches(IATA_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{3}$/.test(code) && !AIRPORT_CODE_STOPWORDS.has(code) && Boolean(findAirportReference(code))
   );
-  const namedAirportCodes = findAirportReferencesInText(normalized).map((airport) => toIcaoCode(airport.icao));
+  const namedAirportCodes =
+    cityRegions.length > 0 ? [] : findAirportReferencesInText(normalized).map((airport) => toIcaoCode(airport.icao));
 
   return dedupe([...namedAirportCodes, ...directCodes, ...contextualCodes, ...faaLidCodes, ...iataCodes]).filter(
     (code) => !REGULATORY_CUE_WORDS.test(code)
@@ -580,6 +701,14 @@ export const toIntentEntities = (entities: ExtractedEntities): IntentEntity[] =>
   for (const airport of entities.airports) {
     result.push({ label: "airport", value: airport });
   }
+  for (const location of entities.cityLocations) {
+    result.push({
+      label: "city",
+      value: location.city,
+      city: location.city,
+      regionCode: location.regionCode
+    });
+  }
   for (const frequency of entities.frequencies) {
     result.push({ label: "frequency", value: frequency });
   }
@@ -647,6 +776,7 @@ export const extractEntities = (input: string, options: { defaultFromAirport?: s
 
   return {
     airports: resolvedAirports,
+    cityLocations: extractCityRegions(input),
     frequencies: extractFrequencies(input),
     altitudesFeet: extractAltitudesFeet(input),
     speedKnots: extractSpeedKnots(input),

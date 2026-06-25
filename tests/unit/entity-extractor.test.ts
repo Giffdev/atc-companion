@@ -3,6 +3,7 @@ import {
   extractAirportCodes,
   extractAltitudesFeet,
   extractCallsigns,
+  extractCityRegions,
   extractEntities,
   extractFarReferences,
   extractFrequencies,
@@ -19,6 +20,7 @@ describe("entity extraction", () => {
     expect(extractAirportCodes("runway configuration at S18")).toContain("S18");
     expect(extractAirportCodes("airport info for 38W")).toContain("38W");
     expect(extractAirportCodes("show me airport 1A1 weather")).toContain("1A1");
+    expect(extractAirportCodes("INFO")).toEqual([]);
     expect(extractAirportCodes("review item 123 and APP notes")).toEqual([]);
   });
 
@@ -30,11 +32,23 @@ describe("entity extraction", () => {
     expect(extractAirportCodes("airport info for KSEA")).not.toContain("INFO");
   });
 
-  it("resolves city and state place names conservatively", () => {
-    expect(extractAirportCodes("show me the runway configuration at forks, wa")).toEqual(["S18"]);
-    expect(extractAirportCodes("show me the runway configuration at forks, washington")).toEqual(["S18"]);
+  it("detects city and state place names without resolving them client-side", () => {
+    expect(extractCityRegions("show me the runway configuration at forks, wa")).toEqual([
+      { city: "forks", regionCode: "WA" }
+    ]);
+    expect(extractCityRegions("show me the runway configuration at forks, washington")).toEqual([
+      { city: "forks", regionCode: "WA" }
+    ]);
+    expect(extractEntities("show me the runway configuration at forks, washington").cityLocations).toEqual([
+      { city: "forks", regionCode: "WA" }
+    ]);
     expect(extractAirportCodes("show me the runway configuration at forks, washington")).not.toContain("KKLS");
-    expect(extractAirportCodes("show me the runway configuration at yakima, washington")[0]).toBe("KYKM");
+  });
+
+  it("keeps existing airport code queries working", () => {
+    expect(extractAirportCodes("runways at KSEA")).toContain("KSEA");
+    expect(extractAirportCodes("38W")).toContain("38W");
+    expect(extractAirportCodes("S18 weather")).toContain("S18");
   });
 
   it("extracts numeric and spoken radio frequencies", () => {

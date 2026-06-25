@@ -1,3 +1,4 @@
+import { getDatasetRunways } from "@/data/airport-dataset";
 import { fetchAirportFromNfdc, findAirportReference, toFaaCode } from "@/data/airports";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
@@ -5,6 +6,7 @@ import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
 import type { ApiResponse } from "@/types/api";
 import { collapseWhitespace, extractTableCellPairs, findFirstPairValue, stripHtmlToText } from "@/services/nfdc-html";
+import { findDatasetAirportReference, OURAIRPORTS_SOURCE } from "@/services/dataset-airport-fallback";
 
 const NASR_SOURCE = getDataSource("faaNasr");
 
@@ -28,7 +30,9 @@ export interface AirportRunways {
  * Results are cached for 28 days (runway data rarely changes).
  */
 export const getAirportRunways = async (airportCodeInput: string): Promise<ApiResponse<AirportRunways>> => {
-  const airportRef = findAirportReference(airportCodeInput) ?? await fetchAirportFromNfdc(airportCodeInput);
+  const airportRef = findAirportReference(airportCodeInput)
+    ?? await fetchAirportFromNfdc(airportCodeInput)
+    ?? findDatasetAirportReference(airportCodeInput);
   const faaCode = airportRef?.faa ?? toFaaCode(airportCodeInput);
   const icaoCode = airportRef?.icao ?? airportCodeInput.toUpperCase();
   const cacheKey = createCacheKey("airport-runways", { airport: icaoCode });
@@ -80,6 +84,22 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
       }
     } catch {
       // Fall through to inference
+    }
+
+    const datasetRunways = getDatasetRunways(airportCodeInput).map((runway): RunwayInfo => ({
+      designator: runway.designator,
+      lengthFeet: runway.lengthFeet ?? null,
+      widthFeet: runway.widthFeet ?? null,
+      surface: runway.surface ?? null,
+      lighting: runway.lighting ?? (runway.lit === undefined ? null : runway.lit ? "lighted" : "unlighted")
+    }));
+
+    if (datasetRunways.length > 0) {
+      return createApiResponse(
+        { airportIcao: icaoCode, airportName: airportRef.name, runways: datasetRunways, source: "OurAirports community dataset" },
+        OURAIRPORTS_SOURCE,
+        { fetchedAt }
+      );
     }
 
     // Fallback: derive from airport reference data when live runway details are unavailable.

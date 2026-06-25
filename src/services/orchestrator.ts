@@ -3,6 +3,7 @@ import { getDataSource } from "@/data/sources";
 import { findAirportReference, fetchAirportFromNfdc } from "@/data/airports";
 import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
 import { getAirportHours, type AirportHours } from "@/services/airport-hours";
+import { findDatasetAirportReference, resolveDatasetAirportByCity } from "@/services/dataset-airport-fallback";
 import { getFrequencies } from "@/services/frequencies";
 import { getNavigationBetween } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
@@ -105,6 +106,46 @@ const getClarificationResponse = (intent: ParsedIntent): ApiResponse<never> =>
     }
   );
 
+const getPrimaryCityAirportCode = (intent: ParsedIntent): string | null => {
+  for (const entity of intent.entities) {
+    if (entity.label !== "city") {
+      continue;
+    }
+
+    const airport = resolveDatasetAirportByCity(entity.city ?? entity.value, entity.regionCode);
+    if (airport) {
+      return airport.icao;
+    }
+  }
+
+  return null;
+};
+
+const resolveCityIntent = (intent: ParsedIntent): ParsedIntent => {
+  const airportCode = getPrimaryCityAirportCode(intent);
+  if (!airportCode) {
+    return intent;
+  }
+
+  if (intent.type === "unknown") {
+    return {
+      ...intent,
+      type: "airport_info",
+      airport: airportCode,
+      detail: "all",
+      requiresClarification: false,
+      clarificationReason: undefined,
+      clarificationPrompt: undefined
+    };
+  }
+
+  if ("airport" in intent && !intent.airport) {
+    return { ...intent, airport: airportCode };
+  }
+
+  return intent;
+};
+
 const executeAirportInfo = async (
   intent: Extract<ParsedIntent, { type: "airport_info" }>,
   options: ExecuteQueryOptions = {}
@@ -123,7 +164,9 @@ const executeAirportInfo = async (
   ]);
 
   // Build runway designator list: prefer live FAA data, fall back to plates inference, then static
-  const airportReference = findAirportReference(intent.airport) ?? await fetchAirportFromNfdc(intent.airport);
+  const airportReference = findAirportReference(intent.airport)
+    ?? await fetchAirportFromNfdc(intent.airport)
+    ?? findDatasetAirportReference(intent.airport);
   const platesData = plates.ok ? plates.data : [];
   const runways = runwayDetails.ok && runwayDetails.data.runways.length > 0
     ? runwayDetails.data.runways.map((r) => r.designator)
@@ -350,11 +393,12 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
 
 export const executeQuery = async (intent: ParsedIntent, options: ExecuteQueryOptions = {}): Promise<QueryResult> => {
   const start = performance.now();
-  const response = await dispatchIntent(intent, options);
+  const resolvedIntent = resolveCityIntent(intent);
+  const response = await dispatchIntent(resolvedIntent, options);
   const executionTimeMs = Number((performance.now() - start).toFixed(2));
 
   return {
-    intent,
+    intent: resolvedIntent,
     response,
     executionTimeMs,
     timestamp: toIsoNow()

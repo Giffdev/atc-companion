@@ -1,6 +1,9 @@
 import { fetchAirportFromNfdc } from "@/data/airports";
 import { parseAirportHoursFromHtml } from "@/services/airport-hours";
 import { appCache } from "@/lib/cache";
+import { parseIntent } from "@/ai/intent-parser";
+import { executeQuery, type AirportInfoQueryPayload } from "@/services/orchestrator";
+import { getFrequencies } from "@/services/frequencies";
 import { getAirportRunways, parseRunwaysFromHtml } from "@/services/runway-info";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -236,15 +239,138 @@ describe("parseRunwaysFromHtml", () => {
     expect(result.data.runways.map((runway) => runway.designator)).toEqual(["04/22"]);
   });
 
-  it("falls back to all static PAE runway ends as physical runway pairs when NFDC is unavailable", async () => {
+  it("falls back to OurAirports runways for local identifiers when NFDC is unavailable", async () => {
+    const result = await getAirportRunways("38W");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.source).toBe("OurAirports community dataset");
+    expect(result.data.runways).toEqual([
+      {
+        designator: "08/26",
+        lengthFeet: 2425,
+        widthFeet: 40,
+        surface: "ASPH-G",
+        lighting: "lighted"
+      }
+    ]);
+  });
+
+  it("falls back to all OurAirports PAE physical runways when NFDC is unavailable", async () => {
     appCache.clear();
 
     const result = await getAirportRunways("KPAE");
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.source).toBe("Inferred from airport data");
-    expect(result.data.runways.map((runway) => runway.designator)).toEqual(["16L/34R", "16R/34L"]);
+    expect(result.data.source).toBe("OurAirports community dataset");
+    expect(result.data.runways.map((runway) => runway.designator)).toEqual(["11/29", "16L/34R", "16R/34L"]);
+  });
+});
+
+describe("OurAirports service fallbacks", () => {
+  it("falls back to dataset frequencies for 38W", async () => {
+    const result = await getFrequencies("38W");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.source.name).toBe("OurAirports community dataset");
+    expect(result.data).toEqual([
+      expect.objectContaining({
+        type: "CTAF",
+        valueMHz: 122.9,
+        name: "CTAF"
+      })
+    ]);
+  });
+
+  it("does not override local FAA-seed frequencies for seeded airports", async () => {
+    const result = await getFrequencies("KSEA");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.source.name).not.toBe("OurAirports community dataset");
+    expect(result.source.id).toBe("faa-nasr");
+    expect(result.data.length).toBeGreaterThan(0);
+  });
+
+  it("keeps curated airport info precedence for airports also present in the dataset", async () => {
+    const result = await executeQuery({
+      type: "airport_info",
+      airport: "S18",
+      detail: "all",
+      confidence: 1,
+      rawInput: "airport info S18",
+      parsedAt: new Date().toISOString(),
+      source: { id: "test", name: "test", url: "test://intent", reliability: "high", refresh_interval: "never" },
+      entities: [],
+      requiresClarification: false
+    });
+
+    expect(result.response.ok).toBe(true);
+    if (!result.response.ok) return;
+    const data = result.response.data as AirportInfoQueryPayload;
+    expect(data.airport).toBe("S18");
+    expect(data.airportName).toBe("FORKS");
+    expect(data.airportName).not.toBe("Forks Airport");
+  });
+
+  it("resolves 38W and S18 airport info with fallback-backed services", async () => {
+    const [lynden, forks] = await Promise.all([
+      executeQuery({
+        type: "airport_info",
+        airport: "38W",
+        detail: "all",
+        confidence: 1,
+        rawInput: "airport info 38W",
+        parsedAt: new Date().toISOString(),
+        source: { id: "test", name: "test", url: "test://intent", reliability: "high", refresh_interval: "never" },
+        entities: [],
+        requiresClarification: false
+      }),
+      executeQuery({
+        type: "airport_info",
+        airport: "S18",
+        detail: "all",
+        confidence: 1,
+        rawInput: "airport info S18",
+        parsedAt: new Date().toISOString(),
+        source: { id: "test", name: "test", url: "test://intent", reliability: "high", refresh_interval: "never" },
+        entities: [],
+        requiresClarification: false
+      })
+    ]);
+
+    expect(lynden.response.ok).toBe(true);
+    expect(forks.response.ok).toBe(true);
+    if (!lynden.response.ok || !forks.response.ok) return;
+    expect((lynden.response.data as AirportInfoQueryPayload).airportName).toBe("Lynden Airport");
+    expect((forks.response.data as AirportInfoQueryPayload).airportName).toBe("FORKS");
+  });
+
+  it("resolves Forks, WA city queries to S18 rather than KKLS", async () => {
+    const [abbrIntent, fullIntent] = await Promise.all([
+      parseIntent("Forks, WA"),
+      parseIntent("Forks, Washington")
+    ]);
+    const [abbrResult, fullResult] = await Promise.all([
+      executeQuery(abbrIntent),
+      executeQuery(fullIntent)
+    ]);
+
+    expect(abbrResult.intent).toMatchObject({ type: "airport_info", airport: "S18" });
+    expect(fullResult.intent).toMatchObject({ type: "airport_info", airport: "S18" });
+    expect("airport" in abbrResult.intent ? abbrResult.intent.airport : undefined).not.toBe("KKLS");
+    expect("airport" in fullResult.intent ? fullResult.intent.airport : undefined).not.toBe("KKLS");
+  });
+
+  it("handles bare city text gracefully when no region code is provided", async () => {
+    const intent = await parseIntent("Forks");
+    const result = await executeQuery(intent);
+
+    expect(result.response.ok).toBe(false);
+    if (result.response.ok) return;
+    expect(result.response.error.code).toBe("CLARIFICATION_REQUIRED");
   });
 });
 

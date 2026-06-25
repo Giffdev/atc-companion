@@ -108,17 +108,19 @@ describe("parseIntent", () => {
     });
   });
 
-  it("resolves city/state runway queries to the airport serving that city", async () => {
-    const [forksAbbrev, forksFullState, yakima] = await Promise.all([
+  it("carries city/state runway queries as structured entities for server resolution", async () => {
+    const [forksAbbrev, forksFullState] = await Promise.all([
       parseIntent("show me the runway configuration at forks, wa"),
-      parseIntent("show me the runway configuration at forks, washington"),
-      parseIntent("show me the runway configuration at yakima, washington")
+      parseIntent("show me the runway configuration at forks, washington")
     ]);
 
-    expect(forksAbbrev).toMatchObject({ type: "airport_info", airport: "S18", detail: "runways" });
-    expect(forksFullState).toMatchObject({ type: "airport_info", airport: "S18", detail: "runways" });
+    expect(forksAbbrev.entities).toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: "city", city: "forks", regionCode: "WA" })])
+    );
+    expect(forksFullState.entities).toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: "city", city: "forks", regionCode: "WA" })])
+    );
     expect(forksFullState).not.toMatchObject({ airport: "KKLS" });
-    expect(yakima).toMatchObject({ type: "airport_info", airport: "KYKM", detail: "runways" });
   });
 
   it("parses traffic queries with facility names as traffic, not frequency or airport_info", async () => {

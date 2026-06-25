@@ -2,6 +2,8 @@ import "@testing-library/jest-dom";
 
 import { afterEach, beforeEach, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
 const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {

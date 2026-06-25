@@ -30,6 +30,8 @@ export interface IntentEntity {
   label: string;
   value: string;
   normalized?: string;
+  city?: string;
+  regionCode?: string;
 }
 
 export interface IntentMetadata {
