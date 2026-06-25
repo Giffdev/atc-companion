@@ -68,6 +68,7 @@ interface RawRunway {
   width_ft: string;
   surface: string;
   lighted: string;
+  closed: string;
   le_ident: string;
   he_ident: string;
 }
@@ -263,6 +264,10 @@ const buildDataset = (
   const airportIdentSet = new Set(airports.map((airport) => airport.ident));
 
   const runwaysByAirport = rawRunways.reduce<Record<string, GeneratedRunway[]>>((accumulator, runway) => {
+    if (runway.closed?.trim() === "1") {
+      return accumulator;
+    }
+
     const airportIdent = sourceIdentToGeneratedIdent.get(runway.airport_ident);
     const rawDesignator = buildRunwayDesignator(runway);
     const designator = rawDesignator

@@ -101,10 +101,10 @@ describe("airport dataset", () => {
     );
   });
 
-  it("preserves all runways for multi-runway airports", () => {
+  it("filters closed runways while preserving open multi-runway airports", () => {
     const runways = getDatasetRunways("PAE");
 
-    expect(runways.map((runway) => runway.designator).sort()).toEqual(["11/29", "16L/34R", "16R/34L"]);
+    expect(runways.map((runway) => runway.designator).sort()).toEqual(["16L/34R", "16R/34L"]);
   });
 
   it("returns multiple frequency entries for towered airports", () => {

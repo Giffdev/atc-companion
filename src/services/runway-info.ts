@@ -4,18 +4,11 @@ import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs, getOrPopulateCache } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
 import { createApiErrorResponse, createApiResponse, toIsoNow, withSourceUrl } from "@/lib/utils";
-import type { ApiResponse, DataSource } from "@/types/api";
+import type { ApiResponse } from "@/types/api";
 import { collapseWhitespace, extractTableCellPairs, findFirstPairValue, stripHtmlToText } from "@/services/nfdc-html";
 import { findDatasetAirportReference, OURAIRPORTS_SOURCE, toAirportReferenceFromDataset } from "@/services/dataset-airport-fallback";
 
 const NASR_SOURCE = getDataSource("faaNasr");
-const CURATED_RUNWAY_SOURCE: DataSource = {
-  id: "curated-airport-reference-data",
-  name: "Curated airport reference data",
-  url: "src/data/airports.ts",
-  reliability: "high",
-  refresh_interval: "Maintained manually when airport reference entries are updated"
-};
 
 export interface RunwayInfo {
   designator: string;   // e.g. "16R/34L"
@@ -182,15 +175,6 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
       }
     } catch {
       // Fall through to inference
-    }
-
-    const curatedRunways = curatedAirportRef?.runways?.length ? inferRunwaysFromAirportData(curatedAirportRef) : [];
-    if (curatedRunways.length > 0) {
-      return createApiResponse(
-        { airportIcao: icaoCode, airportName: airportRef.name, runways: curatedRunways, source: "Curated airport reference data" },
-        CURATED_RUNWAY_SOURCE,
-        { fetchedAt }
-      );
     }
 
     const datasetRunways = getRunwayDatasetRows(airportCodeInput, resolvedFaaCode, airportRef, datasetAirport).map((runway): RunwayInfo => ({

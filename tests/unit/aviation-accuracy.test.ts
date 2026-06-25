@@ -1,8 +1,9 @@
 import { extractRunways, normalizeAviationText } from "@/ai/entity-extractor";
-import { findAirportReference, findAirportReferencesInText, hasRunwayAtAirport, toIcaoCode } from "@/data/airports";
+import { findAirportReference, findAirportReferencesInText, toIcaoCode } from "@/data/airports";
 import { appCache } from "@/lib/cache";
 import { getPlates } from "@/services/plates";
 import { getFrequencies } from "@/services/frequencies";
+import { getAirportRunways } from "@/services/runway-info";
 import { beforeEach } from "vitest";
 import { installAviationApiMock } from "../fixtures/mock-aviation-fetch";
 
@@ -65,11 +66,18 @@ describe("aviation accuracy", () => {
     );
   });
 
-  it("parses and validates Boeing Field runway identifiers", () => {
+  it("parses and validates Boeing Field runway identifiers", async () => {
     expect(extractRunways("14R")).toContain("14R");
     expect(normalizeAviationText("runway one four right")).toContain("runway 14R");
     expect(extractRunways("runway one four right")).toContain("14R");
-    expect(hasRunwayAtAirport("KBFI", "14R")).toBe(true);
+
+    const response = await getAirportRunways("KBFI");
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      return;
+    }
+    const runwayEnds = response.data.runways.flatMap((runway) => runway.designator.split("/"));
+    expect(runwayEnds).toContain("14R");
   });
 
   it("infers approach types and runway designators from real-world chart names", async () => {

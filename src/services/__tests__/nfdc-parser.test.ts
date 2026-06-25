@@ -244,7 +244,7 @@ describe("parseRunwaysFromHtml", () => {
     expect(airport?.longitude).toBeCloseTo(-124.3959, 3);
   });
 
-  it("loads runways from NFDC for static small airports missing curated runway data", async () => {
+  it("loads runways from NFDC for static small airports missing static runway data", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(smallAirportNfdcHtml));
 
     const result = await getAirportRunways("38W");
@@ -272,7 +272,7 @@ describe("parseRunwaysFromHtml", () => {
     ]);
   });
 
-  it("uses curated KPAE runways instead of stale OurAirports 11/29 when NFDC is unavailable", async () => {
+  it("uses closed-filtered OurAirports KPAE runways without stale 11/29 when NFDC is unavailable", async () => {
     appCache.clear();
     vi.stubGlobal("fetch", vi.fn(async () => {
       throw new Error("Force NFDC fallback for KPAE runway precedence");
@@ -282,22 +282,22 @@ describe("parseRunwaysFromHtml", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.source).toBe("Curated airport reference data");
-    expect(result.source.name).toBe("Curated airport reference data");
+    expect(result.data.source).toBe("OurAirports community dataset");
+    expect(result.source.name).toBe("OurAirports community dataset");
     expect(result.data.runways.map((runway) => runway.designator)).toEqual(["16L/34R", "16R/34L"]);
     expect(result.data.runways.map((runway) => runway.designator)).not.toContain("11/29");
   });
 
-  it("uses curated runway references generically before differing OurAirports fallback rows", async () => {
+  it("uses OurAirports fallback rows for KSEA when NFDC is unavailable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
-      throw new Error("Force NFDC fallback for curated runway precedence");
+      throw new Error("Force NFDC fallback for OurAirports runway precedence");
     }));
 
     const result = await getAirportRunways("KSEA");
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.source).toBe("Curated airport reference data");
+    expect(result.data.source).toBe("OurAirports community dataset");
     expect(result.data.runways.map((runway) => runway.designator)).toEqual(["16C/34C", "16L/34R", "16R/34L"]);
     expect(result.data.runways.map((runway) => runway.designator)).not.toContain("lower/high");
   });
