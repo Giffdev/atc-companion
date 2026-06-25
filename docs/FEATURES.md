@@ -186,7 +186,7 @@ The parser understands airports by:
 - **Single distinctive word** (≥6 chars, e.g., "troutdale" → KTTD)
 - **City name** ("seattle" → KSEA)
 
-Airport lookup now includes a generated OurAirports-backed database for U.S., Canadian, and Caribbean airports, so name/code resolution is not limited to the curated U.S. seed list. Puerto Rico and U.S. Virgin Islands airports are treated as U.S. for FAA/NFDC behavior.
+Airport lookup now includes a generated OurAirports-backed database for U.S., Canadian, Mexican, and Caribbean airports, so name/code resolution is not limited to the curated U.S. seed list. Puerto Rico and U.S. Virgin Islands airports are treated as U.S. for FAA/NFDC behavior.
 
 Canadian ICAO codes are recognized when they appear with airport context (for example, "CYYJ traffic" or "plates for CYYZ") to avoid false positives on ordinary four-letter C-words. Caribbean ICAO codes with precise T*/M* location-indicator prefixes are recognized in both contextual and bare-code queries, with stopwords to avoid English-word collisions.
 

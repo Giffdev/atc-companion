@@ -322,10 +322,10 @@ Parses runway characteristics from FAA airport display HTML:
 - Parses dimensions, surface type, lighting from table cell pairs
 - Fallback chain:
   1. **FAA NFDC HTML parsing** — full details (length, width, surface, lighting)
-  2. **Generated OurAirports runway records** — used when present, and used first for non-U.S. generated-dataset airports
-  3. **Static airport-reference runway data** — bundled designators for a few major airports, paired into physical runways
+  2. **Generated OurAirports runway records** — closed/decommissioned rows are filtered out by the generator, and records are used first for non-U.S. generated-dataset airports
+  3. **Inferred airport-reference fallback** — paired designators from resolved airport reference data when live and generated runway details are unavailable
 
-For generated-dataset airports outside the U.S., runway lookup skips FAA NFDC and uses OurAirports runway records when present. If no runway records are available, Canadian gaps mention official Canadian publications / NAV CANADA and other non-U.S. gaps point to the relevant jurisdiction's official aeronautical publications.
+For generated-dataset airports outside the U.S., runway lookup skips FAA NFDC and uses active OurAirports runway records when present. If no runway records are available, Canadian gaps mention official Canadian publications / NAV CANADA and other non-U.S. gaps point to the relevant jurisdiction's official aeronautical publications.
 
 ### `datis.ts`
 
@@ -339,7 +339,7 @@ Primary files:
 - `src/data/airport-dataset.ts`
 - `scripts/generate-airport-dataset.ts`
 
-`scripts/generate-airport-dataset.ts` builds generated JSON from OurAirports public-domain CSV snapshots. `src/data/airport-dataset.ts` is server-only and loads the generated `us`, `ca`, and `carib` JSON prefixes (`DATASET_PREFIXES = ["us", "ca", "carib"]`) into code, runway, frequency, and city indexes. The Caribbean generation includes Puerto Rico and the U.S. Virgin Islands, but normalizes those records to `country: "US"` so FAA-served territory behavior remains in place.
+`scripts/generate-airport-dataset.ts` builds generated JSON from OurAirports public-domain CSV snapshots. `src/data/airport-dataset.ts` is server-only and loads the generated `us`, `ca`, `mx`, and `carib` JSON prefixes (`DATASET_PREFIXES = ["us", "ca", "mx", "carib"]`) into code, runway, frequency, and city indexes for U.S., Canadian, Mexican, and Caribbean coverage. The generator filters out closed/decommissioned runways using the OurAirports `runways.csv` `closed` column, so only active runways are bundled. The Caribbean generation includes Puerto Rico and the U.S. Virgin Islands, but normalizes those records to `country: "US"` so FAA-served territory behavior remains in place.
 
 ### Key generation (`createAirportSearchKeys`)
 

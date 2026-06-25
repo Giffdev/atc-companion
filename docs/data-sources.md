@@ -64,7 +64,8 @@ ATC Companion tracks both **where** aviation data came from and **how fresh** it
   - Frequencies: https://davidmegginson.github.io/ourairports-data/airport-frequencies.csv
 - Notes:
   - Community, public-domain source used as a medium-reliability fallback/bundled corpus; it is not FAA-authoritative.
-  - The generator builds separate `us`, `ca`, and `carib` JSON outputs under `src/data/generated` from OurAirports airports, runways, and airport frequency CSVs, plus explicit local corrections.
+  - The generator builds separate `us`, `ca`, `mx`, and `carib` JSON outputs under `src/data/generated` from OurAirports airports, runways, and airport frequency CSVs, plus explicit local corrections.
+  - Closed/decommissioned runway rows are excluded from bundled runway data using the OurAirports `runways.csv` `closed=1` field, so only active runways are bundled.
   - The server-only airport dataset lookup loads those generated JSON files at runtime and supports airport code, city/region, runway, and frequency lookups.
   - This is not a live per-request API dependency. Refresh the bundled corpus by rerunning the airport dataset generator.
   - Canadian frequency and runway gaps direct users to verify in official Canadian aeronautical publications or with NAV CANADA; Canadian charts/plates are not hosted through this dataset or the FAA DTPP path.
