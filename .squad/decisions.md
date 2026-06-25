@@ -1578,7 +1578,6 @@ Validation note: adding Mexico introduced an OurAirports local-code collision (`
 **References:** src/services/runway-info.ts, src/services/frequencies.ts, src/services/plates.ts
 **Why:** For ATC Companion service-layer Mexico routing, airports with dataset country="MX" / ICAO prefix MM are treated as non-FAA and non-NAV CANADA. Runway and frequency services skip FAA NFDC via the existing non-US dataset-country gate and use OurAirports dataset rows when available. If data is unavailable, Mexico-specific gap copy tells users to verify in Mexico's official SENEAM/AFAC AIP publications. Plate/procedure gaps state that Mexican procedures are published in Mexico's AIP by SENEAM/AFAC, not FAA DTPP or NAV CANADA.
 
-
 ### 2026-06-25T13:05:00-07:00: Bare city cues resolve through multi-country airport dataset
 **By:** Haise
 **What:** Bare place-name tokens after locator/directive cues now emit `label: "city"` entities without `regionCode` when they are not strong explicit airport codes. Strong airport-code matches still win, while substring-only US fuzzy airport-name matches no longer outrank the city candidate.
@@ -1607,3 +1606,9 @@ Validation note: adding Mexico introduced an OurAirports local-code collision (`
 **By:** Mattingly (Backend)
 **What:** Removed the hand-curated runway override from `getAirportRunways`; runway precedence is now live FAA NFDC for US airports, then the closed-filtered OurAirports generated dataset, then inferred fallback. Explicit runway arrays were removed from curated airport identity entries.
 **Why:** Aaron's generator now filters closed/decommissioned OurAirports runway rows, so keeping the curated branch would contradict the no-curated-runway directive and produce dishonest `Curated airport reference data` source labels.
+
+### 2026-06-25T15:00:35-07:00: Live runway documentation reflects live/generative source precedence
+**By:** Kranz
+**What:** Updated product docs to describe runway lookup precedence as FAA NFDC HTML parsing, then generated OurAirports active runway records with closed-runway filtering, then inferred airport-reference fallback. Removed the stale static/curated runway override from documented fallback behavior and corrected generated dataset prefixes to US, Canada, Mexico, and Caribbean.
+**References:** README.md, docs/FEATURES.md, docs/ARCHITECTURE.md, docs/data-sources.md, decisions/inbox/kranz-live-runway-docs.md
+**Why:** Source verification confirmed curated airport entries no longer carry hand-authored runway arrays after the live-data runway refactor. Product documentation now matches commit f592fd9 and follow-up docs commit 75c7852, including Mexico dataset coverage and closed=1 runway filtering.

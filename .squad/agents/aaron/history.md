@@ -81,3 +81,7 @@ Aaron added the Mexico `mx` country-filtered airport dataset segment and regener
 - Parsed OurAirports `runways.csv` `closed` column in `scripts/generate-airport-dataset.ts` and skipped rows where `closed=1`.
 - Regenerated US/CA/Caribbean/Mexico runway datasets; KPAE 11/29 is removed without airport-specific curated runway lists.
 - Production verification passed after commit f592fd9: KPAE, KSEA, KJFK, and KORD runway outputs are correct.
+
+
+## 2026-06-25T15:00:35-07:00 — Product docs aligned to dataset runway model
+Product docs now describe the generated OurAirports runway dataset as the active fallback after live FAA NFDC, including `closed=1` runway filtering and Mexico `mx` dataset coverage. Correct dataset prefixes are `us`, `ca`, `mx`, `carib`.

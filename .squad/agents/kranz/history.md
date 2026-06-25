@@ -24,3 +24,7 @@ Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in co
 ## 2026-06-25T11:07:00-07:00 — Global airport DB product docs
 
 Updated product docs (`README.md`, `docs/FEATURES.md`, `docs/ARCHITECTURE.md`) for US/Canada/Caribbean airport database coverage, jurisdiction-aware messaging, PR/VI handling, ICAO shapes, and trailing airport query cues. Decision archived in `decisions.md`.
+
+
+## 2026-06-25T15:00:35-07:00 — Live runway docs refreshed
+Product docs now describe the live-data runway model: FAA NFDC first, generated OurAirports active runway rows with closed=1 filtering second, inferred fallback last, plus Mexico dataset coverage and prefixes `us`, `ca`, `mx`, `carib`. Docs commit `75c7852` followed runway refactor `f592fd9`.
