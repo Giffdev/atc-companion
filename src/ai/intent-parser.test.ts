@@ -33,6 +33,12 @@ describe("extractEntities", () => {
     expect(entities.airports).toEqual([]);
   });
 
+  it("does not over-match Caribbean-shaped ordinary words as airport identifiers", () => {
+    const entities = extractEntities("we must taxi at this time before takeoff");
+
+    expect(entities.airports).toEqual([]);
+  });
+
   it("extracts positional navigation endpoints in typed order", () => {
     expect(extractNavigationAirports("pae to 38w route")).toEqual({ from: "KPAE", to: "38W" });
     expect(extractNavigationAirports("38w to pae route")).toEqual({ from: "38W", to: "KPAE" });
@@ -90,6 +96,31 @@ describe("parseIntent", () => {
     expect(intent).toMatchObject({
       type: "frequency",
       facility: "CYXX",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Caribbean ICAO airport info, frequency, and weather requests", async () => {
+    const [runwayIntent, frequencyIntent, weatherIntent] = await Promise.all([
+      parseIntent("runway configuration at MKJS"),
+      parseIntent("frequencies for TJSJ"),
+      parseIntent("weather at MYNN")
+    ]);
+
+    expect(runwayIntent).toMatchObject({
+      type: "airport_info",
+      airport: "MKJS",
+      detail: "runways",
+      requiresClarification: false
+    });
+    expect(frequencyIntent).toMatchObject({
+      type: "frequency",
+      facility: "TJSJ",
+      requiresClarification: false
+    });
+    expect(weatherIntent).toMatchObject({
+      type: "weather",
+      airport: "MYNN",
       requiresClarification: false
     });
   });

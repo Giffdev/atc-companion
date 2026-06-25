@@ -93,9 +93,34 @@ const AIRLINE_CALLSIGN_PATTERN = /\b[A-Z]{2,3}\s?\d{1,4}[A-Z]?\b/g;
 const AIRCRAFT_TYPE_PATTERN = /\b(?:A\d{3}|B\d{3,4}|C\d{3}|SR\d{2}|PA-\d{2,2}|E\d{3}|CRJ\d{3}|ERJ\d{3}|B7\d{2}|A3\d{2})\b/gi;
 const SQUAWK_PATTERN = /\b(?:squawk\s+)?(7500|7600|7700)\b/gi;
 const SPEED_PATTERN = /\b(\d{2,3})\s*(?:knots?|kias|kt|kts)\b/gi;
-const AIRPORT_CODE_STOPWORDS = new Set(["THE", "AND", "FOR", "WITH", "ILS", "VOR", "SID", "STAR", "TAF", "APP", "INFO", "NO"]);
+const AIRPORT_CODE_STOPWORDS = new Set([
+  "THE",
+  "AND",
+  "FOR",
+  "WITH",
+  "ILS",
+  "VOR",
+  "SID",
+  "STAR",
+  "TAF",
+  "APP",
+  "INFO",
+  "NO",
+  "TIME",
+  "TAXI",
+  "TAKE",
+  "TALK",
+  "TASK",
+  "TIDE",
+  "TINY",
+  "TIRE",
+  "MUST",
+  "MUCH",
+  "MUTE"
+]);
 const FAA_LID_SHAPE = /^(?=.{3,4}$)(?=.*[A-Z])(?=.*\d)[A-Z0-9]+$/;
 const CANADIAN_ICAO_SHAPE = /^C(?=.*[A-Z])[A-Z0-9]{3}$/;
+const CARIBBEAN_ICAO_SHAPE = /^(?:T(?:A|B|D|F|G|I|J|K|L|N|Q|R|T|U|V)|M(?:B|D|K|T|U|W|Y))[A-Z]{2}$/;
 
 const REGULATORY_CUE_WORDS = /\b(?:far|cfr|part|section|regulation|rule)\b/i;
 
@@ -366,6 +391,7 @@ export const extractCityRegions = (input: string): CityRegionEntity[] => {
 
 const isFaaLocalIdentifier = (code: string): boolean => FAA_LID_SHAPE.test(code);
 const isCanadianIcaoIdentifier = (code: string): boolean => CANADIAN_ICAO_SHAPE.test(code);
+const isCaribbeanIcaoIdentifier = (code: string): boolean => CARIBBEAN_ICAO_SHAPE.test(code);
 
 const isContextualAirportCode = (code: string): boolean => {
   if (AIRPORT_CODE_STOPWORDS.has(code)) {
@@ -376,6 +402,7 @@ const isContextualAirportCode = (code: string): boolean => {
     Boolean(findAirportReference(code)) ||
     (/^[A-Z]{4}$/.test(code) && code.startsWith("K")) ||
     isCanadianIcaoIdentifier(code) ||
+    isCaribbeanIcaoIdentifier(code) ||
     isFaaLocalIdentifier(code)
   );
 };
@@ -385,7 +412,10 @@ export const extractAirportCodes = (input: string): string[] => {
   const uppercased = normalized.toUpperCase();
   const cityRegions = extractCityRegions(normalized);
   const directCodes = collectMatches(ICAO_PATTERN, uppercased).filter(
-    (code) => /^[A-Z]{4}$/.test(code) && (code.startsWith("K") || Boolean(findAirportReference(code)))
+    (code) =>
+      /^[A-Z]{4}$/.test(code) &&
+      !AIRPORT_CODE_STOPWORDS.has(code) &&
+      (code.startsWith("K") || isCaribbeanIcaoIdentifier(code) || Boolean(findAirportReference(code)))
   );
   const contextualCodes = [
     ...Array.from(normalized.matchAll(AIRPORT_CONTEXT_WORDS)),
