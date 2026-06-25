@@ -48,6 +48,7 @@ const FACILITY_STORAGE_KEY = "atc-companion:selected-facility";
 const RESULT_ORDER: DashboardResultType[] = ["weather", "frequency", "traffic", "notam", "plates", "navigation", "regulatory"];
 const NOTAM_FEED_UNAVAILABLE_CODES = new Set(["NOTAM_FEED_NOT_CONFIGURED", "NOTAM_EMBEDDED_SEARCH"]);
 const FREQUENCY_DATA_GAP_CODE = "FREQUENCY_DATA_GAP";
+const PLATES_DATA_GAP_CODE = "PLATES_DATA_GAP";
 
 /** Format a rich airport label like "KSEA — Seattle-Tacoma Intl, WA" */
 const formatAirportLabel = (icao: string, name?: string | null, city?: string | null, state?: string | null): string => {
@@ -146,6 +147,39 @@ const isNotamFeedUnavailableError = (error: ApiError | undefined): boolean =>
 
 const isFrequencyDataGapError = (error: ApiError | undefined): boolean =>
   error?.code === FREQUENCY_DATA_GAP_CODE;
+
+type PlateJurisdictionNotes = Partial<Record<"approaches" | "departures" | "arrivals" | "odps" | "diagram", string>>;
+
+const isPlatesDataGapError = (error: ApiError | undefined): boolean =>
+  error?.code === PLATES_DATA_GAP_CODE;
+
+const getPlateJurisdictionNotes = (liveResult: LiveQueryResult | null): PlateJurisdictionNotes => {
+  if (!liveResult) {
+    return {};
+  }
+
+  if (liveResult.intent.type === "plates" && !liveResult.response.ok && isPlatesDataGapError(liveResult.response.error)) {
+    const procType = liveResult.intent.procedure_type;
+    if (procType === "SID") return { departures: liveResult.response.error.message };
+    if (procType === "STAR") return { arrivals: liveResult.response.error.message };
+    if (procType === "ODP") return { odps: liveResult.response.error.message };
+    return { approaches: liveResult.response.error.message };
+  }
+
+  if (liveResult.intent.type !== "airport_info" || !liveResult.response.ok) {
+    return {};
+  }
+
+  const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
+  const notes: PlateJurisdictionNotes = {};
+  if (!airportInfo.plates.ok && isPlatesDataGapError(airportInfo.plates.error)) notes.approaches = airportInfo.plates.error.message;
+  if (airportInfo.sids && !airportInfo.sids.ok && isPlatesDataGapError(airportInfo.sids.error)) notes.departures = airportInfo.sids.error.message;
+  if (airportInfo.stars && !airportInfo.stars.ok && isPlatesDataGapError(airportInfo.stars.error)) notes.arrivals = airportInfo.stars.error.message;
+  if (airportInfo.odps && !airportInfo.odps.ok && isPlatesDataGapError(airportInfo.odps.error)) notes.odps = airportInfo.odps.error.message;
+  if (airportInfo.diagram && !airportInfo.diagram.ok && isPlatesDataGapError(airportInfo.diagram.error)) notes.diagram = airportInfo.diagram.error.message;
+
+  return notes;
+};
 
 const renderFrequencyDataGap = (error: ApiError) => (
   <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
@@ -370,7 +404,7 @@ const collectWarnings = (
   if (liveResult.intent.type === "airport_info") {
     const airportInfo = liveResult.response.data as AirportInfoQueryPayload;
 
-    [airportInfo.weather, airportInfo.frequencies, airportInfo.plates, airportInfo.diagram].forEach((response) => {
+    [airportInfo.weather, airportInfo.frequencies, airportInfo.plates, airportInfo.sids, airportInfo.stars, airportInfo.odps, airportInfo.diagram].forEach((response) => {
       if (!response) {
         return;
       }
@@ -971,6 +1005,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   const selectedPlateProcedureType = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_type : undefined;
   const selectedProcedureName = liveResult?.intent.type === "plates" ? liveResult.intent.procedure_name : undefined;
   const selectedPlateRunway = liveResult?.intent.type === "plates" ? liveResult.intent.runway : undefined;
+  const plateJurisdictionNotes = useMemo(() => getPlateJurisdictionNotes(liveResult), [liveResult]);
 
   const warnings = useMemo(
     () => collectWarnings(activeIntent, liveResult, submitError, sourceStatuses),
@@ -1730,6 +1765,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           : undefined
                         }
                         diagram={plateDiagram}
+                        jurisdictionNotes={plateJurisdictionNotes}
                         odps={dashboardData.odps}
                         plates={dashboardData.plates}
                         referenceTime={initialNow}

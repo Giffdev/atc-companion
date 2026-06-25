@@ -681,7 +681,8 @@ const resolveNavigationAirportToken = (token: string | undefined, defaultFromAir
     return defaultFromAirport;
   }
 
-  return findAirportReference(token)?.icao ?? undefined;
+  const normalizedToken = token.toUpperCase();
+  return findAirportReference(normalizedToken)?.icao ?? (isContextualAirportCode(normalizedToken) ? normalizedToken : undefined);
 };
 
 export const extractNavigationAirports = (
@@ -699,6 +700,23 @@ export const extractNavigationAirports = (
       from: resolveNavigationAirportToken(explicitRouteMatch[1], defaultFromAirport),
       to: resolveNavigationAirportToken(explicitRouteMatch[2], defaultFromAirport)
     };
+  }
+
+  const positionalRouteMatch = /\b(?:(?:route|direct|vector|heading|bearing|distance)\s+)?([A-Za-z0-9]{3,4}|my airport)\s+(?:direct\s+)?to\s+([A-Za-z0-9]{3,4}|my airport)\b(?:\s+(?:route|direct|vector|heading|bearing|distance))?/i.exec(
+    normalized
+  );
+
+  if (positionalRouteMatch) {
+    const fromToken = positionalRouteMatch[1];
+    const toToken = positionalRouteMatch[2];
+    const from = resolveNavigationAirportToken(fromToken, defaultFromAirport);
+    const to = resolveNavigationAirportToken(toToken, defaultFromAirport);
+    const fromAccepted = Boolean(from) || fromToken.toLowerCase() === "my airport";
+    const toAccepted = Boolean(to) || toToken.toLowerCase() === "my airport";
+
+    if (fromAccepted && toAccepted) {
+      return { from, to };
+    }
   }
 
   const airports = extractAirportCodes(normalized).filter((code) => !isAllSingleLetters(code));

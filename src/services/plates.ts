@@ -1,14 +1,17 @@
 import { toFaaCode, toIcaoCode } from "@/data/airports";
+import { getDatasetAirport, type DatasetAirport } from "@/data/airport-dataset";
 import { getDataSource } from "@/data/sources";
 import { createCacheKey, getCacheTtlMs } from "@/lib/cache";
 import { fetchWithRetry } from "@/lib/fetcher";
-import { createApiErrorResponse, createApiResponse } from "@/lib/utils";
+import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils";
+import { OURAIRPORTS_SOURCE } from "@/services/dataset-airport-fallback";
 import type { ApiResponse } from "@/types/api";
 import type { ApproachPlate, ApproachType, Odp, Sid, Star } from "@/types/aviation";
 import { toServiceErrorResponse } from "@/services/_shared";
 
 const DTPP_SOURCE = getDataSource("faaDtpp");
 const DTPP_XML_URL = "https://nfdc.faa.gov/webContent/dtpp/current.xml";
+export const PLATES_DATA_GAP_CODE = "PLATES_DATA_GAP";
 
 type DtppRecord = {
   chart_code: string;
@@ -28,6 +31,73 @@ type DtppAirportPayload = {
 };
 
 const plateManifest = new Map<string, string>();
+
+type ProcedureFamily = "approach" | "sid" | "star" | "odp" | "diagram";
+
+const getPlateDatasetAirport = (airport: string): DatasetAirport | undefined => {
+  const faaId = toFaaCode(airport);
+  const icaoId = toIcaoCode(airport);
+
+  return getDatasetAirport(airport) ?? getDatasetAirport(icaoId) ?? getDatasetAirport(faaId) ?? undefined;
+};
+
+const getProcedureFamilyLabel = (family: ProcedureFamily): string => {
+  switch (family) {
+    case "sid":
+      return "Departure procedures";
+    case "star":
+      return "Arrival procedures";
+    case "odp":
+      return "Obstacle departure procedures";
+    case "diagram":
+      return "Airport diagrams";
+    case "approach":
+      return "Approach procedures";
+  }
+};
+
+const getForeignJurisdictionPlateGapMessage = (
+  airportCode: string,
+  family: ProcedureFamily,
+  datasetAirport?: DatasetAirport
+): string => {
+  const label = getProcedureFamilyLabel(family);
+
+  if (datasetAirport?.country === "CA") {
+    return `${label} for ${airportCode} are published by NAV CANADA in the Canada Air Pilot (CAP), not the FAA Digital Terminal Procedures source. Verify via official NAV CANADA publications.`;
+  }
+
+  return `${label} for ${airportCode} are not available via the FAA Digital Terminal Procedures source. Verify via the appropriate national aeronautical authority.`;
+};
+
+const getForeignJurisdictionPlateGap = <T>(
+  airport: string,
+  family: ProcedureFamily
+): ApiResponse<T> | null => {
+  const airportCode = toIcaoCode(airport);
+  const datasetAirport = getPlateDatasetAirport(airport);
+
+  if (!datasetAirport?.country || datasetAirport.country === "US") {
+    return null;
+  }
+
+  const message = getForeignJurisdictionPlateGapMessage(airportCode, family, datasetAirport);
+
+  return createApiErrorResponse(
+    {
+      code: PLATES_DATA_GAP_CODE,
+      message,
+      details: message,
+      retryable: true,
+      status: 503
+    },
+    {
+      source: OURAIRPORTS_SOURCE,
+      fetchedAt: toIsoNow(),
+      stalenessCategory: "approachPlate"
+    }
+  ) as ApiResponse<T>;
+};
 
 const parseXmlTag = (block: string, tagName: string): string | undefined => {
   const match = block.match(new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "i"));
@@ -166,6 +236,11 @@ const toApproachPlate = (airportData: DtppAirportPayload, record: DtppRecord, so
 });
 
 export const getPlates = async (params: { airport: string; type?: string }): Promise<ApiResponse<ApproachPlate[]>> => {
+  const jurisdictionGap = getForeignJurisdictionPlateGap<ApproachPlate[]>(params.airport, "approach");
+  if (jurisdictionGap) {
+    return jurisdictionGap;
+  }
+
   try {
     const airportData = await getDtppAirportData(params.airport);
     const records = airportData.records.filter((record) => record.chart_code === "IAP" && record.pdf_name);
@@ -195,6 +270,11 @@ export const getPlates = async (params: { airport: string; type?: string }): Pro
 };
 
 export const getAirportDiagram = async (airport: string): Promise<ApiResponse<ApproachPlate | null>> => {
+  const jurisdictionGap = getForeignJurisdictionPlateGap<ApproachPlate | null>(airport, "diagram");
+  if (jurisdictionGap) {
+    return jurisdictionGap;
+  }
+
   try {
     const airportData = await getDtppAirportData(airport);
     const source = { ...DTPP_SOURCE, url: airportData.sourceUrl };
@@ -220,6 +300,11 @@ export const getAirportDiagram = async (airport: string): Promise<ApiResponse<Ap
 };
 
 export const getSids = async (airport: string): Promise<ApiResponse<Sid[]>> => {
+  const jurisdictionGap = getForeignJurisdictionPlateGap<Sid[]>(airport, "sid");
+  if (jurisdictionGap) {
+    return jurisdictionGap;
+  }
+
   try {
     const airportData = await getDtppAirportData(airport);
     const source = { ...DTPP_SOURCE, url: airportData.sourceUrl };
@@ -256,6 +341,11 @@ export const getSids = async (airport: string): Promise<ApiResponse<Sid[]>> => {
 };
 
 export const getStars = async (airport: string): Promise<ApiResponse<Star[]>> => {
+  const jurisdictionGap = getForeignJurisdictionPlateGap<Star[]>(airport, "star");
+  if (jurisdictionGap) {
+    return jurisdictionGap;
+  }
+
   try {
     const airportData = await getDtppAirportData(airport);
     const source = { ...DTPP_SOURCE, url: airportData.sourceUrl };
@@ -292,6 +382,11 @@ export const getStars = async (airport: string): Promise<ApiResponse<Star[]>> =>
 };
 
 export const getOdps = async (airport: string): Promise<ApiResponse<Odp[]>> => {
+  const jurisdictionGap = getForeignJurisdictionPlateGap<Odp[]>(airport, "odp");
+  if (jurisdictionGap) {
+    return jurisdictionGap;
+  }
+
   try {
     const airportData = await getDtppAirportData(airport);
     const source = { ...DTPP_SOURCE, url: airportData.sourceUrl };

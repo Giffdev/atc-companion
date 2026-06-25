@@ -1,4 +1,4 @@
-import { extractEntities, normalizeAviationText } from "@/ai/entity-extractor";
+import { extractEntities, extractNavigationAirports, normalizeAviationText } from "@/ai/entity-extractor";
 import { parseIntent } from "@/ai/intent-parser";
 
 describe("normalizeAviationText", () => {
@@ -31,6 +31,12 @@ describe("extractEntities", () => {
     const entities = extractEntities("no airport info");
 
     expect(entities.airports).toEqual([]);
+  });
+
+  it("extracts positional navigation endpoints in typed order", () => {
+    expect(extractNavigationAirports("pae to 38w route")).toEqual({ from: "KPAE", to: "38W" });
+    expect(extractNavigationAirports("38w to pae route")).toEqual({ from: "38W", to: "KPAE" });
+    expect(extractNavigationAirports("pae to cyyj")).toEqual({ from: "KPAE", to: "CYYJ" });
   });
 });
 
@@ -202,10 +208,46 @@ describe("parseIntent", () => {
     });
   });
 
+  it("parses explicit point-to-point route requests as navigation", async () => {
+    const routeCases = [
+      ["show me a direct route from KPAE to CYYJ", "KPAE", "CYYJ"],
+      ["from KPAE to KSEA", "KPAE", "KSEA"],
+      ["direct route from KPAE to KSEA", "KPAE", "KSEA"],
+      ["pae to 38w route", "KPAE", "38W"],
+      ["38w to pae route", "38W", "KPAE"],
+      ["heading from KPAE to KSEA", "KPAE", "KSEA"],
+      ["distance from KPAE to KSEA", "KPAE", "KSEA"]
+    ] as const;
+
+    const intents = await Promise.all(routeCases.map(([query]) => parseIntent(query)));
+
+    intents.forEach((intent, index) => {
+      const [, from, to] = routeCases[index];
+
+      expect(intent).toMatchObject({
+        type: "navigation",
+        from,
+        to,
+        requiresClarification: false
+      });
+      expect(intent.entities).toContainEqual({ label: "navigation_from", value: from });
+      expect(intent.entities).toContainEqual({ label: "navigation_to", value: to });
+    });
+  });
+
+  it("does not treat ordinary airport-info phrasing with to as navigation", async () => {
+    await expect(parseIntent("airport info for PAE to review")).resolves.toMatchObject({
+      type: "airport_info",
+      requiresClarification: false
+    });
+  });
+
   it("parses runway configuration and airport diagram requests as airport info", async () => {
-    const [runwayIntent, diagramIntent] = await Promise.all([
+    const [runwayIntent, diagramIntent, genericInfoIntent, compoundInfoIntent] = await Promise.all([
       parseIntent("what is the runway configuration at KSEA"),
-      parseIntent("show me the airport diagram for KSEA")
+      parseIntent("show me the airport diagram for KSEA"),
+      parseIntent("show me info for KSEA"),
+      parseIntent("weather and notams for KSEA")
     ]);
 
     expect(runwayIntent).toMatchObject({
@@ -218,6 +260,17 @@ describe("parseIntent", () => {
       type: "airport_info",
       airport: "KSEA",
       detail: "runways",
+      requiresClarification: false
+    });
+    expect(genericInfoIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KSEA",
+      requiresClarification: false
+    });
+    expect(compoundInfoIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KSEA",
+      detail: "all",
       requiresClarification: false
     });
   });

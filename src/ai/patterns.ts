@@ -212,7 +212,8 @@ export const detectIntentPatternCandidates = (input: string): IntentPatternMatch
     (!FREQUENCY_PATTERN.test(input) || isHoursQuery) &&
     !PLATES_PATTERN.test(input) &&
     !WEATHER_PATTERN.test(input) &&
-    !TRAFFIC_PATTERN.test(input)
+    !TRAFFIC_PATTERN.test(input) &&
+    !NAVIGATION_PATTERN.test(input)
   ) {
     candidates.push("airport_info");
   }
@@ -271,7 +272,7 @@ export const matchIntentPattern = (input: string, options: { defaultFromAirport?
 
   // Compound query detection: if 2+ data types are mentioned with an airport,
   // treat as a broad airport_info request instead of picking just one
-  if (entities.airports.length > 0) {
+  if (entities.airports.length > 0 && !NAVIGATION_PATTERN.test(input)) {
     const hasPlates = PLATES_PATTERN.test(input);
     const hasApproachProcedureContext = APPROACH_PROCEDURE_CONTEXT_PATTERN.test(input);
     const hasTraffic = TRAFFIC_PATTERN.test(input);

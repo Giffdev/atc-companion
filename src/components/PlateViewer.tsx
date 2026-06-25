@@ -8,6 +8,7 @@ import type { ProcedureType } from "@/types/intents";
 import type { ApproachPlate } from "@/types/aviation";
 
 type PlateViewerTab = "approaches" | "departures" | "arrivals" | "odps" | "diagram" | "supplement";
+type PlateViewerJurisdictionNotes = Partial<Record<Exclude<PlateViewerTab, "supplement">, string>>;
 
 type PlateViewerProps = {
   plates: ApproachPlate[];
@@ -21,6 +22,7 @@ type PlateViewerProps = {
   airportCode?: string;
   diagram?: ApproachPlate | null;
   defaultTab?: PlateViewerTab;
+  jurisdictionNotes?: PlateViewerJurisdictionNotes;
 };
 
 const normalizeValue = (value?: string | null): string => value?.trim().toUpperCase() ?? "";
@@ -118,7 +120,7 @@ const findPlateByName = (plateList: ApproachPlate[], name: string): ApproachPlat
   return match;
 };
 
-export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenceTime, selectedProcedureType, selectedProcedureName, selectedRunway, airportCode, diagram, defaultTab }: PlateViewerProps) {
+export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenceTime, selectedProcedureType, selectedProcedureName, selectedRunway, airportCode, diagram, defaultTab, jurisdictionNotes }: PlateViewerProps) {
   const bestMatch = useMemo(
     () => pickBestMatchingPlate(plates, selectedProcedureType, selectedRunway),
     [plates, selectedProcedureType, selectedRunway]
@@ -145,11 +147,16 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
     if (selectedProcedureType === "SID" && sids.length > 0) return "departures";
     if (selectedProcedureType === "STAR" && stars.length > 0) return "arrivals";
     if (selectedProcedureType === "ODP" && odps.length > 0) return "odps";
-    if (plates.length > 0) return "approaches";
+    if (plates.length > 0 || jurisdictionNotes?.approaches) return "approaches";
     if (sids.length > 0) return "departures";
     if (stars.length > 0) return "arrivals";
+    if (odps.length > 0) return "odps";
+    if (jurisdictionNotes?.departures) return "departures";
+    if (jurisdictionNotes?.arrivals) return "arrivals";
+    if (jurisdictionNotes?.odps) return "odps";
+    if (jurisdictionNotes?.diagram) return "diagram";
     return "approaches";
-  }, [defaultTab, namedMatch, odps, plates.length, selectedProcedureType, sids, stars]);
+  }, [defaultTab, jurisdictionNotes, namedMatch, odps, plates.length, selectedProcedureType, sids, stars]);
 
   const [activeTab, setActiveTab] = useState<PlateViewerTab>(resolveDefaultTab);
   const [refLoading, setRefLoading] = useState(true);
@@ -171,18 +178,19 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
     setRefLoading(true);
   }, [airportCode, defaultTab, resolveDefaultTab, selectedProcedureName, selectedProcedureType]);
 
-  const faaCode = airportCode ? toFaaCode(airportCode) : null;
+  const hasJurisdictionNotes = Boolean(jurisdictionNotes && Object.values(jurisdictionNotes).some(Boolean));
+  const faaCode = airportCode && !hasJurisdictionNotes ? toFaaCode(airportCode) : null;
   const supplementUrl = faaCode ? `https://nfdc.faa.gov/nfdcApps/services/ajv5/airportDisplay.jsp?airportId=${faaCode}` : null;
   const proxiedSupplementUrl = supplementUrl ? `/api/plate-proxy?url=${encodeURIComponent(supplementUrl)}` : null;
   const diagramUrl = diagram ? (diagram.pdfUrl ?? diagram.chartUrl) : null;
   const proxiedDiagramUrl = diagramUrl ? getProxiedPlateUrl(diagram!) : null;
 
   const tabs: { id: PlateViewerTab; label: string; available: boolean }[] = [
-    { id: "approaches", label: `Approaches (${plates.length})`, available: plates.length > 0 },
-    { id: "departures", label: `SIDs (${sids.length})`, available: sids.length > 0 },
-    { id: "arrivals", label: `STARs (${stars.length})`, available: stars.length > 0 },
-    { id: "odps", label: `ODPs (${odps.length})`, available: odps.length > 0 },
-    { id: "diagram", label: "Diagram", available: Boolean(proxiedDiagramUrl) },
+    { id: "approaches", label: `Approaches (${plates.length})`, available: plates.length > 0 || Boolean(jurisdictionNotes?.approaches) },
+    { id: "departures", label: `SIDs (${sids.length})`, available: sids.length > 0 || Boolean(jurisdictionNotes?.departures) },
+    { id: "arrivals", label: `STARs (${stars.length})`, available: stars.length > 0 || Boolean(jurisdictionNotes?.arrivals) },
+    { id: "odps", label: `ODPs (${odps.length})`, available: odps.length > 0 || Boolean(jurisdictionNotes?.odps) },
+    { id: "diagram", label: "Diagram", available: Boolean(proxiedDiagramUrl || jurisdictionNotes?.diagram) },
     { id: "supplement", label: "Supplement", available: Boolean(proxiedSupplementUrl) }
   ];
 
@@ -196,6 +204,7 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
     : activeTab === "approaches" ? bestMatch
     : activeTabPlates.length > 0 ? activeTabPlates[0]
     : undefined;
+  const activeTabJurisdictionNote = activeTab === "supplement" ? undefined : jurisdictionNotes?.[activeTab];
 
   return (
     <div className="space-y-4">
@@ -230,7 +239,8 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
           />
         ) : (
           <div className="text-sm text-aviation-muted">
-            No {activeTab === "approaches" ? "approach plates" : activeTab === "departures" ? "SIDs" : activeTab === "arrivals" ? "STARs" : "ODPs"} available for this airport.
+            {activeTabJurisdictionNote
+              ?? `No ${activeTab === "approaches" ? "approach plates" : activeTab === "departures" ? "SIDs" : activeTab === "arrivals" ? "STARs" : "ODPs"} available for this airport.`}
           </div>
         )
       )}
@@ -246,6 +256,9 @@ export function PlateViewer({ plates, sids = [], stars = [], odps = [], referenc
           title="Airport Diagram"
         />
       )}
+      {activeTab === "diagram" && !proxiedDiagramUrl && activeTabJurisdictionNote ? (
+        <div className="text-sm text-aviation-muted">{activeTabJurisdictionNote}</div>
+      ) : null}
 
       {/* Chart Supplement tab */}
       {activeTab === "supplement" && proxiedSupplementUrl && (

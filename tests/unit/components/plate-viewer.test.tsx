@@ -80,4 +80,20 @@ describe("PlateViewer", () => {
     expect(screen.getByTitle("ILS OR LOC RWY 34L PDF")).toHaveAttribute("src", proxiedUrl(PLATES[0].chartUrl));
     expect(screen.getAllByRole("link", { name: /open in new tab/i })[0]).toHaveAttribute("href", PLATES[0].chartUrl);
   });
+
+  it("renders jurisdiction notes instead of implying foreign procedures do not exist", () => {
+    const note = "Approach procedures for CYYJ are published by NAV CANADA in the Canada Air Pilot (CAP), not the FAA Digital Terminal Procedures source. Verify via official NAV CANADA publications.";
+
+    render(
+      <PlateViewer
+        airportCode="CYYJ"
+        jurisdictionNotes={{ approaches: note }}
+        plates={[]}
+      />
+    );
+
+    expect(screen.getByText(note)).toBeInTheDocument();
+    expect(screen.queryByText(/No approach plates available for this airport/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /supplement/i })).not.toBeInTheDocument();
+  });
 });
