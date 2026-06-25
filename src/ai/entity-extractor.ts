@@ -76,7 +76,7 @@ const RUNWAY_SIDE_MAP: Record<string, string> = {
 
 const AIRPORT_CONTEXT_WORDS = /\b(?:at|for|near|nearest|into|from|to|airport|field|station)\s+([A-Za-z0-9]{2,4})\b/g;
 const AIRPORT_CONTEXT_AFTER_WORDS =
-  /\b([A-Za-z0-9]{2,4})\s+(?:airport|field|runways?|diagram|weather|metar|taf|notams?|frequenc(?:y|ies)|tower|ground|atis|ctaf)\b/gi;
+  /\b([A-Za-z0-9]{2,4})\s+(?:airport|field|runways?|diagram|weather|metar|taf|notams?|frequenc(?:y|ies)|tower|ground|atis|ctaf|traffic|plates|approaches|departures?|arrivals?|sids?|stars|hours)\b/gi;
 const ICAO_PATTERN = /\b([A-Z][A-Z0-9]{2,3})\b/g;
 const FAA_LID_PATTERN = /\b([A-Z0-9]{3,4})\b/gi;
 const IATA_PATTERN = /\b([A-Z]{3})\b/g;

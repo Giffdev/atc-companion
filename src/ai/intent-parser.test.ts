@@ -39,6 +39,12 @@ describe("extractEntities", () => {
     expect(entities.airports).toEqual([]);
   });
 
+  it("does not extract stopwords before trailing airport intent cues", () => {
+    const entities = extractEntities("no traffic");
+
+    expect(entities.airports).toEqual([]);
+  });
+
   it("extracts positional navigation endpoints in typed order", () => {
     expect(extractNavigationAirports("pae to 38w route")).toEqual({ from: "KPAE", to: "38W" });
     expect(extractNavigationAirports("38w to pae route")).toEqual({ from: "38W", to: "KPAE" });
@@ -188,6 +194,89 @@ describe("parseIntent", () => {
       type: "traffic",
       airport: "KLAX",
       altitude_range: [18000, 24000],
+      requiresClarification: false
+    });
+  });
+
+  it("parses Canadian ICAO trailing traffic requests", async () => {
+    const [victoriaIntent, vancouverIntent, leadingIntent] = await Promise.all([
+      parseIntent("cyyj traffic"),
+      parseIntent("cyvr traffic"),
+      parseIntent("traffic at cyyj")
+    ]);
+
+    expect(victoriaIntent).toMatchObject({
+      type: "traffic",
+      airport: "CYYJ",
+      requiresClarification: false
+    });
+    expect(victoriaIntent.entities).toContainEqual({ label: "airport", value: "CYYJ" });
+    expect(vancouverIntent).toMatchObject({
+      type: "traffic",
+      airport: "CYVR",
+      requiresClarification: false
+    });
+    expect(vancouverIntent.entities).toContainEqual({ label: "airport", value: "CYVR" });
+    expect(leadingIntent).toMatchObject({
+      type: "traffic",
+      airport: "CYYJ",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Canadian ICAO trailing plate cues", async () => {
+    const [platesIntent, approachesIntent, departureIntent, arrivalIntent, sidIntent, starIntent] = await Promise.all([
+      parseIntent("cyyj plates"),
+      parseIntent("cyyj approaches"),
+      parseIntent("cyyj departures"),
+      parseIntent("cyyj arrivals"),
+      parseIntent("cyyj sids"),
+      parseIntent("cyyj stars")
+    ]);
+
+    expect(platesIntent).toMatchObject({
+      type: "plates",
+      airport: "CYYJ",
+      requiresClarification: false
+    });
+    expect(approachesIntent).toMatchObject({
+      type: "plates",
+      airport: "CYYJ",
+      requiresClarification: false
+    });
+    expect(departureIntent).toMatchObject({
+      type: "plates",
+      airport: "CYYJ",
+      procedure_type: "SID",
+      requiresClarification: false
+    });
+    expect(arrivalIntent).toMatchObject({
+      type: "plates",
+      airport: "CYYJ",
+      procedure_type: "STAR",
+      requiresClarification: false
+    });
+    expect(sidIntent).toMatchObject({
+      type: "plates",
+      airport: "CYYJ",
+      procedure_type: "SID",
+      requiresClarification: false
+    });
+    expect(starIntent).toMatchObject({
+      type: "plates",
+      airport: "CYYJ",
+      procedure_type: "STAR",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Canadian ICAO trailing hours requests", async () => {
+    const intent = await parseIntent("cyyj hours");
+
+    expect(intent).toMatchObject({
+      type: "airport_info",
+      airport: "CYYJ",
+      detail: "hours",
       requiresClarification: false
     });
   });

@@ -63,3 +63,7 @@ Phase A Global Airport Database release is live at atc-companion.vercel.app via 
 ## 2026-06-25T09:40:42-07:00 — Phase B Canada shipped
 
 Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in commit `2618ee5` for Devin Sinha. Contributions recorded: Kranz scoped the Canada plan, Aaron generated/merged CA data server-side, Mattingly gated 122.9 and runway jurisdiction paths, Haise added Canadian extraction, Swigert removed hardcoded FAA-only copy, Lovell passed safety review, and Rai's yellow advisory was resolved. Unified validation: lint 0 warnings, clean build, 260 tests passed; production CYVR returns real runways with no Canadian 122.9 or FAA Chart Supplement leakage.
+
+
+## 2026-06-25T17:45:00Z — Phase C parser-recognized in production
+Phase C Caribbean dataset coverage is now fully parser-recognized in production. Haise added precise Caribbean ICAO prefix recognition for the shipped dataset, and coordinator live-verified MKJS/TJSJ/MYNN no longer fall into `CLARIFICATION_REQUIRED`.

@@ -1521,3 +1521,22 @@ Files:
 - `tests/unit/navigation-service.test.ts`: added reference-based math coverage, CYYJ dataset fallback coverage, and KPAE→CYYJ orchestrator coverage.
 
 Validation: shipped in commit `f5d3260`; deployed and live-verified: KPAE→CYYJ returns trueHeading 315, magneticHeading 298, 63.8nm. `npm run lint` passed with 0 warnings; `npm run build` passed; `npm test` passed with 269 tests.
+
+
+### 2026-06-25T17-29-55: Phase C Caribbean dataset aggregates multiple OurAirports iso_country codes and normalizes PR/VI to US jurisdiction
+**By:** Aaron
+**What:** Phase C Caribbean dataset aggregates multiple OurAirports iso_country codes and normalizes PR/VI to US jurisdiction
+**References:** scripts\generate-airport-dataset.ts, src\data\airport-dataset.ts, tests\unit\data\airport-dataset.test.ts
+**Why:** For ATC Companion Phase C, the generated Caribbean dataset uses a single `carib` prefix that aggregates OurAirports iso_country values AG, AI, AW, BB, BL, BQ, BS, CU, CW, DM, DO, GD, GP, HT, JM, KN, KY, LC, MF, MQ, MS, PR, SX, TC, TT, VC, VG, and VI. PR and VI records remain in the carib generated JSON files but emit `country: "US"` because Puerto Rico and the U.S. Virgin Islands are FAA-served territories; this preserves existing `country === "US"` FAA/NFDC lookup and messaging behavior without adding service-specific Caribbean branches. Other Caribbean country codes retain their raw iso_country value and therefore use the existing generic foreign-jurisdiction messaging.
+
+### 2026-06-25T17-41-07: Recognize precise Caribbean ICAO prefixes in the local entity extractor
+**By:** Haise
+**What:** Recognize precise Caribbean ICAO prefixes in the local entity extractor
+**References:** src\ai\entity-extractor.ts, src\ai\intent-parser.test.ts
+**Why:** Added CARIBBEAN_ICAO_SHAPE using only dataset-backed T-series prefixes (TA, TB, TD, TF, TG, TI, TJ, TK, TL, TN, TQ, TR, TT, TU, TV) and M-series prefixes (MB, MD, MK, MT, MU, MW, MY). Included this shape in contextual extraction and directCodes so contextual queries like "weather at MYNN" and bare Caribbean ICAOs are treated like existing Canadian ICAOs. Added stopwords for high-collision Caribbean-shaped ordinary words (TIME, TAXI, TAKE, TALK, TASK, TIDE, TINY, TIRE, MUST, MUCH, MUTE) to protect the direct path.
+
+
+### 2026-06-25T17:46:00Z: PR/VI airports keep FAA/NFDC treatment
+**By:** Devin Sinha (via Copilot)
+**What:** Puerto Rico (TJ*) and US Virgin Islands (TI*) airports are normalized to country="US" in the Caribbean dataset, so they retain full FAA/NFDC treatment (NFDC runway lookups, 122.9 CTAF hint, FAA plate sourcing) rather than generic non-US Caribbean handling.
+**Why:** User confirmed — PR/VI are US jurisdictions and should be treated as such. This ratifies the shipped Phase C behavior; no code change required.
