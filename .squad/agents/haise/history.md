@@ -31,3 +31,7 @@ Fixed the `cyyj traffic` empty-entities bug by adding conservative trailing airp
 
 ## 2026-06-25T11:58:56.987-07:00 — Mexico ICAO recognition and CYNJ precedence shipped
 Haise shipped Mexican MM-prefixed ICAO recognition in commit `c358047` by adding `MEXICAN_ICAO_SHAPE` to direct and contextual extraction paths. Haise also shipped the Langley CYNJ fix in commit `81fef69`: explicit airport-code matches now dedupe ahead of fuzzy named-airport matches, and CY/CZ ICAO-looking direct tokens such as CYNJ are accepted without a context cue.
+
+## 2026-06-25T13:05:00-07:00 — Bare city resolution shipped
+
+Haise fixed Canada/global bare-city airport resolution in coordinator commit `f3bb6e0`. Bare locator/directive place-name cues now emit city entities for the server multi-country resolver, so `langley` resolves to CYNJ and `abbotsford` resolves to CYXX while Everett still resolves to KPAE and explicit CYNJ remains preserved. Full validation passed with 286 tests and production live checks.

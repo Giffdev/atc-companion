@@ -1578,3 +1578,17 @@ Validation note: adding Mexico introduced an OurAirports local-code collision (`
 **References:** src/services/runway-info.ts, src/services/frequencies.ts, src/services/plates.ts
 **Why:** For ATC Companion service-layer Mexico routing, airports with dataset country="MX" / ICAO prefix MM are treated as non-FAA and non-NAV CANADA. Runway and frequency services skip FAA NFDC via the existing non-US dataset-country gate and use OurAirports dataset rows when available. If data is unavailable, Mexico-specific gap copy tells users to verify in Mexico's official SENEAM/AFAC AIP publications. Plate/procedure gaps state that Mexican procedures are published in Mexico's AIP by SENEAM/AFAC, not FAA DTPP or NAV CANADA.
 
+
+### 2026-06-25T13:05:00-07:00: Bare city cues resolve through multi-country airport dataset
+**By:** Haise
+**What:** Bare place-name tokens after locator/directive cues now emit `label: "city"` entities without `regionCode` when they are not strong explicit airport codes. Strong airport-code matches still win, while substring-only US fuzzy airport-name matches no longer outrank the city candidate.
+**References:** src/ai/entity-extractor.ts, src/ai/intent-parser.test.ts, decisions/inbox/Haise-bare-city-resolution.md
+**Why:** Server-side city resolution has full US/CA/Caribbean/Mexico coverage, while the client-safe airport reference layer is US-only. Routing bare cues like `show me langley` and `show me abbotsford` through city resolution selects CYNJ/CYXX instead of US-only fuzzy matches such as KLFI; Everett/PAE aliases and explicit CYNJ remain preserved.
+**Validation:** `npm run lint`, `npx vitest run`, and `npm run build` passed in the shipped batch.
+
+### 2026-06-25T13:05:00-07:00: Curated runway fallback outranks OurAirports dataset
+**By:** Mattingly
+**What:** Runway resolution keeps live FAA NFDC primary. When NFDC is unavailable or returns no runway rows, explicit curated `src/data/airports.ts` runway arrays now precede the generated OurAirports community dataset; OurAirports remains the next fallback.
+**References:** src/services/runway-info.ts, src/services/__tests__/nfdc-parser.test.ts, decisions/inbox/Mattingly-curated-runway-precedence.md
+**Why:** Hand-vetted curated runway data is higher-confidence than broad community dataset rows for operationally sensitive airports. KPAE/PAE now falls back to curated physical pairs `16L/34R` and `16R/34L` instead of stale/decommissioned OurAirports `11/29`, and curated fallback source labels honestly read `Curated airport reference data`.
+**Validation:** `npm run lint`, targeted NFDC parser tests, `npm run build`, and the final coordinated full suite passed; production verification covered KPAE plus Canada/global city scenarios.

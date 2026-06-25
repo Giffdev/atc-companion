@@ -63,3 +63,7 @@ Mattingly also shipped the navigation dataset-coordinate fallback in commit `f5d
 
 ## 2026-06-25T11:58:56.987-07:00 — Mexico jurisdiction service routing shipped
 Mattingly updated runway, frequency, and plates services for commit `c358047` so MX/MM airports use Mexico SENEAM/AFAC AIP jurisdiction messaging. Mexican airport gaps should not direct users to FAA DTPP/NFDC or NAV CANADA; available OurAirports runway/frequency rows remain usable for MX airports.
+
+## 2026-06-25T13:05:00-07:00 — Curated runway precedence shipped
+
+Mattingly fixed runway fallback precedence in coordinator commit `f3bb6e0`: live FAA NFDC remains primary, curated `airports.ts` runway arrays now outrank OurAirports fallback, and curated fallback source labels are explicit. KPAE now falls back to `16L/34R` and `16R/34L` instead of stale/decommissioned `11/29`. Full validation passed with 286 tests and production live checks.
