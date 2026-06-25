@@ -38,9 +38,17 @@ export interface DatasetAirport {
 type AirportRecord = Omit<DatasetAirport, "runways">;
 type RunwayRecord = Record<string, DatasetRunway[]>;
 type FrequencyRecord = Record<string, DatasetFrequency[]>;
+type AirportCodeKind = "ident" | "icao" | "gpsCode" | "iata" | "localCode";
 
 const GENERATED_DATA_DIR = path.join(process.cwd(), "src", "data", "generated");
-const DATASET_PREFIXES = ["us", "ca", "carib"] as const;
+const DATASET_PREFIXES = ["us", "ca", "mx", "carib"] as const;
+const AIRPORT_CODE_PRIORITY: Record<AirportCodeKind, number> = {
+  localCode: 1,
+  iata: 2,
+  gpsCode: 3,
+  icao: 4,
+  ident: 5
+};
 
 const readGeneratedJson = <T>(fileName: string): T => {
   const filePath = path.join(GENERATED_DATA_DIR, fileName);
@@ -69,23 +77,39 @@ const airports = airportRecords.map<DatasetAirport>((airport) => ({
 
 const airportByIdent = new Map<string, DatasetAirport>();
 const airportByCode = new Map<string, DatasetAirport>();
+const airportCodePriority = new Map<string, number>();
 const frequenciesByCode = new Map<string, DatasetFrequency[]>();
+const frequencyCodePriority = new Map<string, number>();
 const airportIdentsByCity = new Map<string, string[]>();
 
-const addAirportCode = (code: string | undefined, airport: DatasetAirport): void => {
+const addAirportCode = (code: string | undefined, airport: DatasetAirport, kind: AirportCodeKind): void => {
   if (!code) {
     return;
   }
 
-  airportByCode.set(normalizeCode(code), airport);
+  const normalizedCode = normalizeCode(code);
+  const priority = AIRPORT_CODE_PRIORITY[kind];
+  const existingPriority = airportCodePriority.get(normalizedCode) ?? 0;
+
+  if (priority >= existingPriority) {
+    airportByCode.set(normalizedCode, airport);
+    airportCodePriority.set(normalizedCode, priority);
+  }
 };
 
-const addFrequencyCode = (code: string | undefined, airport: DatasetAirport): void => {
+const addFrequencyCode = (code: string | undefined, airport: DatasetAirport, kind: AirportCodeKind): void => {
   if (!code) {
     return;
   }
 
-  frequenciesByCode.set(normalizeCode(code), frequencyRecords[airport.ident] ?? []);
+  const normalizedCode = normalizeCode(code);
+  const priority = AIRPORT_CODE_PRIORITY[kind];
+  const existingPriority = frequencyCodePriority.get(normalizedCode) ?? 0;
+
+  if (priority >= existingPriority) {
+    frequenciesByCode.set(normalizedCode, frequencyRecords[airport.ident] ?? []);
+    frequencyCodePriority.set(normalizedCode, priority);
+  }
 };
 
 const addCityIndex = (key: string, airportIdent: string): void => {
@@ -94,16 +118,16 @@ const addCityIndex = (key: string, airportIdent: string): void => {
 
 for (const airport of airports) {
   airportByIdent.set(airport.ident, airport);
-  addAirportCode(airport.ident, airport);
-  addAirportCode(airport.icao, airport);
-  addAirportCode(airport.gpsCode, airport);
-  addAirportCode(airport.iata, airport);
-  addAirportCode(airport.localCode, airport);
-  addFrequencyCode(airport.ident, airport);
-  addFrequencyCode(airport.icao, airport);
-  addFrequencyCode(airport.gpsCode, airport);
-  addFrequencyCode(airport.iata, airport);
-  addFrequencyCode(airport.localCode, airport);
+  addAirportCode(airport.ident, airport, "ident");
+  addAirportCode(airport.icao, airport, "icao");
+  addAirportCode(airport.gpsCode, airport, "gpsCode");
+  addAirportCode(airport.iata, airport, "iata");
+  addAirportCode(airport.localCode, airport, "localCode");
+  addFrequencyCode(airport.ident, airport, "ident");
+  addFrequencyCode(airport.icao, airport, "icao");
+  addFrequencyCode(airport.gpsCode, airport, "gpsCode");
+  addFrequencyCode(airport.iata, airport, "iata");
+  addFrequencyCode(airport.localCode, airport, "localCode");
 
   if (airport.municipality) {
     const cityKey = normalizeCity(airport.municipality);

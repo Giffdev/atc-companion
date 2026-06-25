@@ -69,12 +69,20 @@ const getAirportNotFoundMessage = (airportCodeInput: string, datasetAirport?: Da
     return `Airport ${airportCodeInput} could not be found in available airport data sources. Verify the identifier in official Canadian aeronautical publications or with NAV CANADA.`;
   }
 
+  if (datasetAirport?.country === "MX") {
+    return `Airport ${airportCodeInput} could not be found in available airport data sources. Verify the identifier in Mexico's official SENEAM/AFAC AIP publications.`;
+  }
+
   return `Airport ${airportCodeInput} could not be found in available airport data sources. Verify the identifier in official aeronautical publications for that airport's jurisdiction.`;
 };
 
 const getRunwayDataGapMessage = (airportCodeInput: string, datasetAirport?: DatasetAirport): string => {
   if (datasetAirport?.country === "CA") {
     return `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration in official Canadian aeronautical publications or with NAV CANADA.`;
+  }
+
+  if (datasetAirport?.country === "MX") {
+    return `Runway data could not be loaded for ${airportCodeInput}. Verify runway configuration in Mexico's official SENEAM/AFAC AIP publications.`;
   }
 
   if (datasetAirport?.country && datasetAirport.country !== "US") {
@@ -87,6 +95,10 @@ const getRunwayDataGapMessage = (airportCodeInput: string, datasetAirport?: Data
 const getRunwayDataGapDetails = (datasetAirport: DatasetAirport | undefined, sourceUrl: string): string => {
   if (datasetAirport?.country === "CA") {
     return "Available sources returned no runway records. Verify runway configuration in official Canadian aeronautical publications or with NAV CANADA.";
+  }
+
+  if (datasetAirport?.country === "MX") {
+    return "Available sources returned no runway records. Verify runway configuration in Mexico's official SENEAM/AFAC AIP publications.";
   }
 
   if (datasetAirport?.country && datasetAirport.country !== "US") {
@@ -197,7 +209,7 @@ export const getAirportRunways = async (airportCodeInput: string): Promise<ApiRe
 
     return createApiResponse(
       { airportIcao: icaoCode, airportName: airportRef.name, runways: inferredRunways, source: "Inferred from airport data" },
-      source,
+      datasetAirport?.country && datasetAirport.country !== "US" ? OURAIRPORTS_SOURCE : source,
       { fetchedAt }
     );
   });

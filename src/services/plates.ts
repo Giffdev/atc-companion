@@ -67,6 +67,10 @@ const getForeignJurisdictionPlateGapMessage = (
     return `${label} for ${airportCode} are published by NAV CANADA in the Canada Air Pilot (CAP), not the FAA Digital Terminal Procedures source. Verify via official NAV CANADA publications.`;
   }
 
+  if (datasetAirport?.country === "MX") {
+    return `${label} for ${airportCode} are published in Mexico's AIP by SENEAM/AFAC, not the FAA Digital Terminal Procedures source or NAV CANADA. Verify via official SENEAM/AFAC AIP publications.`;
+  }
+
   return `${label} for ${airportCode} are not available via the FAA Digital Terminal Procedures source. Verify via the appropriate national aeronautical authority.`;
 };
 

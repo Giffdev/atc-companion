@@ -1,0 +1,5 @@
+### 2026-06-25T18-39-13: Mexico jurisdiction service messaging uses SENEAM/AFAC AIP
+**By:** Mattingly
+**What:** Mexico jurisdiction service messaging uses SENEAM/AFAC AIP
+**References:** src/services/runway-info.ts, src/services/frequencies.ts, src/services/plates.ts
+**Why:** For ATC Companion service-layer Mexico routing, airports with dataset country="MX" / ICAO prefix MM are treated as non-FAA and non-NAV CANADA. Runway and frequency services skip FAA NFDC via the existing non-US dataset-country gate and use OurAirports dataset rows when available. If data is unavailable, Mexico-specific gap copy tells users to verify in Mexico's official SENEAM/AFAC AIP publications. Plate/procedure gaps state that Mexican procedures are published in Mexico's AIP by SENEAM/AFAC, not FAA DTPP or NAV CANADA.

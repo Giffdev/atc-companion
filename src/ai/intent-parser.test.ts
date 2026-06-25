@@ -39,6 +39,12 @@ describe("extractEntities", () => {
     expect(entities.airports).toEqual([]);
   });
 
+  it("does not over-match ordinary words near Mexican-shaped airport cues", () => {
+    const entities = extractEntities("memo says many maps mention mm hmm traffic");
+
+    expect(entities.airports).toEqual([]);
+  });
+
   it("does not extract stopwords before trailing airport intent cues", () => {
     const entities = extractEntities("no traffic");
 
@@ -127,6 +133,116 @@ describe("parseIntent", () => {
     expect(weatherIntent).toMatchObject({
       type: "weather",
       airport: "MYNN",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Mexican ICAO weather, traffic, runway, and frequency requests", async () => {
+    const [weatherIntent, trafficIntent, runwayIntent, frequencyIntent] = await Promise.all([
+      parseIntent("MMMX weather"),
+      parseIntent("MMUN traffic"),
+      parseIntent("MMTJ runways"),
+      parseIntent("frequencies at MMGL")
+    ]);
+
+    expect(weatherIntent).toMatchObject({
+      type: "weather",
+      airport: "MMMX",
+      requiresClarification: false
+    });
+    expect(trafficIntent).toMatchObject({
+      type: "traffic",
+      airport: "MMUN",
+      requiresClarification: false
+    });
+    expect(runwayIntent).toMatchObject({
+      type: "airport_info",
+      airport: "MMTJ",
+      detail: "runways",
+      requiresClarification: false
+    });
+    expect(frequencyIntent).toMatchObject({
+      type: "frequency",
+      facility: "MMGL",
+      requiresClarification: false
+    });
+  });
+
+  it("parses Mexican ICAO codes after leading airport context cues", async () => {
+    const intent = await parseIntent("traffic near MMUN");
+
+    expect(intent).toMatchObject({
+      type: "traffic",
+      airport: "MMUN",
+      requiresClarification: false
+    });
+    expect(intent.entities).toContainEqual({ label: "airport", value: "MMUN" });
+  });
+
+  it("parses Mexican ICAO trailing airport context cues", async () => {
+    const [
+      trafficIntent,
+      platesIntent,
+      approachesIntent,
+      departureIntent,
+      arrivalIntent,
+      sidIntent,
+      starIntent,
+      hoursIntent
+    ] = await Promise.all([
+      parseIntent("mmun traffic"),
+      parseIntent("mmmx plates"),
+      parseIntent("mmgl approaches"),
+      parseIntent("mmtj departures"),
+      parseIntent("mmmy arrivals"),
+      parseIntent("mmmx sids"),
+      parseIntent("mmun stars"),
+      parseIntent("mmgl hours")
+    ]);
+
+    expect(trafficIntent).toMatchObject({
+      type: "traffic",
+      airport: "MMUN",
+      requiresClarification: false
+    });
+    expect(platesIntent).toMatchObject({
+      type: "plates",
+      airport: "MMMX",
+      requiresClarification: false
+    });
+    expect(approachesIntent).toMatchObject({
+      type: "plates",
+      airport: "MMGL",
+      requiresClarification: false
+    });
+    expect(departureIntent).toMatchObject({
+      type: "plates",
+      airport: "MMTJ",
+      procedure_type: "SID",
+      requiresClarification: false
+    });
+    expect(arrivalIntent).toMatchObject({
+      type: "plates",
+      airport: "MMMY",
+      procedure_type: "STAR",
+      requiresClarification: false
+    });
+    expect(sidIntent).toMatchObject({
+      type: "plates",
+      airport: "MMMX",
+      procedure_type: "SID",
+      requiresClarification: false
+    });
+    expect(starIntent).toMatchObject({
+      type: "plates",
+      airport: "MMUN",
+      procedure_type: "STAR",
+      requiresClarification: false
+    });
+    expect(hoursIntent).toMatchObject({
+      type: "airport_info",
+      airport: "MMGL",
+      detail: "hours",
       requiresClarification: false
     });
   });

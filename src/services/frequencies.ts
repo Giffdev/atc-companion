@@ -82,6 +82,10 @@ const getFrequencyGapVerificationText = (
     return "verify frequency assignments in official Canadian aeronautical publications or with NAV CANADA before use";
   }
 
+  if (datasetAirport?.country === "MX") {
+    return "verify frequency assignments in Mexico's official SENEAM/AFAC AIP publications before use";
+  }
+
   if (datasetAirport?.country && datasetAirport.country !== "US") {
     return "verify frequency assignments in official aeronautical publications for that airport's jurisdiction before use";
   }
@@ -226,8 +230,30 @@ const toApproachFacilityResponse = async (facilityLookup: string, airportCode: s
 
 export const getFrequencies = async (airport: string, freqType?: string): Promise<ApiResponse<Frequency[]>> => {
   const airportCode = toIcaoCode(airport);
+  const faaCode = toFaaCode(airport);
+  const datasetAirport = getDatasetAirportForFrequencyLookup(airport, airportCode, faaCode);
+  const tryDatasetFallback = (): ApiResponse<Frequency[]> | undefined => {
+    const datasetFreqs = getDatasetFallbackFrequencies(airportCode, freqType);
+    if (datasetFreqs.length > 0) {
+      return createApiResponse(datasetFreqs, OURAIRPORTS_SOURCE, {
+        fetchedAt: datasetFreqs[0]?.fetchedAt ?? toIsoNow(),
+        stalenessCategory: "frequency"
+      });
+    }
+
+    return undefined;
+  };
 
   if (freqType?.toUpperCase() === "APP") {
+    if (datasetAirport?.country && datasetAirport.country !== "US") {
+      const datasetResponse = tryDatasetFallback();
+      if (datasetResponse) {
+        return datasetResponse;
+      }
+
+      return toFrequencyDataGapResponse(airport, airportCode, faaCode, datasetAirport);
+    }
+
     return toApproachFacilityResponse(airport, airportCode);
   }
 
@@ -257,20 +283,7 @@ export const getFrequencies = async (airport: string, freqType?: string): Promis
   }
 
   // Fallback: fetch from FAA NFDC
-  const faaCode = toFaaCode(airport);
-  const datasetAirport = getDatasetAirportForFrequencyLookup(airport, airportCode, faaCode);
   const shouldQueryNfdc = !datasetAirport || datasetAirport.country === "US";
-  const tryDatasetFallback = (): ApiResponse<Frequency[]> | undefined => {
-    const datasetFreqs = getDatasetFallbackFrequencies(airportCode, freqType);
-    if (datasetFreqs.length > 0) {
-      return createApiResponse(datasetFreqs, OURAIRPORTS_SOURCE, {
-        fetchedAt: datasetFreqs[0]?.fetchedAt ?? toIsoNow(),
-        stalenessCategory: "frequency"
-      });
-    }
-
-    return undefined;
-  };
 
   if (!shouldQueryNfdc) {
     const datasetResponse = tryDatasetFallback();

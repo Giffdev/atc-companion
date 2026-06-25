@@ -4,6 +4,7 @@ import path from "node:path";
 const DATASETS = [
   { countries: ["US"], prefix: "us" },
   { countries: ["CA"], prefix: "ca" },
+  { countries: ["MX"], prefix: "mx" },
   {
     countries: [
       "AG",
