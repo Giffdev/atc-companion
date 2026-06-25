@@ -40,7 +40,7 @@ type RunwayRecord = Record<string, DatasetRunway[]>;
 type FrequencyRecord = Record<string, DatasetFrequency[]>;
 
 const GENERATED_DATA_DIR = path.join(process.cwd(), "src", "data", "generated");
-const DATASET_PREFIXES = ["us", "ca"] as const;
+const DATASET_PREFIXES = ["us", "ca", "carib"] as const;
 
 const readGeneratedJson = <T>(fileName: string): T => {
   const filePath = path.join(GENERATED_DATA_DIR, fileName);

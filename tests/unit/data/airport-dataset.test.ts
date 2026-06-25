@@ -68,6 +68,39 @@ describe("airport dataset", () => {
     });
   });
 
+  it("resolves Jamaican ICAO MKJS from the Caribbean generated dataset", () => {
+    expect(getDatasetAirport("MKJS")).toMatchObject({
+      ident: "MKJS",
+      name: "Sangster International Airport",
+      country: "JM"
+    });
+  });
+
+  it("normalizes Puerto Rico airports to US jurisdiction while keeping them in the Caribbean dataset", () => {
+    expect(getDatasetAirport("TJSJ")).toMatchObject({
+      ident: "TJSJ",
+      name: "Luis Munoz Marin International Airport",
+      country: "US"
+    });
+  });
+
+  it("returns runway and frequency rows for Caribbean airports", () => {
+    expect(getDatasetRunways("MKJS")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          designator: "07/25"
+        })
+      ])
+    );
+    expect(getDatasetFrequencies("MKJS")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "TWR"
+        })
+      ])
+    );
+  });
+
   it("preserves all runways for multi-runway airports", () => {
     const runways = getDatasetRunways("PAE");
 

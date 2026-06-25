@@ -2,8 +2,41 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const DATASETS = [
-  { country: "US", prefix: "us" },
-  { country: "CA", prefix: "ca" }
+  { countries: ["US"], prefix: "us" },
+  { countries: ["CA"], prefix: "ca" },
+  {
+    countries: [
+      "AG",
+      "AI",
+      "AW",
+      "BB",
+      "BL",
+      "BQ",
+      "BS",
+      "CU",
+      "CW",
+      "DM",
+      "DO",
+      "GD",
+      "GP",
+      "HT",
+      "JM",
+      "KN",
+      "KY",
+      "LC",
+      "MF",
+      "MQ",
+      "MS",
+      "PR",
+      "SX",
+      "TC",
+      "TT",
+      "VC",
+      "VG",
+      "VI"
+    ],
+    prefix: "carib"
+  }
 ] as const;
 const EXCLUDED_TYPES = new Set(["closed", "heliport", "balloonport"]);
 const AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv";
@@ -186,6 +219,9 @@ const buildRunwayDesignator = (runway: RawRunway): string | undefined => {
 const toAirport = (raw: RawAirport): GeneratedAirport => {
   const ident = clean(raw.icao_code) ?? clean(raw.gps_code) ?? raw.ident.trim();
   const regionCode = clean(raw.iso_region)?.split("-")[1];
+  const rawCountry = raw.iso_country.trim();
+  // PR/VI are FAA-served U.S. territories, so keep FAA/NFDC behavior while storing them in carib files.
+  const country = rawCountry === "PR" || rawCountry === "VI" ? "US" : rawCountry;
 
   return {
     ident,
@@ -197,14 +233,14 @@ const toAirport = (raw: RawAirport): GeneratedAirport => {
     type: raw.type.trim(),
     lat: roundCoordinate(raw.latitude_deg),
     lon: roundCoordinate(raw.longitude_deg),
-    country: raw.iso_country.trim(),
+    country,
     ...(regionCode ? { regionCode } : {}),
     ...(clean(raw.municipality) ? { municipality: clean(raw.municipality) } : {})
   };
 };
 
 const buildDataset = (
-  country: string,
+  countries: readonly string[],
   rawAirports: RawAirport[],
   rawRunways: RawRunway[],
   rawFrequencies: RawFrequency[]
@@ -215,7 +251,7 @@ const buildDataset = (
 } => {
   const sourceIdentToGeneratedIdent = new Map<string, string>();
   const airports = rawAirports
-    .filter((airport) => airport.iso_country === country)
+    .filter((airport) => countries.includes(airport.iso_country))
     .filter((airport) => !EXCLUDED_TYPES.has(airport.type))
     .map((airport) => {
       const generated = toAirport(airport);
@@ -338,7 +374,7 @@ const main = async (): Promise<void> => {
 
   for (const dataset of DATASETS) {
     const { airports, runwaysByAirport, frequenciesByAirport } = buildDataset(
-      dataset.country,
+      dataset.countries,
       rawAirports,
       rawRunways,
       rawFrequencies
@@ -353,7 +389,7 @@ const main = async (): Promise<void> => {
     const runwayCount = Object.values(runwaysByAirport).reduce((sum, runways) => sum + runways.length, 0);
     const frequencyCount = Object.values(frequenciesByAirport).reduce((sum, frequencies) => sum + frequencies.length, 0);
     console.log(
-      `Generated ${airports.length} ${dataset.country} airports, ${runwayCount} runways, and ${frequencyCount} frequencies from OurAirports public-domain CSVs plus local corrections.`
+      `Generated ${airports.length} ${dataset.prefix} airports, ${runwayCount} runways, and ${frequencyCount} frequencies from OurAirports public-domain CSVs plus local corrections.`
     );
   }
 };
