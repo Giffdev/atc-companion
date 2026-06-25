@@ -68,6 +68,41 @@ vi.mock("@/components/QueryInput", () => {
         >
           Submit NOTAM query
         </button>
+        <button
+          type="button"
+          onClick={() =>
+            onSubmit("frequencies at KSEA", {
+              type: "frequency",
+              facility: "KSEA",
+              confidence: 0.99,
+              rawInput: "frequencies at KSEA",
+              parsedAt: "2026-06-18T05:00:00.000Z",
+              source,
+              entities: [],
+              requiresClarification: false
+            })
+          }
+        >
+          Submit frequency query
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onSubmit("airport info for 38W", {
+              type: "airport_info",
+              airport: "38W",
+              detail: "all",
+              confidence: 0.99,
+              rawInput: "airport info for 38W",
+              parsedAt: "2026-06-18T05:00:00.000Z",
+              source,
+              entities: [],
+              requiresClarification: false
+            })
+          }
+        >
+          Submit airport info query
+        </button>
       </div>
     )
   };
@@ -223,6 +258,138 @@ const createEmptyNotamResult = (timestamp: string) => ({
   timestamp
 });
 
+const createFrequencyResult = (timestamp: string) => ({
+  intent: {
+    type: "frequency",
+    facility: "KSEA",
+    confidence: 0.99,
+    rawInput: "frequencies at KSEA",
+    parsedAt: timestamp,
+    source: QUERY_SOURCE,
+    entities: [],
+    requiresClarification: false
+  },
+  response: {
+    ok: true as const,
+    data: [
+      {
+        type: "TWR",
+        valueMHz: 119.9,
+        name: "Seattle Tower",
+        source: QUERY_SOURCE,
+        fetchedAt: timestamp,
+        isStale: false
+      }
+    ],
+    source: QUERY_SOURCE,
+    attribution: { primary: QUERY_SOURCE },
+    fetchedAt: timestamp,
+    isStale: false
+  },
+  executionTimeMs: 14,
+  timestamp
+});
+
+const createEmptyPlateResult = (timestamp: string) => ({
+  intent: {
+    type: "plates",
+    airport: "38W",
+    procedure_type: "APPROACH",
+    confidence: 0.99,
+    rawInput: "approach plates at 38W",
+    parsedAt: timestamp,
+    source: QUERY_SOURCE,
+    entities: [],
+    requiresClarification: false
+  },
+  response: {
+    ok: true as const,
+    data: [],
+    source: QUERY_SOURCE,
+    attribution: { primary: QUERY_SOURCE },
+    fetchedAt: timestamp,
+    isStale: false
+  },
+  executionTimeMs: 10,
+  timestamp
+});
+
+const createLyndenAirportInfoResult = (timestamp: string) => ({
+  intent: {
+    type: "airport_info",
+    airport: "38W",
+    detail: "all",
+    confidence: 0.99,
+    rawInput: "airport info for 38W",
+    parsedAt: timestamp,
+    source: QUERY_SOURCE,
+    entities: [],
+    requiresClarification: false
+  },
+  response: {
+    ok: true as const,
+    data: {
+      airport: "38W",
+      airportName: "Lynden Airport",
+      airportCity: "Lynden",
+      airportState: "WA",
+      runways: [],
+      weather: {
+        ok: true as const,
+        data: {
+          stationIcao: "KBLI",
+          metar: null,
+          taf: null,
+          pireps: [],
+          source: QUERY_SOURCE,
+          fetchedAt: timestamp,
+          isStale: false
+        },
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      },
+      frequencies: {
+        ok: false as const,
+        data: null,
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false,
+        error: {
+          code: "AIRPORT_NOT_FOUND",
+          message: "No FAA frequency data found for 38W.",
+          retryable: false,
+          status: 404
+        }
+      },
+      plates: {
+        ok: true as const,
+        data: [],
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      },
+      diagram: {
+        ok: true as const,
+        data: null,
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      }
+    },
+    source: QUERY_SOURCE,
+    attribution: { primary: QUERY_SOURCE },
+    fetchedAt: timestamp,
+    isStale: false
+  },
+  executionTimeMs: 24,
+  timestamp
+});
+
 const jsonResponse = (payload: unknown) =>
   Promise.resolve(
     new Response(JSON.stringify(payload), {
@@ -374,5 +541,34 @@ describe("OperationsConsole auto-refresh", () => {
     expect(screen.getAllByText("No active NOTAMs").length).toBeGreaterThan(0);
     expect(screen.getByText(/The live NOTAM feed loaded successfully and returned zero notices/i)).toBeInTheDocument();
     expect(screen.queryByText("⚠️ NOTAMs could not be loaded")).not.toBeInTheDocument();
+  });
+
+  it("clears stale frequencies and labels the queried airport when airport info has no frequency data", async () => {
+    const timestamp = "2026-06-18T05:00:00.000Z";
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse(createFrequencyResult(timestamp)))
+      .mockImplementationOnce(() => jsonResponse(createLyndenAirportInfoResult(timestamp)))
+      .mockImplementation(() => jsonResponse(createEmptyPlateResult(timestamp)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OperationsConsole initialNow={timestamp} />);
+
+    await flushUpdates();
+    fetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit frequency query" }));
+    await flushUpdates();
+
+    expect(screen.getByText("Seattle Tower")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit airport info query" }));
+    await flushUpdates();
+
+    expect(screen.getByRole("heading", { name: "38W — Lynden Airport core frequencies" })).toBeInTheDocument();
+    expect(screen.getByText("No published FAA frequencies for 38W — Lynden Airport. Verify via official FAA sources.")).toBeInTheDocument();
+    expect(screen.queryByText("Seattle Tower")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "KBLI — Bellingham International Airport core frequencies" })).not.toBeInTheDocument();
   });
 });

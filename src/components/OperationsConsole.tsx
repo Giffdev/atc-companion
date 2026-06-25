@@ -234,7 +234,7 @@ const mergeLiveDashboardData = (
       return {
         ...dashboardData,
         weather: airportInfo.weather.ok ? airportInfo.weather.data : dashboardData.weather,
-        frequencies: airportInfo.frequencies.ok ? airportInfo.frequencies.data : dashboardData.frequencies,
+        frequencies: airportInfo.frequencies.ok ? airportInfo.frequencies.data : [],
         plates: airportInfo.plates.ok ? airportInfo.plates.data : dashboardData.plates,
         sids: airportInfo.sids?.ok ? airportInfo.sids.data : dashboardData.sids,
         stars: airportInfo.stars?.ok ? airportInfo.stars.data : dashboardData.stars,
@@ -955,6 +955,17 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   }, [liveResult, facilityAirportInfo, supplementaryDiagram]);
   const fallbackSource = PLACEHOLDER_SOURCE;
   const fallbackFetchedAt = initialNow;
+  const frequencyPanelAirport =
+    activeIntent?.type === "frequency" ? activeIntent.facility
+    : activeIntent?.type === "airport_info" ? activeIntent.airport
+    : selectedFacility?.primaryAirport || dashboardData.weather.stationIcao || "Field";
+  const airportInfoFrequencyUnavailable =
+    liveResult?.intent.type === "airport_info" &&
+    liveResult.response.ok &&
+    !(liveResult.response.data as AirportInfoQueryPayload).frequencies.ok;
+  const frequencyEmptyMessage = airportInfoFrequencyUnavailable
+    ? `No published FAA frequencies for ${formatAirportTitle(frequencyPanelAirport)}. Verify via official FAA sources.`
+    : "No frequencies returned for the active live query.";
 
   const trafficAirportIcao = useMemo(() => {
     if (activeIntent?.type === "traffic" && activeIntent.airport) return activeIntent.airport;
@@ -1583,7 +1594,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                       referenceTime={initialNow}
                       source={dashboardData.frequencies[0]?.source ?? liveResult?.response.source ?? fallbackSource}
                       subtitle="High-contrast FAA field frequencies in a terminal-style list for quick eyes-on validation."
-                      title={`${formatAirportTitle(activeIntent?.type === "frequency" ? activeIntent.facility : dashboardData.weather.stationIcao)} core frequencies`}
+                      title={`${formatAirportTitle(frequencyPanelAirport)} core frequencies`}
                     >
                       {loadingPanels.has("frequency") ? (
                         <div className="flex items-center gap-2 text-sm text-aviation-muted">
@@ -1617,7 +1628,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-aviation-muted">No frequencies returned for the active live query.</div>
+                        <div className="text-sm text-aviation-muted">{frequencyEmptyMessage}</div>
                       )}
                     </ResultCard>
                   </div>
