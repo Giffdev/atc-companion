@@ -1,5 +1,0 @@
-### 2026-06-25T18-42-02: Recognize Mexican MM-prefixed ICAO codes in direct and contextual parser paths
-**By:** Haise
-**What:** Recognize Mexican MM-prefixed ICAO codes in direct and contextual parser paths
-**References:** src/ai/entity-extractor.ts, src/ai/intent-parser.test.ts
-**Why:** Added MEXICAN_ICAO_SHAPE as /^MM[A-Z0-9]{2}$/ for Mexican ICAO identifiers. False-positive analysis: unlike Canadian C-prefixed four-letter shapes, common English four-letter words starting with "MM" are essentially absent because "MM" is not a productive English word-initial bigram; ordinary phrases like "memo", "many", "maps", and "mm hmm" do not collide. Therefore the Mexican shape follows the Caribbean precedent and is wired into both direct extraction and contextual extraction, allowing bare codes such as MMMX and contextual/trailing-cue forms such as MMUN traffic, while still respecting stopwords and dedupe behavior.

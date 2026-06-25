@@ -28,3 +28,6 @@ Haise shipped two Canadian navigation parsing fixes in commit `5070c70`: route-c
 ## 2026-06-25T11:07:00-07:00 — Traffic cue extraction fix
 
 Fixed the `cyyj traffic` empty-entities bug by adding conservative trailing airport context cues to `AIRPORT_CONTEXT_AFTER_WORDS` (`traffic`, plates/procedure/hour cues). Added tests; 278 passed. Commit `8b43c37` deployed and live-verified. Decision archived in `decisions.md`.
+
+## 2026-06-25T11:58:56.987-07:00 — Mexico ICAO recognition and CYNJ precedence shipped
+Haise shipped Mexican MM-prefixed ICAO recognition in commit `c358047` by adding `MEXICAN_ICAO_SHAPE` to direct and contextual extraction paths. Haise also shipped the Langley CYNJ fix in commit `81fef69`: explicit airport-code matches now dedupe ahead of fuzzy named-airport matches, and CY/CZ ICAO-looking direct tokens such as CYNJ are accepted without a context cue.

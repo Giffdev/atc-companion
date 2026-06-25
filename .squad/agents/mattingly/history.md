@@ -60,3 +60,6 @@ Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in co
 Mattingly shipped Canadian plates jurisdiction handling in commit `5070c70`: non-US FAA DTPP misses now return `PLATES_DATA_GAP` with NAV CANADA / Canada Air Pilot guidance instead of false no-plates copy; CYYJ was live-verified.
 
 Mattingly also shipped the navigation dataset-coordinate fallback in commit `f5d3260`: navigation math now accepts pre-resolved references, and orchestrator resolves curated airports first with dataset fallback for endpoints like CYYJ. Deployed live verification: KPAE→CYYJ returns trueHeading 315, magneticHeading 298, and 63.8nm; 269 tests pass.
+
+## 2026-06-25T11:58:56.987-07:00 — Mexico jurisdiction service routing shipped
+Mattingly updated runway, frequency, and plates services for commit `c358047` so MX/MM airports use Mexico SENEAM/AFAC AIP jurisdiction messaging. Mexican airport gaps should not direct users to FAA DTPP/NFDC or NAV CANADA; available OurAirports runway/frequency rows remain usable for MX airports.

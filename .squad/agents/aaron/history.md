@@ -72,3 +72,6 @@ Phase C Caribbean dataset coverage is now fully parser-recognized in production.
 ## 2026-06-25T11:07:00-07:00 — OurAirports and NAV CANADA source docs
 
 Updated `docs/data-sources.md` to describe OurAirports as the bundled/generated community airport dataset source and to clarify NAV CANADA jurisdiction boundaries for Canadian aviation data surfaces. Decision archived in `decisions.md`.
+
+## 2026-06-25T11:58:56.987-07:00 — Mexico airport dataset shipped
+Aaron added the Mexico `mx` country-filtered airport dataset segment and regenerated MX airport/runway/frequency artifacts for commit `c358047`. Mexico now contributes 1,585 airports with verified MX lookups for MMMX, MMUN, MMTJ, MMGL, and MMMY; keep dataset precedence strong enough to protect established IATA/local lookups such as PAE.

@@ -12,6 +12,7 @@
 **Implementation direction:** Official keyed path sends `client_id` and `client_secret` headers, queries `icaoLocation` with `responseFormat=geoJson`, and parses the FAA GeoJSON-ish `items[].properties.coreNOTAMData.notam` shape in addition to legacy flat test shapes. Supported environment variables are `FAA_NOTAM_CLIENT_ID` / `FAA_NOTAM_CLIENT_SECRET`, with legacy aliases `FAA_NMS_CLIENT_ID` / `FAA_NMS_CLIENT_SECRET`. Do not use `FAA_NOTAM_API_KEY`, `FAA_NMS_API_KEY`, or `api.aviationapi.com` going forward.
 
 **Why:** Inline NOTAMs cannot honestly be provided from a viable keyless live source. Provision FAA NOTAM/NMS credentials in Vercel after FAA API/NMS onboarding; without those credentials, inline NOTAMs remain unavailable by design and the app links users to official FAA NOTAM Search.
+
 ### 2026-06-23T15:01:06-07:00: T2a envelope migration contract
 **By:** Kranz
 
@@ -20,6 +21,7 @@
 **Why:** The codebase already standardizes JSON service/route payloads on `ApiResponse<T>`, but `/api/atis` and `/api/adjacent` are JSON outliers. `/api/plate-proxy` only looks like an outlier; JSON-wrapping its success would break chart/document rendering. This contract isolates the binary exemption, preserves ATIS batch semantics, and provides a lockstep implementation/test order so backend and frontend do not land incompatible shapes.
 
 **Reference:** Full implementation contract was merged from `decisions/inbox/kranz-t2a-contract.md` on 2026-06-23T15:23:00Z.
+
 ### 2026-06-23T15:22:00Z: Keep NOTAM fallback UI in lockstep with service error code
 **By:** Swigert
 
@@ -104,25 +106,30 @@
    - Swigert: in the same change set before merge/full validation, update `AtisStrip.tsx` and `FacilityOverview.tsx` to unwrap `ApiResponse<Record<string, AtisEntry | null>>`. Do not change PlateViewer/DiagramPanel behavior.
    - Lovell: update route tests and integration assertions after backend+frontend compile; add the AtisStrip envelope consumer test; note/defer FacilityOverview component-test gap if not added.
    - Final validation: typecheck/lint/test commands already used by the repo. The app must never land with backend envelopes but old consumers, or old backend with new consumers.
+
 ### 2026-06-23T15:30:00Z: Keep plate-proxy JSON errors unchanged
 **By:** Mattingly
 
 **What:** Added the required binary passthrough exemption comment above the `/api/plate-proxy` success response, but did not normalize the existing JSON error paths to `ApiResponse<never>` in this backend slice.
 
 **Why:** The frozen contract makes error normalization optional and prioritizes not breaking the binary iframe/source success path. Leaving the existing error JSON untouched is lower risk for T2a while Swigert and Lovell complete consumer and test migration around the required ATIS/adjacent envelopes.
+
 ### 2026-06-23T15:45:00Z: Facility summary leads selected airport dashboards
 **By:** Swigert
 **What:** Render the selected tower airport's facility overview section before the general query/status information when a home facility is selected.
 **Why:** A specific airport selection should orient controllers with airport-specific hours, runways, frequencies, and procedure links before broader dashboard panels or general query details.
+
 ### 2026-06-23T16:30:00Z: FacilityOverview T2a component coverage deferred
 **By:** Lovell
 **What:** FacilityOverview dedicated component coverage is deferred for T2a.
 **Why:** The final gate coverage focused on required AtisStrip envelope consumer cases plus route/integration envelope assertions; FacilityOverview remains covered by build/type checks and existing integration paths for this pass.
+
 ### 2026-06-23T23-01-07: Added real NFDC parser Vitest coverage
 **By:** Lovell
 **What:** Added real NFDC parser Vitest coverage
 **References:** src/services/__tests__/nfdc-parser.test.ts, src/services/airport-hours.ts, src/services/runway-info.ts
 **Why:** Replaced the unfinished NFDC parser test harness with 4 Vitest tests in src/services/__tests__/nfdc-parser.test.ts. Coverage added: parseRunwaysFromHtml happy path for NFDC-style runway sections including designator, dimensions, surface, and lighting normalization; parseRunwaysFromHtml empty/no-runway fallback; parseAirportHoursFromHtml happy path for tower hours, schedule, timezone, and airport fields; parseAirportHoursFromHtml empty/unstructured HTML fallback with null parser fields. Validation results: npx vitest run src/services/__tests__/nfdc-parser.test.ts passed (4 tests); npx vitest run passed with exit code 0; npm run lint passed with exit code 0; npm run build passed with exit code 0.
+
 ### 2026-06-23T23-27-48: Clarified NOTAM failure messaging so unavailable feed is not presented as zero NOTAMs
 **By:** Swigert
 **What:** Clarified NOTAM failure messaging so unavailable feed is not presented as zero NOTAMs
@@ -138,6 +145,7 @@ After: the panel derives notamPanelResult from the active NOTAM query or the fac
 API route touched: no.
 
 Validation: npm run lint passed; npm run build passed; npx vitest run passed (30 files, 205 tests). Focused component tests added for unavailable vs successful-empty NOTAM states.
+
 ### 2026-06-23T21:48:33-07:00: PAE runway completeness and static fallback pairing
 **By:** Aaron (Data)
 **Requested by:** Devin Sinha
@@ -145,6 +153,7 @@ Validation: npm run lint passed; npm run build passed; npx vitest run passed (30
 **Why:** When NFDC runway details are unavailable, static fallback and approach-plate inference can miss non-procedure runways. PAE exposed the systemic issue because approach plates only surfaced procedure runways, not both physical runways.
 **Validation:** Added multi-runway NFDC parse and NFDC-unavailable fallback tests; combined build/lint/Vitest passed (30 files, 210 tests).
 **Outcome:** Shipped in commit `f980f81`; live deployment verified.
+
 ### 2026-06-23T21:48:33-07:00: D-ATIS stale threshold widened to 75 minutes
 **By:** Mattingly (Backend)
 **Requested by:** Devin Sinha
@@ -158,7 +167,6 @@ Validation: npm run lint passed; npm run build passed; npx vitest run passed (30
 **Requested by:** Devin Sinha
 **What:** Fresh/non-stale ATIS badges now use the console's calm informational cyan palette instead of amber/yellow. Fresh ATIS letter chips and FacilityOverview capsules use cyan tones; stale ATIS remains amber/yellow and keeps the explicit `STALE` label/ring.
 **Why:** Amber/yellow reads as caution in the dark tower UI and should be reserved for stale or unavailable ATIS states. Cyan communicates nominal/current information while preserving strong contrast and non-color stale affordances.
-
 
 ### 2026-06-24T16:26:24-07:00: US airport coverage via live NFDC fallback
 **By:** Aaron (Data)
@@ -1116,9 +1124,6 @@ Retaining prior frequency data can show a different airport's radios for the que
 ## Follow-up risk
 The airport-info merge still retains prior weather and procedure data when those nested lookups fail. This fix is scoped to frequencies per request; plates/weather should be assessed separately before changing fallback behavior.
 
-
-
-
 ### 2026-06-24T21:33:19-07:00: Explicit query exits facility-dashboard mode and clears stale facility panels
 **By:** Swigert (Frontend)
 
@@ -1127,7 +1132,6 @@ The airport-info merge still retains prior weather and procedure data when those
 **Why:** Selecting a home facility such as KDEN left facility summary panels rendered after an explicit query for another airport such as 38W. Explicit queries must render the queried airport without stale home-facility dashboard state.
 
 **Validation:** Updated `src/components/OperationsConsole.tsx` and `tests/unit/components/operations-console-autorefresh.test.tsx`. Swigert reported 238 tests passing, lint with 0 warnings, and a clean build. Coordinator committed `4cab907`, pushed `origin/master`, and deployed production at `atc-companion.vercel.app`.
-
 
 ### 2026-06-24T21:44:52-07:00: Kranz frequency-gap policy recommendation
 **By:** Kranz (inbox merge)
@@ -1269,8 +1273,6 @@ Suggested validation for implementers:
 - Add/adjust tests around `getFrequencies("4W0")` or a mocked dataset-missing airport so the response is `FREQUENCY_DATA_UNAVAILABLE`, not `AIRPORT_NOT_FOUND`.
 - Add/adjust OperationsConsole tests asserting the frequency panel says "could not be loaded" and "not confirmation" rather than "No published FAA frequencies."
 
-
-
 ### 2026-06-24T21:44:52-07:00: Mattingly frequency-gap implementation
 **By:** Mattingly (inbox merge)
 
@@ -1324,8 +1326,6 @@ Towered/unknown no-hint message:
 
 `Frequency data could not be loaded for {CODE} from our available sources. This is not confirmation that the airport has no published frequency; verify CTAF/UNICOM in the official FAA Chart Supplement.`
 
-
-
 ### 2026-06-24T21:44:52-07:00: Swigert frequency gap UI
 **By:** Swigert (inbox merge)
 
@@ -1344,8 +1344,6 @@ Unverified convention — verify before use: 122.9 MHz is the FAA default CTAF c
 
 ## Rationale
 The user-approved Option C contract distinguishes missing confirmed source data from an authoritative absence of a published frequency. The UI must preserve that distinction and prevent controllers from treating the default non-towered CTAF convention as published data.
-
-
 
 ### 2026-06-24T22:14:47-07:00: Lovell frequency-gap safety review
 **By:** Lovell (inbox merge)
@@ -1394,7 +1392,6 @@ None.
 - `npm run lint`: PASS, exit 0, eslint `--max-warnings=0` produced 0 warnings.
 - `npm run build`: PASS, exit 0, Next.js 16.2.9 printed `✓ Compiled successfully in 3.4s`.
 - `npx vitest run`: PASS, exit 0, 32 test files passed, 245 tests passed, 0 failed.
-
 
 ### 2026-06-24T23:43:21-07:00: Phase B Canada airport database scope
 **By:** Kranz (Lead / Architect)
@@ -1478,7 +1475,6 @@ None.
 
 **Validation:** `npm run generate:airports`, lint with zero warnings, build, targeted safety/entity tests, and full Vitest passed. Final full-suite evidence in the shipment manifest was 260 tests passing after Rai's yellow finding was resolved.
 
-
 ### 2026-06-25T17:10:00Z: Haise route classification fix
 **By:** Haise
 
@@ -1522,7 +1518,6 @@ Files:
 
 Validation: shipped in commit `f5d3260`; deployed and live-verified: KPAE→CYYJ returns trueHeading 315, magneticHeading 298, 63.8nm. `npm run lint` passed with 0 warnings; `npm run build` passed; `npm test` passed with 269 tests.
 
-
 ### 2026-06-25T17-29-55: Phase C Caribbean dataset aggregates multiple OurAirports iso_country codes and normalizes PR/VI to US jurisdiction
 **By:** Aaron
 **What:** Phase C Caribbean dataset aggregates multiple OurAirports iso_country codes and normalizes PR/VI to US jurisdiction
@@ -1535,12 +1530,10 @@ Validation: shipped in commit `f5d3260`; deployed and live-verified: KPAE→CYYJ
 **References:** src\ai\entity-extractor.ts, src\ai\intent-parser.test.ts
 **Why:** Added CARIBBEAN_ICAO_SHAPE using only dataset-backed T-series prefixes (TA, TB, TD, TF, TG, TI, TJ, TK, TL, TN, TQ, TR, TT, TU, TV) and M-series prefixes (MB, MD, MK, MT, MU, MW, MY). Included this shape in contextual extraction and directCodes so contextual queries like "weather at MYNN" and bare Caribbean ICAOs are treated like existing Canadian ICAOs. Added stopwords for high-collision Caribbean-shaped ordinary words (TIME, TAXI, TAKE, TALK, TASK, TIDE, TINY, TIRE, MUST, MUCH, MUTE) to protect the direct path.
 
-
 ### 2026-06-25T17:46:00Z: PR/VI airports keep FAA/NFDC treatment
 **By:** Devin Sinha (via Copilot)
 **What:** Puerto Rico (TJ*) and US Virgin Islands (TI*) airports are normalized to country="US" in the Caribbean dataset, so they retain full FAA/NFDC treatment (NFDC runway lookups, 122.9 CTAF hint, FAA plate sourcing) rather than generic non-US Caribbean handling.
 **Why:** User confirmed — PR/VI are US jurisdictions and should be treated as such. This ratifies the shipped Phase C behavior; no code change required.
-
 
 ### 2026-06-25T17-51-09: Add conservative Canadian ICAO trailing context cues for airport intents
 **By:** Haise
@@ -1559,3 +1552,29 @@ Validation: shipped in commit `f5d3260`; deployed and live-verified: KPAE→CYYJ
 **What:** Updated product documentation for global airport database feature
 **References:** README.md, docs/FEATURES.md, docs/ARCHITECTURE.md, scripts/generate-airport-dataset.ts, src/data/airport-dataset.ts, src/ai/entity-extractor.ts, src/services/plates.ts, src/services/runway-info.ts, src/services/frequencies.ts, src/services/dataset-airport-fallback.ts
 **Why:** Updated README.md, docs/FEATURES.md, and docs/ARCHITECTURE.md to document the generated OurAirports-backed global airport database (US/Canada/Caribbean), jurisdiction-aware non-US handling, NAV CANADA messaging for Canadian chart/runway/frequency gaps, PR/VI FAA treatment, and entity-extraction fixes for Canadian contextual codes, Caribbean ICAO codes, and trailing query cues. Verified against the generator, dataset, extraction, and service files.
+
+### 2026-06-25T18-39-14: Mexico airport dataset added as its own MX-filtered segment
+**By:** Aaron
+**What:** Mexico airport dataset added as its own MX-filtered segment
+**References:** TASK: Add Mexico to global airport dataset pipeline, scripts/generate-airport-dataset.ts, src/data/airport-dataset.ts
+**Why:** Added an `mx` dataset segment to the airport generator that filters OurAirports rows by ISO country `MX`, exactly mirroring the Canada country-filter path. Mexico is loaded as a non-US/non-CA jurisdiction, preserving `country: "MX"` for downstream routing; existing PR/VI normalization remains unchanged. Regeneration produced 1,585 Mexico airports, 200 runway rows, and 153 frequency rows, and lookup samples MMMX, MMUN, MMTJ, MMGL, and MMMY all resolve with country MX.
+
+Validation note: adding Mexico introduced an OurAirports local-code collision (`PAE` exists as Mexico local code for MX-0316 and as Paine Field's US IATA/local code). The dataset lookup now prioritizes stronger code types (ident > ICAO > GPS > IATA > local) so Mexican ICAO lookups remain available while established IATA/local lookups like PAE continue routing to the US airport.
+
+### 2026-06-25T11:46:16-07:00
+**By:** Haise
+**What:** Explicit airport-code matches are ordered before fuzzy airport name matches; Canadian CY/CZ ICAO-looking tokens are admitted as explicit direct codes so typed CYNJ can outrank the Langley name match.
+**Why:** User-entered ICAO codes are stronger intent signals than fuzzy place-name matches, and preserving fuzzy matches later in the dedupe keeps name-only resolution working.
+
+### 2026-06-25T18-42-02: Recognize Mexican MM-prefixed ICAO codes in direct and contextual parser paths
+**By:** Haise
+**What:** Recognize Mexican MM-prefixed ICAO codes in direct and contextual parser paths
+**References:** src/ai/entity-extractor.ts, src/ai/intent-parser.test.ts
+**Why:** Added MEXICAN_ICAO_SHAPE as /^MM[A-Z0-9]{2}$/ for Mexican ICAO identifiers. False-positive analysis: unlike Canadian C-prefixed four-letter shapes, common English four-letter words starting with "MM" are essentially absent because "MM" is not a productive English word-initial bigram; ordinary phrases like "memo", "many", "maps", and "mm hmm" do not collide. Therefore the Mexican shape follows the Caribbean precedent and is wired into both direct extraction and contextual extraction, allowing bare codes such as MMMX and contextual/trailing-cue forms such as MMUN traffic, while still respecting stopwords and dedupe behavior.
+
+### 2026-06-25T18-39-13: Mexico jurisdiction service messaging uses SENEAM/AFAC AIP
+**By:** Mattingly
+**What:** Mexico jurisdiction service messaging uses SENEAM/AFAC AIP
+**References:** src/services/runway-info.ts, src/services/frequencies.ts, src/services/plates.ts
+**Why:** For ATC Companion service-layer Mexico routing, airports with dataset country="MX" / ICAO prefix MM are treated as non-FAA and non-NAV CANADA. Runway and frequency services skip FAA NFDC via the existing non-US dataset-country gate and use OurAirports dataset rows when available. If data is unavailable, Mexico-specific gap copy tells users to verify in Mexico's official SENEAM/AFAC AIP publications. Plate/procedure gaps state that Mexican procedures are published in Mexico's AIP by SENEAM/AFAC, not FAA DTPP or NAV CANADA.
+
