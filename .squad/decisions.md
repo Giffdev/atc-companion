@@ -183,3 +183,15 @@ Validation: npm run lint passed; npm run build passed; npx vitest run passed (30
 **Why:** The full-US coverage change correctly allowed contextual FAA local identifiers, but its relaxed four-letter branch could swallow common English words. Requiring the K-prefix on the contextual four-letter ICAO branch preserves US ICAO recognition while avoiding `INFO`-style false positives; the FAA-LID shape still requires a digit, so common words are rejected.
 
 **Validation:** Added extractor regressions for `airport info for S18`, `airport info for 38W`, and `airport info for KSEA`, plus an intent-parser regression that selects `S18` rather than `INFO`. Live checks verified S18→FORKS rw 04/22, 38W→Lynden rw 08/26, and KSEA unaffected. Shipped in `d418853` and deployed live.
+
+### 2026-06-24T17:56:00-07:00: City/state airport resolution requires actual city match in named state
+**By:** Aaron (Data)
+**Requested by:** Devin Sinha (via Copilot)
+
+**What:** Fixed place-name airport resolution for city/state queries so `forks, wa` and `forks, washington` resolve to `S18` (Forks), while `kelso, wa` still resolves to `KKLS`.
+
+**Root cause:** Place-name extraction only searched curated `AIRPORT_REFERENCES`, which did not include `S18`, and full state names such as `Washington` could be treated as loose airport-name substrings (for example Kelso's `Southwest Washington Regional Airport`) without requiring an actual matching city.
+
+**Decision:** Detect state from both abbreviations and full names, but state match alone is never sufficient. When a city/state query is supplied, require an actual city match within the named state before loose airport-name matching, with position-ordered selection and `airportPriorityScore` as the tiebreaker. Add `S18` / Forks, WA to curated `AIRPORT_REFERENCES` so city-name resolution has an authoritative local reference.
+
+**Validation:** Added entity-extractor and intent-parser regressions for `forks, wa`, `forks, washington`, and `yakima, washington`; full validation passed (`npm exec vitest -- run tests\unit\entity-extractor.test.ts tests\unit\intent-parser.test.ts`, `npm run lint`, `npm run build`, `npx vitest run` — 221 tests). Live verification: `forks, wa`→S18, `forks, washington`→S18, `kelso, wa`→KKLS. Shipped in commit `bdf3b0c` and deployed to atc-companion.vercel.app.

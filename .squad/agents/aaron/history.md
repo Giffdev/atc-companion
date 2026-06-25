@@ -50,3 +50,8 @@
 - Any US airport can now resolve through live FAA NFDC Airport Display lookup instead of requiring full static NASR coverage; successful live references are cached and can provide airport names, locations, and runway designators.
 - Runway consumers should surface `RUNWAY_DATA_UNAVAILABLE` when neither NFDC nor authoritative fallback runway data is available, rather than treating an empty list as complete.
 - Gotcha: contextual airport-code recognition must require a `K` prefix for four-letter ICAOs unless the token is already in the airport reference list. The FAA-LID branch is safe for context because its shape requires at least one digit, rejecting common words such as `INFO`.
+
+## 2026-06-24: City/state place-name resolver gotcha
+- City/state resolution only works against curated `AIRPORT_REFERENCES`; live NFDC lookup is keyed by airport ID, not city name.
+- Match state as a whole token/word, accepting either full name or abbreviation.
+- For `city, state` queries, require the actual city to match within that state; never let a state-word substring match an airport whose name merely contains the state (for example `Washington` in `Southwest Washington Regional Airport`).
