@@ -23,12 +23,14 @@ ATC Assist gives a controller a single dark-theme console for:
 - **Intent preview** before submission, including confidence and clarification prompts
 - **Two-stage intent parsing**: regex/entity extraction first, LLM fallback second
 - **Compound query detection** that collapses multi-data airport requests into a single airport overview workflow
+- **Global airport lookup** for U.S., Canadian, and Caribbean airports through a generated OurAirports-backed dataset
 - **Real-time weather** via METAR, TAF, and nearby PIREPs from `aviationweather.gov`
 - **D-ATIS strip** for one or many airports, including facility-wide airport groups
 - **Live traffic map** on dark Leaflet/OpenStreetMap tiles with zoom, pan, altitude color coding, nearby airport labels, and click-to-center from target list
 - **FAA approach plates** plus **SIDs**, **STARs**, **ODPs** (obstacle departure procedures), and **airport diagrams**
 - **Inline plate viewer** with best-match selection by procedure type and runway
 - **Airport frequencies** from FAA/NASR-backed seed data, including approach/TRACON sectors for major facilities
+- **Jurisdiction-aware airport data gaps** so non-U.S. airports get source-appropriate guidance instead of FAA-only assumptions
 - **NOTAM lookup** — links to FAA NOTAM Search portal (no free programmatic API available)
 - **Airport statistics** such as tower hours, runway layout, lighting/surface hints, timezone, and airport-use metadata
 - **FAR / eCFR lookups** plus locally searchable FAA **JO 7110.65** and **AIM** reference content
@@ -66,6 +68,9 @@ Traffic is currently implemented with **ADSB.fi** as the primary source (fast, f
 | **ADSB.fi** | live traffic targets (primary) | `src/services/traffic.ts` |
 | **OpenSky Network** | live traffic targets (fallback) | `src/services/traffic.ts` |
 | **eCFR API** | FAR / Title 14 references | `src/services/regulatory.ts` |
+| **OurAirports community dataset** | generated airport/runway/frequency lookup for U.S., Canada, and Caribbean coverage | `scripts/generate-airport-dataset.ts`, `src/data/airport-dataset.ts` |
+
+See `docs/data-sources.md` for source details, caveats, and refresh notes.
 
 ### Official reference corpora bundled locally
 

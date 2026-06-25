@@ -64,6 +64,13 @@ This same normalization is used by the voice path, so text and speech are parsed
 - procedure type hints
 - airport-info detail hints
 
+Airport code extraction is jurisdiction-aware:
+
+- U.S. ICAO and known local/IATA identifiers continue through the existing reference lookup path.
+- Canadian ICAO-shaped identifiers (`CANADIAN_ICAO_SHAPE`) are accepted only in contextual airport-code paths, including leading cues ("for CYYJ") and trailing cues ("CYYJ traffic"), to avoid treating ordinary four-letter C-words as airports.
+- Caribbean ICAO-shaped identifiers (`CARIBBEAN_ICAO_SHAPE`) use precise T*/M* location-indicator prefixes and are accepted in both contextual and bare-code paths, with airport-code stopwords filtering common English collisions.
+- Trailing query cues include traffic, plates, approaches, departures, arrivals, SIDs, STARs, and hours so phrases such as "CYYJ traffic" resolve as airport queries.
+
 ### Phase 2: regex/pattern classification
 
 `patterns.ts` contains the fast-path matcher for:
@@ -258,12 +265,17 @@ Reads FAA DTPP `current.xml`, extracts airport records, and exposes:
 
 Also supports FAA PDF proxying through `/api/plate-proxy` for inline viewing.
 
+Before querying FAA DTPP, plate/diagram/SID/STAR/ODP lookups check the generated airport dataset. Non-U.S. airports return a jurisdiction gap response instead of an FAA miss; Canadian airports specifically point users to NAV CANADA / Canada Air Pilot publications, while Puerto Rico and U.S. Virgin Islands airports remain U.S. in the dataset and continue through FAA behavior.
+
 ### `frequencies.ts`
 
 Returns:
 
 - airport-local frequency data from a NASR-backed seed dataset
 - approach/TRACON frequency sectors for mapped facilities
+- OurAirports fallback frequencies when available for generated-dataset airports
+
+For non-U.S. generated-dataset airports, FAA NFDC frequency lookup is skipped. Canadian data gaps tell users to verify official Canadian aeronautical publications or NAV CANADA; other non-U.S. gaps point to that airport jurisdiction's official publications. Puerto Rico and U.S. Virgin Islands records are normalized to `country: "US"` by the dataset generator, so they keep FAA/NFDC behavior.
 
 ### `notams.ts`
 
@@ -308,10 +320,12 @@ Parses runway characteristics from FAA airport display HTML:
 
 - Extracts runway sections by div ID (`runway_16_34`) or heading regex
 - Parses dimensions, surface type, lighting from table cell pairs
-- Three-tier fallback chain:
+- Fallback chain:
   1. **FAA NFDC HTML parsing** — full details (length, width, surface, lighting)
-  2. **Approach plate inference** (`inferRunwaysFromPlates`) — derives runway designators from procedure names (e.g., "ILS RWY 16" → 16/34), pairs reciprocals
-  3. **Static airport data** — bundled runway designators for a few major airports
+  2. **Generated OurAirports runway records** — used when present, and used first for non-U.S. generated-dataset airports
+  3. **Static airport-reference runway data** — bundled designators for a few major airports, paired into physical runways
+
+For generated-dataset airports outside the U.S., runway lookup skips FAA NFDC and uses OurAirports runway records when present. If no runway records are available, Canadian gaps mention official Canadian publications / NAV CANADA and other non-U.S. gaps point to the relevant jurisdiction's official aeronautical publications.
 
 ### `datis.ts`
 
@@ -319,7 +333,13 @@ Fetches D-ATIS entries for single or multiple airports. In practice, the UI bulk
 
 ## Airport Name Resolution
 
-Primary file: `src/data/airports.ts`
+Primary files:
+
+- `src/data/airports.ts`
+- `src/data/airport-dataset.ts`
+- `scripts/generate-airport-dataset.ts`
+
+`scripts/generate-airport-dataset.ts` builds generated JSON from OurAirports public-domain CSV snapshots. `src/data/airport-dataset.ts` is server-only and loads the generated `us`, `ca`, and `carib` JSON prefixes (`DATASET_PREFIXES = ["us", "ca", "carib"]`) into code, runway, frequency, and city indexes. The Caribbean generation includes Puerto Rico and the U.S. Virgin Islands, but normalizes those records to `country: "US"` so FAA-served territory behavior remains in place.
 
 ### Key generation (`createAirportSearchKeys`)
 

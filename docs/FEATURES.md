@@ -49,6 +49,8 @@ The procedures workflow supports:
 - Inline PDF viewing inside the app
 - Opening the original chart in a new tab (mobile fallback)
 
+FAA terminal procedures are served for FAA-covered airports, including Puerto Rico and the U.S. Virgin Islands. For Canadian airports, the app does not host plates; it directs users to NAV CANADA / Canada Air Pilot publications. Other non-U.S. airports receive an explicit national-authority fallback instead of an empty FAA result.
+
 ### Tabbed plate viewer
 
 The PlateViewer organizes charts into tabs:
@@ -176,13 +178,17 @@ When querying about a different airport than the selected facility, supplementar
 
 The parser understands airports by:
 
-- **ICAO code** (KSEA, KFHR, KTTD)
+- **ICAO code** (KSEA, CYYJ, MKJS)
 - **FAA LID** (SEA, FHR, TTD)
 - **IATA code** (SEA)
 - **Full name** ("Seattle-Tacoma International")
 - **Partial name** ("Boeing Field", "Troutdale")
 - **Single distinctive word** (≥6 chars, e.g., "troutdale" → KTTD)
 - **City name** ("seattle" → KSEA)
+
+Airport lookup now includes a generated OurAirports-backed database for U.S., Canadian, and Caribbean airports, so name/code resolution is not limited to the curated U.S. seed list. Puerto Rico and U.S. Virgin Islands airports are treated as U.S. for FAA/NFDC behavior.
+
+Canadian ICAO codes are recognized when they appear with airport context (for example, "CYYJ traffic" or "plates for CYYZ") to avoid false positives on ordinary four-letter C-words. Caribbean ICAO codes with precise T*/M* location-indicator prefixes are recognized in both contextual and bare-code queries, with stopwords to avoid English-word collisions.
 
 ### City/state context disambiguation
 
@@ -237,6 +243,8 @@ This makes the regulatory panel useful for both legal/regulatory and operational
 Queries do not need to follow a rigid command syntax. The parser understands direct phrases such as:
 
 - "METAR KSEA"
+- "CYYJ traffic"
+- "MKJS approaches"
 - "show me the ILS 14R approach into Boeing Field"
 - "approach control frequencies for Whidbey approach"
 - "how many planes in the traffic pattern at Bremerton"
@@ -245,6 +253,8 @@ Queries do not need to follow a rigid command syntax. The parser understands dir
 - "what charts are around KGSO"
 - "runways at friday harbor airport"
 - "what is FAR 91.113"
+
+Trailing-noun airport phrases such as "{code} traffic", "{code} plates", "{code} approaches", "{code} departures", "{code} arrivals", "{code} SIDs", "{code} STARs", and "{code} hours" are recognized, including contextual Canadian codes.
 
 ### Intent types recognized
 

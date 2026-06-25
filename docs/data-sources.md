@@ -10,6 +10,7 @@ ATC Companion tracks both **where** aviation data came from and **how fresh** it
 | FAA NOTAM Search / NMS | NOTAMs | https://notams.aim.faa.gov/notamSearch/ | Browser search is public; API onboarding required | Continuous |
 | FAA DTPP | Approach plates, SIDs, STARs | https://aeronav.faa.gov/d-tpp/ | None | 28-day chart cycle |
 | FAA NASR Subscription | Airport, runway, frequency master data | https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/ | None | 28-day AIRAC cycle |
+| OurAirports community dataset | Airport identifiers, names, coordinates, runways, frequencies | https://ourairports.com/data/ | None | Bundled generated corpus; refresh by rerunning the generator |
 | OpenSky Network | Live ADS-B traffic targets | https://openskynetwork.github.io/opensky-api/rest.html | Optional login for higher limits | Near real time |
 | eCFR API | FAR / Title 14 references | https://www.ecfr.gov/api/ | None | Infrequent; re-check monthly |
 
@@ -42,6 +43,7 @@ ATC Companion tracks both **where** aviation data came from and **how fresh** it
   - Official FAA chart distribution.
   - Organized by 28-day chart cycle.
   - Source of approach plate, SID, and STAR PDFs referenced by the domain models.
+  - FAA DTPP is not used for Canadian procedures. For Canadian airports, the app returns a jurisdiction-aware data-gap message that approach/departure/arrival procedures, airport diagrams, and ODPs are published by NAV CANADA in the Canada Air Pilot (CAP), and tells users to verify with official NAV CANADA publications.
 
 ## FAA NASR Subscription
 
@@ -51,6 +53,21 @@ ATC Companion tracks both **where** aviation data came from and **how fresh** it
   - Official FAA facility dataset.
   - Used for airports, runways, and radio frequencies.
   - Publication cadence follows the 28-day AIRAC cycle.
+
+## OurAirports community dataset
+
+- Landing page: https://ourairports.com/
+- Data page: https://ourairports.com/data/
+- Generator CSV snapshots:
+  - Airports: https://davidmegginson.github.io/ourairports-data/airports.csv
+  - Runways: https://davidmegginson.github.io/ourairports-data/runways.csv
+  - Frequencies: https://davidmegginson.github.io/ourairports-data/airport-frequencies.csv
+- Notes:
+  - Community, public-domain source used as a medium-reliability fallback/bundled corpus; it is not FAA-authoritative.
+  - The generator builds separate `us`, `ca`, and `carib` JSON outputs under `src/data/generated` from OurAirports airports, runways, and airport frequency CSVs, plus explicit local corrections.
+  - The server-only airport dataset lookup loads those generated JSON files at runtime and supports airport code, city/region, runway, and frequency lookups.
+  - This is not a live per-request API dependency. Refresh the bundled corpus by rerunning the airport dataset generator.
+  - Canadian frequency and runway gaps direct users to verify in official Canadian aeronautical publications or with NAV CANADA; Canadian charts/plates are not hosted through this dataset or the FAA DTPP path.
 
 ## OpenSky Network
 
