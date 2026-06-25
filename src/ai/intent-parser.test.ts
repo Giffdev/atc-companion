@@ -27,6 +27,23 @@ describe("extractEntities", () => {
     expect(entities.cityLocations).toContainEqual({ city: "seattle", regionCode: "WA" });
   });
 
+  it("extracts bare city names without promoting US-only airport name substrings", () => {
+    const [langley, abbotsford, everett, seattle] = [
+      extractEntities("show me langley"),
+      extractEntities("show me abbotsford"),
+      extractEntities("show me all runways for everett"),
+      extractEntities("show me seattle")
+    ];
+
+    expect(langley.cityLocations).toContainEqual({ city: "langley" });
+    expect(langley.airports).not.toContain("KLFI");
+    expect(abbotsford.cityLocations).toContainEqual({ city: "abbotsford" });
+    expect(everett).toMatchObject({ airports: ["KPAE"] });
+    expect(everett.cityLocations).toContainEqual({ city: "everett" });
+    expect(seattle.airports.length).toBeGreaterThan(0);
+    expect(seattle.cityLocations).toContainEqual({ city: "seattle" });
+  });
+
   it("does not over-match NO or INFO as airport identifiers", () => {
     const entities = extractEntities("no airport info");
 
@@ -103,11 +120,13 @@ describe("parseIntent", () => {
   });
 
   it("prioritizes explicit airport codes over fuzzy place-name matches", async () => {
-    const [langleyIntent, bareCanadianIntent, seattleNameIntent, usExplicitIntent] = await Promise.all([
+    const [langleyIntent, bareCanadianIntent, seattleNameIntent, usExplicitIntent, bareLangleyIntent, abbotsfordIntent] = await Promise.all([
       parseIntent("show me everything for langley, CYNJ"),
       parseIntent("everything for CYNJ"),
       parseIntent("weather at SeaTac"),
-      parseIntent("weather for SeaTac, KDEN")
+      parseIntent("weather for SeaTac, KDEN"),
+      parseIntent("show me langley"),
+      parseIntent("show me abbotsford")
     ]);
 
     expect(langleyIntent).toMatchObject({
@@ -133,6 +152,45 @@ describe("parseIntent", () => {
       airport: "KDEN",
       requiresClarification: false
     });
+    expect(bareLangleyIntent.entities).toContainEqual({
+      label: "city",
+      value: "langley",
+      city: "langley",
+      regionCode: undefined
+    });
+    expect(bareLangleyIntent).not.toMatchObject({ airport: "KLFI" });
+    expect(abbotsfordIntent.entities).toContainEqual({
+      label: "city",
+      value: "abbotsford",
+      city: "abbotsford",
+      regionCode: undefined
+    });
+  });
+
+  it("keeps bare US city airport resolution working", async () => {
+    const [everettIntent, seattleIntent] = await Promise.all([
+      parseIntent("show me all runways for everett"),
+      parseIntent("show me seattle")
+    ]);
+
+    expect(everettIntent).toMatchObject({
+      type: "airport_info",
+      airport: "KPAE",
+      detail: "runways",
+      requiresClarification: false
+    });
+    expect(everettIntent.entities).toContainEqual({
+      label: "city",
+      value: "everett",
+      city: "everett",
+      regionCode: undefined
+    });
+    expect(seattleIntent).toMatchObject({
+      type: "airport_info",
+      detail: "all",
+      requiresClarification: false
+    });
+    expect("airport" in seattleIntent ? seattleIntent.airport : undefined).toBeTruthy();
   });
 
   it("parses Canadian ICAO frequency requests with airport context", async () => {

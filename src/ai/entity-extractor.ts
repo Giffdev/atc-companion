@@ -1,4 +1,5 @@
 import { findAirportReference, findAirportReferencesInText, toIcaoCode } from "@/data/airports";
+import type { AirportReference } from "@/data/airports";
 import type {
   AirportInfoDetail,
   FrequencyQueryType,
@@ -124,6 +125,14 @@ const CARIBBEAN_ICAO_SHAPE = /^(?:T(?:A|B|D|F|G|I|J|K|L|N|Q|R|T|U|V)|M(?:B|D|K|T
 const MEXICAN_ICAO_SHAPE = /^MM[A-Z0-9]{2}$/;
 
 const REGULATORY_CUE_WORDS = /\b(?:far|cfr|part|section|regulation|rule)\b/i;
+const BARE_CITY_LOCATOR_PATTERN = /\b(?:at|for|near|nearest|in|around|into|from|to)\s+([^,.;!?]+)/gi;
+const BARE_CITY_DIRECTIVE_PATTERN = /\b(?:show|display|pull\s+up|find|give|tell)\s+(?:me\s+)?(?:the\s+)?([^,.;!?]+)/gi;
+const BARE_CITY_STOPWORDS = new Set([
+  "a", "about", "airport", "all", "and", "any", "approach", "arrival", "arrivals", "at", "atis", "data",
+  "departure", "departures", "details", "diagram", "everything", "field", "for", "frequencies", "frequency",
+  "ground", "help", "how", "info", "information", "me", "metar", "near", "no", "notam", "notams", "plates",
+  "runway", "runways", "taf", "the", "traffic", "weather", "what", "when", "which"
+]);
 
 export interface FarReferenceEntity {
   raw: string;
@@ -360,6 +369,78 @@ const normalizeCityCandidate = (candidate: string): string | undefined => {
   return normalized && /[a-z0-9]/.test(normalized) ? normalized : undefined;
 };
 
+const stripCityQueryWords = (candidate: string): string => {
+  let stripped = candidate
+    .replace(/\b(?:all|everything|data|info|information|details|runways?|diagram|weather|metar|taf|notams?|traffic|plates|approaches|departures?|arrivals?|sids?|stars|hours)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const nestedLocator = /\b(?:at|for|near|nearest|in|around|into|from|to)\s+(.+)$/i.exec(candidate);
+  if (nestedLocator?.[1]) {
+    stripped = nestedLocator[1].trim();
+  }
+
+  return stripped;
+};
+
+const isStrongExplicitAirportToken = (candidate: string): boolean => {
+  const trimmed = candidate.trim();
+  const uppercased = trimmed.toUpperCase();
+  const isSingleToken = !/\s/.test(trimmed);
+
+  return (
+    isSingleToken &&
+    ((/^[A-Z]{4}$/.test(uppercased) &&
+      (uppercased.startsWith("K") ||
+        isExplicitCanadianIcaoIdentifier(uppercased) ||
+        isCaribbeanIcaoIdentifier(uppercased) ||
+        isMexicanIcaoIdentifier(uppercased))) ||
+      (trimmed === uppercased && /^[A-Z]{3}$/.test(uppercased) && Boolean(findAirportReference(uppercased))) ||
+      isFaaLocalIdentifier(uppercased))
+  );
+};
+
+const normalizeBareCityCandidate = (candidate: string): string | undefined => {
+  const stripped = stripCityQueryWords(candidate);
+
+  if (!stripped || isStrongExplicitAirportToken(stripped)) {
+    return undefined;
+  }
+
+  const normalized = normalizeCityCandidate(stripped);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const words = normalized.split(/\s+/);
+  return words.length <= 3 && !words.every((word) => BARE_CITY_STOPWORDS.has(word)) ? normalized : undefined;
+};
+
+const fuzzyAirportMatchCanBeatBareCity = (airport: AirportReference, cityLocations: CityRegionEntity[]): boolean => {
+  const bareCities = new Set(
+    cityLocations
+      .filter((location) => !location.regionCode)
+      .map((location) => normalizeCityCandidate(location.city))
+      .filter((value): value is string => Boolean(value))
+  );
+
+  if (bareCities.size === 0) {
+    return true;
+  }
+
+  const exactAirportKeys = [airport.city, airport.name, ...(airport.aliases ?? [])]
+    .map((value) => normalizeCityCandidate(value))
+    .filter((value): value is string => Boolean(value));
+
+  return exactAirportKeys.some((key) => {
+    if (bareCities.has(key)) {
+      return true;
+    }
+
+    return Array.from(bareCities).some((city) => city.split(/\s+/).length > 1 && key.includes(city));
+  });
+};
+
 const extractCityBeforeComma = (prefix: string): string | undefined => {
   const trimmedPrefix = prefix.replace(/[;:!?]+$/g, "").trim();
   const locatorMatch = /\b(?:at|for|near|nearest|in|around|into|from|to)\s+([^,]+)$/i.exec(trimmedPrefix);
@@ -374,6 +455,24 @@ const extractCityBeforeComma = (prefix: string): string | undefined => {
   return locatorMatch || wordCount <= 5 ? normalized : undefined;
 };
 
+const extractBareCityLocations = (normalized: string): CityRegionEntity[] => {
+  const matches: CityRegionEntity[] = [];
+
+  for (const pattern of [BARE_CITY_LOCATOR_PATTERN, BARE_CITY_DIRECTIVE_PATTERN]) {
+    pattern.lastIndex = 0;
+
+    for (const match of normalized.matchAll(pattern)) {
+      const candidate = normalizeBareCityCandidate(match[1]?.trim() ?? "");
+
+      if (candidate) {
+        matches.push({ city: candidate });
+      }
+    }
+  }
+
+  return matches;
+};
+
 export const extractCityRegions = (input: string): CityRegionEntity[] => {
   const normalized = normalizeAviationText(input);
   const matches: CityRegionEntity[] = [];
@@ -386,6 +485,9 @@ export const extractCityRegions = (input: string): CityRegionEntity[] => {
       matches.push({ city, regionCode });
     }
   }
+
+  const regionCities = new Set(matches.filter((location) => location.regionCode).map((location) => location.city));
+  matches.push(...extractBareCityLocations(normalized).filter((location) => !regionCities.has(location.city)));
 
   return dedupe(matches.map((value) => JSON.stringify(value))).map((value) => JSON.parse(value) as CityRegionEntity);
 };
@@ -437,8 +539,11 @@ export const extractAirportCodes = (input: string): string[] => {
   const iataCodes = collectMatches(IATA_PATTERN, uppercased).filter(
     (code) => /^[A-Z]{3}$/.test(code) && !AIRPORT_CODE_STOPWORDS.has(code) && Boolean(findAirportReference(code))
   );
-  const namedAirportCodes =
-    cityRegions.length > 0 ? [] : findAirportReferencesInText(normalized).map((airport) => toIcaoCode(airport.icao));
+  const namedAirportCodes = cityRegions.some((location) => location.regionCode)
+    ? []
+    : findAirportReferencesInText(normalized)
+        .filter((airport) => fuzzyAirportMatchCanBeatBareCity(airport, cityRegions))
+        .map((airport) => toIcaoCode(airport.icao));
 
   return dedupe([...directCodes, ...contextualCodes, ...faaLidCodes, ...iataCodes, ...namedAirportCodes]).filter(
     (code) => !REGULATORY_CUE_WORDS.test(code)
