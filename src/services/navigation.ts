@@ -1,4 +1,5 @@
 import { findAirportReference } from "@/data/airports";
+import type { AirportReference } from "@/data/airports";
 import type { GeoPoint } from "@/types/aviation";
 
 export interface NavigationResult {
@@ -44,14 +45,7 @@ export const estimateMagneticDeclination = (lat: number, lon: number): number =>
   return Math.max(-15, Math.min(18, Number(continentalEstimate.toFixed(1))));
 };
 
-export const getNavigationBetween = (fromAirport: string, toAirport: string, speedKnots?: number): NavigationResult | null => {
-  const from = findAirportReference(fromAirport);
-  const to = findAirportReference(toAirport);
-
-  if (!from || !to) {
-    return null;
-  }
-
+export const getNavigationBetweenReferences = (from: AirportReference, to: AirportReference, speedKnots?: number): NavigationResult => {
   const fromPosition = { latitude: from.latitude, longitude: from.longitude };
   const toPosition = { latitude: to.latitude, longitude: to.longitude };
   const { distanceNm, trueBearing } = calculateNavigation(fromPosition, toPosition);
@@ -76,4 +70,15 @@ export const getNavigationBetween = (fromAirport: string, toAirport: string, spe
     distanceSm: Number((distanceNm * NM_TO_SM).toFixed(1)),
     estimatedTimeMinutes
   };
+};
+
+export const getNavigationBetween = (fromAirport: string, toAirport: string, speedKnots?: number): NavigationResult | null => {
+  const from = findAirportReference(fromAirport);
+  const to = findAirportReference(toAirport);
+
+  if (!from || !to) {
+    return null;
+  }
+
+  return getNavigationBetweenReferences(from, to, speedKnots);
 };

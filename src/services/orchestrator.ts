@@ -5,7 +5,7 @@ import { createApiErrorResponse, createApiResponse, toIsoNow } from "@/lib/utils
 import { getAirportHours, type AirportHours } from "@/services/airport-hours";
 import { findDatasetAirportReference, resolveDatasetAirportByCity } from "@/services/dataset-airport-fallback";
 import { getFrequencies } from "@/services/frequencies";
-import { getNavigationBetween } from "@/services/navigation";
+import { getNavigationBetweenReferences } from "@/services/navigation";
 import { getNotams } from "@/services/notams";
 import { getAirportDiagram, getOdps, getPlates, getSids, getStars } from "@/services/plates";
 import { searchAllRegulatory } from "@/services/regulatory";
@@ -311,9 +311,10 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
         );
       }
 
-      const navigation = getNavigationBetween(fromAirport, intent.to, intent.speed_knots);
+      const fromRef = findAirportReference(fromAirport) ?? findDatasetAirportReference(fromAirport);
+      const toRef = findAirportReference(intent.to) ?? findDatasetAirportReference(intent.to);
 
-      if (!navigation) {
+      if (!fromRef || !toRef) {
         return createApiErrorResponse(
           {
             code: "NAVIGATION_LOOKUP_FAILED",
@@ -327,6 +328,8 @@ const dispatchIntent = async (intent: ParsedIntent, options: ExecuteQueryOptions
           }
         );
       }
+
+      const navigation = getNavigationBetweenReferences(fromRef, toRef, intent.speed_knots);
 
       return createApiResponse(navigation, getDataSource("faaNasr"), {
         fetchedAt: toIsoNow(),
