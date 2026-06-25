@@ -390,6 +390,85 @@ const createLyndenAirportInfoResult = (timestamp: string) => ({
   timestamp
 });
 
+const createDenverAirportInfoResult = (timestamp: string) => ({
+  intent: {
+    type: "airport_info",
+    airport: "KDEN",
+    detail: "all",
+    confidence: 0.99,
+    rawInput: "airport info for KDEN",
+    parsedAt: timestamp,
+    source: QUERY_SOURCE,
+    entities: [],
+    requiresClarification: false
+  },
+  response: {
+    ok: true as const,
+    data: {
+      airport: "KDEN",
+      airportName: "Denver International Airport",
+      airportCity: "Denver",
+      airportState: "CO",
+      runways: ["07/25"],
+      weather: {
+        ok: true as const,
+        data: {
+          stationIcao: "KDEN",
+          metar: null,
+          taf: null,
+          pireps: [],
+          source: QUERY_SOURCE,
+          fetchedAt: timestamp,
+          isStale: false
+        },
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      },
+      frequencies: {
+        ok: true as const,
+        data: [
+          {
+            type: "TWR",
+            valueMHz: 124.3,
+            name: "Denver Tower",
+            source: QUERY_SOURCE,
+            fetchedAt: timestamp,
+            isStale: false
+          }
+        ],
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      },
+      plates: {
+        ok: true as const,
+        data: [],
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      },
+      diagram: {
+        ok: true as const,
+        data: null,
+        source: QUERY_SOURCE,
+        attribution: { primary: QUERY_SOURCE },
+        fetchedAt: timestamp,
+        isStale: false
+      }
+    },
+    source: QUERY_SOURCE,
+    attribution: { primary: QUERY_SOURCE },
+    fetchedAt: timestamp,
+    isStale: false
+  },
+  executionTimeMs: 24,
+  timestamp
+});
+
 const jsonResponse = (payload: unknown) =>
   Promise.resolve(
     new Response(JSON.stringify(payload), {
@@ -408,6 +487,8 @@ const flushUpdates = async () => {
 describe("OperationsConsole auto-refresh", () => {
   afterEach(() => {
     vi.useRealTimers();
+    window.localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
   it("auto-refreshes traffic queries every 15 seconds with cache bypass", async () => {
@@ -570,5 +651,57 @@ describe("OperationsConsole auto-refresh", () => {
     expect(screen.getByText("No published FAA frequencies for 38W — Lynden Airport. Verify via official FAA sources.")).toBeInTheDocument();
     expect(screen.queryByText("Seattle Tower")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "KBLI — Bellingham International Airport core frequencies" })).not.toBeInTheDocument();
+  });
+
+  it("clears the selected home facility summary when querying a different airport", async () => {
+    const timestamp = "2026-06-18T05:00:00.000Z";
+    window.localStorage.setItem("atc-companion:selected-facility", "KDEN-TWR");
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof input === "string" && input.includes("warmup=1")) {
+        return jsonResponse({});
+      }
+
+      const body = JSON.parse(String(init?.body ?? "{}")) as { input?: string };
+      const query = body.input ?? "";
+
+      if (query === "airport info for KDEN") {
+        return jsonResponse(createDenverAirportInfoResult(timestamp));
+      }
+
+      if (query === "airport info for 38W") {
+        return jsonResponse(createLyndenAirportInfoResult(timestamp));
+      }
+
+      if (query.startsWith("frequencies at KDEN")) {
+        return jsonResponse(createFrequencyResult(timestamp));
+      }
+
+      if (query.startsWith("notams for")) {
+        return jsonResponse(createEmptyNotamResult(timestamp));
+      }
+
+      if (query.startsWith("traffic at")) {
+        return jsonResponse(createTrafficResult(timestamp));
+      }
+
+      if (query.startsWith("approach plates") || query.startsWith("SIDs") || query.startsWith("STARs") || query.startsWith("ODPs")) {
+        return jsonResponse(createEmptyPlateResult(timestamp));
+      }
+
+      return jsonResponse(createWeatherResult(timestamp));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<OperationsConsole initialNow={timestamp} />);
+
+    expect(await screen.findByRole("heading", { name: "KDEN — Denver International Airport facility overview" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit airport info query" }));
+    await flushUpdates();
+
+    expect(await screen.findByRole("heading", { name: "38W — Lynden Airport facility overview" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "KDEN — Denver International Airport facility overview" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Denver Tower")).not.toBeInTheDocument();
   });
 });

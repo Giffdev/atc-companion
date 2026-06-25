@@ -815,6 +815,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   }>({ sids: [], stars: [], odps: [], approaches: [] });
   const [supplementaryDiagram, setSupplementaryDiagram] = useState<ApproachPlate | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [isFacilityDashboardActive, setIsFacilityDashboardActive] = useState(false);
 
   // Hydrate facility from localStorage after mount to avoid SSR mismatch
   useEffect(() => {
@@ -822,6 +823,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     if (storedFacilityId && getFacilityById(storedFacilityId)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedFacilityId(storedFacilityId);
+      setIsFacilityDashboardActive(true);
     }
 
     // Warm up serverless functions on page load so the first real query is fast
@@ -843,6 +845,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   );
 
   const handleHomeClick = () => {
+    setIsFacilityDashboardActive(Boolean(selectedFacilityId));
     setActiveIntent(null);
     setSubmittedQuery("Awaiting query");
     setLiveResult(null);
@@ -1038,16 +1041,25 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
   );
 
   const handleSubmit = async (query: string, intent: ParsedIntent | null) => {
+    setIsFacilityDashboardActive(false);
     setSubmittedQuery(query);
     setActiveIntent(intent);
     setSubmitError(null);
     setIsSubmitting(true);
     setLiveResult(null);
+    setFacilityResults(new Map());
+    setFacilityAirportInfo(null);
+    setFacilityAirportInfoResult(null);
+    setLoadingPanels(new Set());
+    setSupplementaryProcedures({ sids: [], stars: [], odps: [], approaches: [] });
+    setSupplementaryDiagram(null);
 
     const previewCard = mapIntentToDashboardType(intent);
     if (previewCard) {
       setActiveCard(previewCard);
       setVisiblePanels(new Set([previewCard]));
+    } else {
+      setVisiblePanels(new Set());
     }
 
     try {
@@ -1106,7 +1118,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
     setLoadingPanels(new Set());
     setVisiblePanels(new Set());
 
-    if (!selectedFacility) {
+    if (!selectedFacility || !isFacilityDashboardActive) {
       return;
     }
 
@@ -1172,7 +1184,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         setFacilityResults((prev) => new Map(prev).set("notam", payload));
         setLoadingPanels((prev) => { const next = new Set(prev); next.delete("notam"); return next; });
       } catch {
-        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("notam"); return next; });
+        if (!cancelled) {
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("notam"); return next; });
+        }
       }
 
       // Fetch traffic
@@ -1182,7 +1196,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         setFacilityResults((prev) => new Map(prev).set("traffic", payload));
         setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
       } catch {
-        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
+        if (!cancelled) {
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("traffic"); return next; });
+        }
       }
 
       // Fetch frequencies and plates
@@ -1192,7 +1208,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         setFacilityResults((prev) => new Map(prev).set("frequency", payload));
         setLoadingPanels((prev) => { const next = new Set(prev); next.delete("frequency"); return next; });
       } catch {
-        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("frequency"); return next; });
+        if (!cancelled) {
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("frequency"); return next; });
+        }
       }
 
       try {
@@ -1201,7 +1219,9 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         setFacilityResults((prev) => new Map(prev).set("plates", payload));
         setLoadingPanels((prev) => { const next = new Set(prev); next.delete("plates"); return next; });
       } catch {
-        setLoadingPanels((prev) => { const next = new Set(prev); next.delete("plates"); return next; });
+        if (!cancelled) {
+          setLoadingPanels((prev) => { const next = new Set(prev); next.delete("plates"); return next; });
+        }
       }
 
       // Fetch airport info (hours, runways)
@@ -1219,7 +1239,7 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFacility?.id, selectedFacility?.type, fetchLiveQuery]);
+  }, [selectedFacility?.id, selectedFacility?.type, isFacilityDashboardActive, fetchLiveQuery]);
 
   useEffect(() => {
     if (!autoRefreshConfig || !submittedQuery || submittedQuery === "Awaiting query") {
@@ -1308,7 +1328,10 @@ export function OperationsConsole({ initialNow }: OperationsConsoleProps) {
         </header>
 
         <FacilitySelector
-          onSelect={(facility) => setSelectedFacilityId(facility?.id ?? null)}
+          onSelect={(facility) => {
+            setSelectedFacilityId(facility?.id ?? null);
+            setIsFacilityDashboardActive(Boolean(facility));
+          }}
           selectedFacility={selectedFacility}
         />
 
