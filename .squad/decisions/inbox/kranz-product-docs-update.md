@@ -1,3 +1,0 @@
-# Kranz product docs update
-
-2026-06-25T11:07:00-07:00 — Updated README.md, docs/FEATURES.md, and docs/ARCHITECTURE.md to document the generated OurAirports-backed global airport database (US/Canada/Caribbean), jurisdiction-aware non-US handling, NAV CANADA messaging for Canadian chart/runway/frequency gaps, PR/VI FAA treatment, and entity-extraction fixes for Canadian contextual codes, Caribbean ICAO codes, and trailing query cues. Verified against scripts/generate-airport-dataset.ts, src/data/airport-dataset.ts, src/ai/entity-extractor.ts, src/services/plates.ts, src/services/runway-info.ts, src/services/frequencies.ts, and src/services/dataset-airport-fallback.ts.

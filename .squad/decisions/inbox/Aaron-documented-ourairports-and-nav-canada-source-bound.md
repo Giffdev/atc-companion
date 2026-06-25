@@ -1,5 +1,0 @@
-### 2026-06-25T18-09-05: Documented OurAirports and NAV CANADA source boundaries
-**By:** Aaron
-**What:** Documented OurAirports and NAV CANADA source boundaries
-**References:** docs/data-sources.md, scripts/generate-airport-dataset.ts, src/data/airport-dataset.ts, src/services/plates.ts, src/services/runway-info.ts, src/services/frequencies.ts
-**Why:** Updated docs/data-sources.md to add the OurAirports community dataset as the bundled/generated medium-reliability corpus for airport identifiers, names, coordinates, runways, and frequencies. Verified generator inputs and generated us/ca/carib JSON behavior from scripts/generate-airport-dataset.ts and src/data/airport-dataset.ts, and verified NAV CANADA jurisdiction-aware chart/runway/frequency messages from src/services/plates.ts, src/services/runway-info.ts, and src/services/frequencies.ts. No code changes or git operations were performed.

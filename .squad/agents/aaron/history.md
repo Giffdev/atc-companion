@@ -67,3 +67,8 @@ Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in co
 
 ## 2026-06-25T17:45:00Z — Phase C parser-recognized in production
 Phase C Caribbean dataset coverage is now fully parser-recognized in production. Haise added precise Caribbean ICAO prefix recognition for the shipped dataset, and coordinator live-verified MKJS/TJSJ/MYNN no longer fall into `CLARIFICATION_REQUIRED`.
+
+
+## 2026-06-25T11:07:00-07:00 — OurAirports and NAV CANADA source docs
+
+Updated `docs/data-sources.md` to describe OurAirports as the bundled/generated community airport dataset source and to clarify NAV CANADA jurisdiction boundaries for Canadian aviation data surfaces. Decision archived in `decisions.md`.

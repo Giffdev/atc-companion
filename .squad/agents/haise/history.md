@@ -23,3 +23,8 @@ Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in co
 ## 2026-06-25T17:10:00Z — Navigation parsing fixes shipped
 
 Haise shipped two Canadian navigation parsing fixes in commit `5070c70`: route-classification now lets `NAVIGATION_PATTERN` queries win without passive `airport_info` dual-classification, and guarded positional `X to Y` extraction preserves typed order for routes such as `pae to 38w`. Live verification confirmed navigation requests no longer reverse or collapse into airport-info ambiguity.
+
+
+## 2026-06-25T11:07:00-07:00 — Traffic cue extraction fix
+
+Fixed the `cyyj traffic` empty-entities bug by adding conservative trailing airport context cues to `AIRPORT_CONTEXT_AFTER_WORDS` (`traffic`, plates/procedure/hour cues). Added tests; 278 passed. Commit `8b43c37` deployed and live-verified. Decision archived in `decisions.md`.

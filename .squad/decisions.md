@@ -1540,3 +1540,22 @@ Validation: shipped in commit `f5d3260`; deployed and live-verified: KPAE→CYYJ
 **By:** Devin Sinha (via Copilot)
 **What:** Puerto Rico (TJ*) and US Virgin Islands (TI*) airports are normalized to country="US" in the Caribbean dataset, so they retain full FAA/NFDC treatment (NFDC runway lookups, 122.9 CTAF hint, FAA plate sourcing) rather than generic non-US Caribbean handling.
 **Why:** User confirmed — PR/VI are US jurisdictions and should be treated as such. This ratifies the shipped Phase C behavior; no code change required.
+
+
+### 2026-06-25T17-51-09: Add conservative Canadian ICAO trailing context cues for airport intents
+**By:** Haise
+**What:** Add conservative Canadian ICAO trailing context cues for airport intents
+**References:** src/ai/entity-extractor.ts, src/ai/intent-parser.test.ts, BUG: cyyj traffic missing airport
+**Why:** Fixed the production issue where `cyyj traffic` dropped CYYJ by adding `traffic` to `AIRPORT_CONTEXT_AFTER_WORDS` in `src/ai/entity-extractor.ts`. Audited supported airport query intents and also added trailing cues that map directly to existing supported intents and read naturally after an airport code: `plates`, `approaches`, `departures?`, `arrivals?`, `sids?`, `stars`, and `hours`. These allow Canadian ICAO/local identifiers such as CYYJ/CYVR to resolve through the contextual path for traffic, plates/SID/STAR/approach-plate, and airport-hours queries without adding Canadian codes to the direct ICAO filter. I intentionally did not add `route`: although route queries are supported, `{CODE} route` is ambiguous/incomplete for navigation and `route` is broad enough to increase false positives such as ordinary C-prefix words before route. I also did not add singular `star` because it has a higher ordinary-language collision risk; `stars` is the natural procedure-list noun. I left `AIRPORT_CONTEXT_WORDS` unchanged because leading traffic phrasing (`traffic at cyyj`) is already covered by the existing `at` leading context word and is now covered by tests.
+
+### 2026-06-25T18-09-05: Documented OurAirports and NAV CANADA source boundaries
+**By:** Aaron
+**What:** Documented OurAirports and NAV CANADA source boundaries
+**References:** docs/data-sources.md, scripts/generate-airport-dataset.ts, src/data/airport-dataset.ts, src/services/plates.ts, src/services/runway-info.ts, src/services/frequencies.ts
+**Why:** Updated docs/data-sources.md to add the OurAirports community dataset as the bundled/generated medium-reliability corpus for airport identifiers, names, coordinates, runways, and frequencies. Verified generator inputs and generated us/ca/carib JSON behavior from scripts/generate-airport-dataset.ts and src/data/airport-dataset.ts, and verified NAV CANADA jurisdiction-aware chart/runway/frequency messages from src/services/plates.ts, src/services/runway-info.ts, and src/services/frequencies.ts. No code changes or git operations were performed.
+
+### 2026-06-25T11:07:00-07:00: Kranz product docs update
+**By:** Kranz
+**What:** Updated product documentation for global airport database feature
+**References:** README.md, docs/FEATURES.md, docs/ARCHITECTURE.md, scripts/generate-airport-dataset.ts, src/data/airport-dataset.ts, src/ai/entity-extractor.ts, src/services/plates.ts, src/services/runway-info.ts, src/services/frequencies.ts, src/services/dataset-airport-fallback.ts
+**Why:** Updated README.md, docs/FEATURES.md, and docs/ARCHITECTURE.md to document the generated OurAirports-backed global airport database (US/Canada/Caribbean), jurisdiction-aware non-US handling, NAV CANADA messaging for Canadian chart/runway/frequency gaps, PR/VI FAA treatment, and entity-extraction fixes for Canadian contextual codes, Caribbean ICAO codes, and trailing query cues. Verified against the generator, dataset, extraction, and service files.

@@ -19,3 +19,8 @@ Frequency-gap policy moved from options analysis into shipped Option C: no absen
 ## 2026-06-25T09:40:42-07:00 — Phase B Canada shipped
 
 Phase B Canadian airport coverage shipped live to atc-companion.vercel.app in commit `2618ee5` for Devin Sinha. Contributions recorded: Kranz scoped the Canada plan, Aaron generated/merged CA data server-side, Mattingly gated 122.9 and runway jurisdiction paths, Haise added Canadian extraction, Swigert removed hardcoded FAA-only copy, Lovell passed safety review, and Rai's yellow advisory was resolved. Unified validation: lint 0 warnings, clean build, 260 tests passed; production CYVR returns real runways with no Canadian 122.9 or FAA Chart Supplement leakage.
+
+
+## 2026-06-25T11:07:00-07:00 — Global airport DB product docs
+
+Updated product docs (`README.md`, `docs/FEATURES.md`, `docs/ARCHITECTURE.md`) for US/Canada/Caribbean airport database coverage, jurisdiction-aware messaging, PR/VI handling, ICAO shapes, and trailing airport query cues. Decision archived in `decisions.md`.
